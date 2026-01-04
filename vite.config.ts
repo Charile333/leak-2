@@ -63,23 +63,27 @@ export default defineConfig(({ mode }) => {
             });
           },
         },
-        '/api/dns-v1': {
-          target: 'https://src.0zqq.com',
+        '/api/otx': {
+          target: 'https://otx.alienvault.com/api/v1',
           changeOrigin: true,
-          rewrite: (path) => path.replace(/^\/api\/dns-v1/, '/api/v1'),
+          rewrite: (path) => path.replace(/^\/api\/otx/, ''),
           configure: (proxy) => {
             proxy.on('proxyReq', (proxyReq, req) => {
-              const apiToken = env.VITE_DNS_API_TOKEN?.trim();
-              if (apiToken) {
-                // 使用 Bearer Token 认证
-                proxyReq.setHeader('Authorization', `Bearer ${apiToken}`);
-                proxyReq.setHeader('Host', 'src.0zqq.com');
-                console.log(`\x1b[36m[DNS Proxy Request]\x1b[0m ${req.method} ${proxyReq.path} -> src.0zqq.com`);
+              const apiKey = env.VITE_OTX_API_KEY?.trim();
+              if (apiKey) {
+                proxyReq.setHeader('X-OTX-API-KEY', apiKey);
+                console.log(`\x1b[36m[OTX Proxy Request]\x1b[0m ${req.method} ${req.url} -> otx.alienvault.com`);
               }
             });
             
+            proxy.on('proxyRes', (proxyRes, req) => {
+              if (proxyRes.statusCode === 401) {
+                console.log(`\x1b[31m[OTX Proxy Error]\x1b[0m ${req.url} returned 401 Unauthorized`);
+              }
+            });
+
             proxy.on('error', (err, _req) => {
-              console.error('\x1b[31m[DNS Proxy Fatal Error]\x1b[0m', err);
+              console.error('\x1b[31m[OTX Proxy Fatal Error]\x1b[0m', err);
             });
           },
         },
