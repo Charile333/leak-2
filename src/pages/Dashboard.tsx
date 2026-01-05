@@ -35,7 +35,6 @@ import {
   YAxis, 
   CartesianGrid, 
   Tooltip, 
-  ResponsiveContainer,
   Legend
 } from 'recharts';
 import { cn } from '../lib/utils';
@@ -253,7 +252,7 @@ const Dashboard = () => {
   const [sortField] = useState<keyof LeakedCredential>('leaked_at');
   const [sortOrder] = useState<'asc' | 'desc'>('desc');
 
-  const [dnsResults, setDnsResults] = useState<any>(null);
+  const [dnsResults, setDnsResults] = useState<any>({});
   const [dnsActiveSubTab, setDnsActiveSubTab] = useState('Subdomains');
 
   // Fix Recharts width error by ensuring container is visible and has size
@@ -294,7 +293,7 @@ const Dashboard = () => {
         
         if (type === 'ipv4') {
           data = await otxApi.getIpInfo(searchQuery, otxSection);
-          setDnsResults({ ipv4: data });
+          setDnsResults((prev: any) => ({ ...prev, ipv4: data }));
           setDnsActiveSubTab('IPv4');
         } else if (type === 'domain') {
           // 获取威胁评分数据 - OTX API中威胁评分通常在general部分
@@ -314,23 +313,23 @@ const Dashboard = () => {
             }
           };
           
-          setDnsResults({ domain: mergedData });
+          setDnsResults((prev: any) => ({ ...prev, domain: mergedData }));
           setDnsActiveSubTab('Domain');
         } else if (type === 'url') {
           data = await otxApi.getUrlInfo(searchQuery, otxSection);
-          setDnsResults({ url: data });
+          setDnsResults((prev: any) => ({ ...prev, url: data }));
           setDnsActiveSubTab('URL');
         } else if (type === 'cve') {
           data = await otxApi.getCveInfo(searchQuery, otxSection);
-          setDnsResults({ cve: data });
+          setDnsResults((prev: any) => ({ ...prev, cve: data }));
           setDnsActiveSubTab('CVE');
         } else if (type === 'search') {
           data = await otxApi.searchPulses(searchQuery);
-          setDnsResults({ search: data });
+          setDnsResults((prev: any) => ({ ...prev, search: data }));
           setDnsActiveSubTab('Search');
         } else if (type === 'activity') {
           data = await otxApi.getActivity();
-          setDnsResults({ activity: data });
+          setDnsResults((prev: any) => ({ ...prev, activity: data }));
           setDnsActiveSubTab('Activity');
         }
         
