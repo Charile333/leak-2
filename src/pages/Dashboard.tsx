@@ -1063,9 +1063,10 @@ const Dashboard = () => {
       console.log('Starting Frontend CSV Export for:', results.summary.domain, 'Category:', activeTab);
       
       let category: 'employees' | 'customers' | 'third_parties' | 'all' = 'employees';
-      if (activeTab === 'Customers') category = 'customers';
-      else if (activeTab === 'Third-Parties') category = 'third_parties';
+      if (activeTab === '客户' || activeTab === 'Customers') category = 'customers';
+      else if (activeTab === '第三方' || activeTab === 'Third-Parties') category = 'third_parties';
       else if (activeTab === '报告') category = 'all';
+      else if (activeTab === '员工' || activeTab === 'Employees') category = 'employees';
 
       const notification = document.createElement('div');
       notification.className = "fixed bottom-8 right-8 bg-accent text-white px-6 py-3 rounded-xl shadow-2xl z-50 animate-bounce flex items-center gap-2";
