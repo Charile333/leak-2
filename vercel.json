@@ -1,13 +1,13 @@
 {
   "functions": {
     "api/auth/login.cjs": {
-      "runtime": "@vercel/node@3.0.1"
+      "runtime": "@vercel/node@latest"
     },
     "api/auth/whitelist.cjs": {
-      "runtime": "@vercel/node@3.0.1"
+      "runtime": "@vercel/node@latest"
     },
     "api/proxy.cjs": {
-      "runtime": "@vercel/node@3.0.1"
+      "runtime": "@vercel/node@latest"
     }
   },
   "rewrites": [
