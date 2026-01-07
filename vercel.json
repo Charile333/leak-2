@@ -1,6 +1,18 @@
 {
   "rewrites": [
     {
+      "source": "/api/auth/login",
+      "destination": "/api/auth/login.cjs"
+    },
+    {
+      "source": "/api/auth/whitelist",
+      "destination": "/api/auth/whitelist.cjs"
+    },
+    {
+      "source": "/api/(.*)",
+      "destination": "/api/proxy.cjs"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }
