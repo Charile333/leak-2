@@ -72,7 +72,7 @@ const Login: React.FC = () => {
         localStorage.removeItem('rememberedEmail');
       }
       
-      const result = await loginWithCredentials(trimmedEmail, '');
+      const result = await loginWithCredentials(trimmedEmail);
       if (!result.success) {
         setError(result.message || '登录失败');
       } else {

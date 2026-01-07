@@ -15,7 +15,26 @@ module.exports = async function handler(req, res) {
       return;
     }
 
-    const { email } = req.body;
+    // 解析请求体 - Vercel Serverless Functions不会自动解析
+    let body;
+    if (req.method === 'POST' || req.method === 'PUT' || req.method === 'PATCH') {
+      body = await new Promise((resolve, reject) => {
+        let data = '';
+        req.on('data', chunk => {
+          data += chunk;
+        });
+        req.on('end', () => {
+          try {
+            resolve(JSON.parse(data));
+          } catch (error) {
+            reject(new Error('Invalid JSON in request body'));
+          }
+        });
+        req.on('error', reject);
+      });
+    }
+
+    const { email } = body;
     
     // 1. 从环境变量获取白名单
     const WHITELISTED_USERS = process.env.WHITELISTED_USERS 
@@ -46,8 +65,15 @@ module.exports = async function handler(req, res) {
     });
   } catch (error) {
     console.error('[Login Error]', error);
-    const statusCode = error.response?.status || 500;
-    const message = error.response?.data?.message || '登录失败，请检查邮箱和密码';
+    let statusCode = 500;
+    let message = '登录失败，请检查邮箱';
+    
+    // 根据错误类型设置更具体的错误信息
+    if (error.message === 'Invalid JSON in request body') {
+      statusCode = 400;
+      message = '无效的请求格式，请检查请求体';
+    }
+    
     res.status(statusCode).json({
       error: 'Login failed',
       message: message

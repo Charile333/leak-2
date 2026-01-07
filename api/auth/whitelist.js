@@ -1,4 +1,5 @@
-module.exports = async function handler(req, res) {  try {
+module.exports = async function handler(req, res) {
+  try {
     // 设置CORS头
     res.setHeader('Access-Control-Allow-Credentials', 'true');
     res.setHeader('Access-Control-Allow-Origin', '*');
@@ -14,25 +15,25 @@ module.exports = async function handler(req, res) {  try {
       return;
     }
 
-    // 只允许GET请求获取白名单
-    if (req.method === 'GET') {
-      // 从环境变量获取白名单
-      const WHITELISTED_USERS = process.env.WHITELISTED_USERS 
-        ? JSON.parse(process.env.WHITELISTED_USERS)
-        : [];
-      
-      console.log('[Whitelist] Retrieved whitelist:', WHITELISTED_USERS);
-      return res.status(200).json({
-        whitelist: WHITELISTED_USERS,
-        count: WHITELISTED_USERS.length,
-        lastUpdated: new Date().toISOString()
+    // 只允许GET请求
+    if (req.method !== 'GET') {
+      // 其他HTTP方法不允许
+      return res.status(405).json({ 
+        error: 'Method Not Allowed',
+        message: 'Only GET requests are allowed for this endpoint'
       });
     }
 
-    // 其他HTTP方法不允许
-    res.status(405).json({ 
-      error: 'Method Not Allowed',
-      message: 'Only GET requests are allowed for this endpoint'
+    // 从环境变量获取白名单
+    const WHITELISTED_USERS = process.env.WHITELISTED_USERS 
+      ? JSON.parse(process.env.WHITELISTED_USERS)
+      : [];
+      
+    console.log('[Whitelist] Retrieved whitelist:', WHITELISTED_USERS);
+    return res.status(200).json({
+      whitelist: WHITELISTED_USERS,
+      count: WHITELISTED_USERS.length,
+      lastUpdated: new Date().toISOString()
     });
   } catch (error) {
     console.error('[Whitelist Error]', error);
