@@ -1,17 +1,16 @@
 {
+  "functions": {
+    "api/auth/login.cjs": {
+      "runtime": "nodejs18.x"
+    },
+    "api/auth/whitelist.cjs": {
+      "runtime": "nodejs18.x"
+    },
+    "api/proxy.cjs": {
+      "runtime": "nodejs18.x"
+    }
+  },
   "rewrites": [
-    {
-      "source": "/api/auth/login",
-      "destination": "/api/auth/login.cjs"
-    },
-    {
-      "source": "/api/auth/whitelist",
-      "destination": "/api/auth/whitelist.cjs"
-    },
-    {
-      "source": "/api/(.*)",
-      "destination": "/api/proxy.cjs"
-    },
     {
       "source": "/(.*)",
       "destination": "/index.html"
