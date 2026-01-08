@@ -7,11 +7,10 @@
  */
 
 // 根据环境动态选择API地址
-const isProduction = import.meta.env.PROD;
+// 开发环境强制使用本地后端服务器地址，确保API请求正确路由
 // 生产环境使用当前域名的/api路径（Vercel部署的API函数）
-// 开发环境直接使用本地后端服务器地址
-const BASE_URL = isProduction ? '' : 'http://localhost:3001';
-const API_PREFIX = isProduction ? '/api' : '';
+const BASE_URL = 'http://localhost:3001';
+const API_PREFIX = '';
 
 export interface LeakRadarProfile {
   success: boolean;
