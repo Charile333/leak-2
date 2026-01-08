@@ -47,6 +47,15 @@ export default async function handler(req, res) {
     // 2. 获取目标路径 (更健壮的解析)
     const url = new URL(req.url, `http://${req.headers.host}`);
     let targetPath = url.pathname;
+    
+    // 演示模式：强制限制每次查询最多100条结果
+    // 设置固定的page_size为100
+    url.searchParams.set('page_size', '100');
+    // 如果是解锁请求，添加限制参数
+    if (targetPath.includes('/unlock')) {
+      url.searchParams.set('limit', '100');
+    }
+    
     const searchParams = url.search || '';
     
     // 彻底剥离所有已知的前缀，拿到纯净的业务路径
