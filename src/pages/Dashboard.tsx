@@ -515,7 +515,8 @@ const Dashboard = () => {
       return 0;
     });
 
-    return list;
+    // 演示模式：只显示前10条结果
+    return list.slice(0, 10);
   }, [results, activeTab, sortField, sortOrder, filterType, innerSearchQuery, categoryCredentials]);
 
   // 格式化日期为 YYYY/MM/DD
@@ -1793,8 +1794,8 @@ const Dashboard = () => {
                   )}
                 </div>
 
-                {/* 分页控制 */}
-                {results && (
+                {/* 分页控制 - 演示模式下不显示，只显示前10条数据 */}
+                {/* {results && (
                   (() => {
                     let totalCount = results.summary.total;
                     if (activeTab === '员工') totalCount = results.summary.employees.count;
