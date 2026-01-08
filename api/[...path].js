@@ -1,4 +1,4 @@
-import proxyHandler from './proxy.cjs';
+import proxyHandler from './proxy.js';
 
 export default async function handler(req, res) {
   console.log('[Dynamic Route] Received request:', req.method, req.url);

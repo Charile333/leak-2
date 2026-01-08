@@ -1,26 +1,24 @@
-// 确保使用正确的模块系统
-try {
-  const axios = require('axios');
-  const { Buffer } = require('buffer');
+import axios from 'axios';
+import { Buffer } from 'buffer';
 
-  module.exports = async function handler(req, res) {
-    console.log('[Proxy Handler] Received request:', req.method, req.url);
-    
-    // 确保返回的是JSON格式
-    function sendJSONResponse(res, status, data) {
-      try {
-        res.setHeader('Content-Type', 'application/json');
-        res.status(status).send(JSON.stringify(data));
-      } catch (e) {
-        res.setHeader('Content-Type', 'application/json');
-        res.status(500).send(JSON.stringify({
-          error: 'Internal Server Error',
-          message: '无法发送响应，请稍后重试'
-        }));
-      }
-    }
-
+export default async function handler(req, res) {
+  console.log('[Proxy Handler] Received request:', req.method, req.url);
+  
+  // 确保返回的是JSON格式
+  function sendJSONResponse(res, status, data) {
     try {
+      res.setHeader('Content-Type', 'application/json');
+      res.status(status).send(JSON.stringify(data));
+    } catch (e) {
+      res.setHeader('Content-Type', 'application/json');
+      res.status(500).send(JSON.stringify({
+        error: 'Internal Server Error',
+        message: '无法发送响应，请稍后重试'
+      }));
+    }
+  }
+
+  try {
     // 1. 设置跨域头
     res.setHeader('Access-Control-Allow-Credentials', true);
     res.setHeader('Access-Control-Allow-Origin', '*');
