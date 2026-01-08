@@ -57,6 +57,7 @@ export default async function handler(req, res) {
       url.searchParams.set('max', '10');
     }
     
+    // 使用修改后的URL的search属性，确保page_size=10被应用
     const searchParams = url.search || '';
     
     // 彻底剥离所有已知的前缀，拿到纯净的业务路径
@@ -193,7 +194,25 @@ export default async function handler(req, res) {
 
     for (let i = 0; i < prefixesToTry.length; i++) {
       const currentPath = prefixesToTry[i];
-      const currentUrl = `https://${host}${currentPath}${searchParams}`;
+      // 构建当前路径的完整URL，包含所有查询参数
+      const currentUrlObj = new URL(`https://${host}${currentPath}`);
+      
+      // 强制添加page_size=10到所有搜索请求
+      currentUrlObj.searchParams.set('page_size', '10');
+      
+      // 如果是解锁请求，添加max=10参数
+      if (currentPath.includes('/unlock')) {
+        currentUrlObj.searchParams.set('max', '10');
+      }
+      
+      // 合并原始查询参数（但page_size和max会被上面的设置覆盖）
+      url.searchParams.forEach((value, key) => {
+        if (key !== 'page_size' && key !== 'max') {
+          currentUrlObj.searchParams.set(key, value);
+        }
+      });
+      
+      const currentUrl = currentUrlObj.toString();
       lastTriedUrl = currentUrl;
       
       const authHeadersToTry = [
