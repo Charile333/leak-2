@@ -155,25 +155,15 @@ const server = http.createServer((req, res) => {
             `
           };
           
-          // 发送邮件
-          transporter.sendMail(mailOptions, (error, info) => {
-            if (error) {
-              console.error('[Mail Error] Failed to send login link:', error.message);
-              res.writeHead(500, { 'Content-Type': 'application/json' });
-              res.end(JSON.stringify({
-                error: 'Internal Server Error',
-                message: '发送登录链接失败，请稍后重试'
-              }));
-              return;
-            }
-            
-            console.log(`[Mail] Login link sent to ${email}: ${info.messageId}`);
-            res.writeHead(200, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({
-              success: true,
-              message: '登录链接已发送到您的邮箱，请检查并点击链接登录'
-            }));
-          });
+          // 开发环境中跳过实际发送邮件，直接返回成功响应
+          console.log(`[Dev Mode] Login link for ${email}: ${loginLink}`);
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({
+            success: true,
+            message: '登录链接已生成（开发模式），请查看控制台获取登录链接',
+            loginLink: loginLink
+          }));
+          return;
           
           return;
         } catch (error) {
