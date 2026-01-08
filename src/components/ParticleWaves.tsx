@@ -16,8 +16,6 @@ const ParticleWaves: React.FC = () => {
     const container = containerRef.current;
     const particleCount = 5000; // 减少粒子数量，提高性能，同时保持视觉效果
 
-    console.log('[ParticleWaves] Initializing with', particleCount, 'particles');
-
     // 初始化场景
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x000000);
@@ -124,9 +122,7 @@ const ParticleWaves: React.FC = () => {
       renderer.setSize(window.innerWidth, window.innerHeight);
       container.appendChild(renderer.domElement);
       rendererRef.current = renderer;
-      console.log('[ParticleWaves] Renderer initialized successfully');
     } catch (error) {
-      console.error('[ParticleWaves] Failed to initialize renderer:', error);
       return;
     }
 
@@ -144,8 +140,6 @@ const ParticleWaves: React.FC = () => {
       const currentTime = (Date.now() - (startTimeRef.current || Date.now())) * 0.001;
       const material = particlesRef.current.material as THREE.ShaderMaterial;
       material.uniforms.time.value = currentTime;
-      
-      console.log('[ParticleWaves] Time updated:', currentTime);
 
       // 渲染场景
       rendererRef.current.render(sceneRef.current, cameraRef.current);
@@ -154,7 +148,6 @@ const ParticleWaves: React.FC = () => {
     // 开始动画
     startTimeRef.current = Date.now();
     animate();
-    console.log('[ParticleWaves] Animation started');
 
     // 窗口大小变化处理
     const handleResize = () => {
@@ -163,15 +156,12 @@ const ParticleWaves: React.FC = () => {
       cameraRef.current.aspect = window.innerWidth / window.innerHeight;
       cameraRef.current.updateProjectionMatrix();
       rendererRef.current.setSize(window.innerWidth, window.innerHeight);
-      console.log('[ParticleWaves] Resized renderer to', window.innerWidth, 'x', window.innerHeight);
     };
 
     window.addEventListener('resize', handleResize);
 
     // 清理函数
     return () => {
-      console.log('[ParticleWaves] Cleaning up');
-      
       if (animationFrameRef.current) {
         cancelAnimationFrame(animationFrameRef.current);
         animationFrameRef.current = null;
