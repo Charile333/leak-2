@@ -14,7 +14,7 @@ const ParticleWaves: React.FC = () => {
     if (!containerRef.current) return;
 
     const container = containerRef.current;
-    const particleCount = 100_000;
+    const particleCount = 5000; // 减少粒子数量，提高性能，同时保持视觉效果
 
     console.log('[ParticleWaves] Initializing with', particleCount, 'particles');
 
@@ -70,18 +70,19 @@ const ParticleWaves: React.FC = () => {
           float x = pos.x * 0.5;
           float z = pos.z * 0.5;
           
-          // 原始实现的波浪运动
-          float time2 = (1.0 - time) * 5.0;
+          // 使用直接的时间计算，确保动画正常向前播放
+          float time2 = time * 2.0; // 调整速度，使动画更明显
           
-          float sinX = sin(x + time2 * 0.7) * 50.0;
-          float sinZ = sin(z + time2 * 0.5) * 50.0;
+          // 波浪运动 - 调整参数使动画更明显
+          float sinX = sin(x + time2 * 0.7) * 80.0; // 增加振幅
+          float sinZ = sin(z + time2 * 0.5) * 80.0; // 增加振幅
           
           pos.y = sinX + sinZ;
           
-          // 原始实现的大小变化
+          // 大小变化 - 调整参数使粒子大小变化更明显
           float sinSX = sin(x + time2 * 0.7) + 1.0;
           float sinSZ = sin(z + time2 * 0.5) + 1.0;
-          float particleSize = (sinSX + sinSZ) * 5.0;
+          float particleSize = (sinSX + sinSZ) * 8.0; // 增加粒子大小
           
           vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);
           gl_PointSize = particleSize * (300.0 / -mvPosition.z);
@@ -98,13 +99,14 @@ const ParticleWaves: React.FC = () => {
             discard;
           }
           
-          // 白色粒子
-          gl_FragColor = vec4(1.0, 1.0, 1.0, 1.0);
+          // 白色粒子，添加轻微的透明度变化，使效果更柔和
+          float alpha = 1.0 - distance * 2.0;
+          gl_FragColor = vec4(1.0, 1.0, 1.0, alpha);
         }
       `,
-      transparent: false,
-      depthWrite: true,
-      blending: THREE.NormalBlending,
+      transparent: true, // 启用透明，使效果更柔和
+      depthWrite: false, // 禁用深度写入，提高性能
+      blending: THREE.AdditiveBlending, // 使用加法混合，使粒子更明亮
       vertexColors: false,
     });
 
@@ -117,8 +119,7 @@ const ParticleWaves: React.FC = () => {
     // 初始化渲染器
     let renderer: THREE.WebGLRenderer | null = null;
     try {
-      // 使用WebGLRenderer，确保兼容性
-      renderer = new THREE.WebGLRenderer({ antialias: true });
+      renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
       renderer.setPixelRatio(window.devicePixelRatio);
       renderer.setSize(window.innerWidth, window.innerHeight);
       container.appendChild(renderer.domElement);
@@ -140,8 +141,10 @@ const ParticleWaves: React.FC = () => {
       }
 
       // 更新时间 uniforms
-      const currentTime = Date.now() * 0.0001;
+      const currentTime = (Date.now() - (startTimeRef.current || Date.now())) * 0.001;
       particlesRef.current.material.uniforms.time.value = currentTime;
+      
+      console.log('[ParticleWaves] Time updated:', currentTime);
 
       // 渲染场景
       rendererRef.current.render(sceneRef.current, cameraRef.current);
