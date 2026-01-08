@@ -10,7 +10,7 @@
     }
   ],
   "functions": {
-    "api/**/*.cjs": {
+    "api/**/*.js": {
       "runtime": "@vercel/node@5.5.16"
     }
   }
