@@ -19,8 +19,11 @@ export default async function handler(req, res) {
 
   try {
     // 检查请求路径，如果是auth相关请求，返回404
-    if (req.url.includes('/api/auth/login') || req.url.includes('/auth/login') || 
-        req.url.includes('/api/auth/whitelist') || req.url.includes('/auth/whitelist')) {
+    // 但允许/login/verify请求通过，因为它应该被路由到auth/login.js
+    const isAuthLoginRoot = req.url === '/api/auth/login' || req.url === '/auth/login';
+    const isAuthWhitelist = req.url.includes('/api/auth/whitelist') || req.url.includes('/auth/whitelist');
+    
+    if (isAuthLoginRoot || isAuthWhitelist) {
       console.log('[Dynamic Route] Rejecting auth request:', req.url);
       sendJSONResponse(res, 404, {
         error: 'Not Found',

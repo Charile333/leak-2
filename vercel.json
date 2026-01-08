@@ -5,18 +5,12 @@
       "destination": "/api/auth/login.js"
     },
     {
-      "source": "/api/auth/whitelist",
-      "destination": "/api/auth/whitelist.js"
+      "source": "/api/auth/login/verify",
+      "destination": "/api/auth/login.js"
     },
     {
-      "source": "/api/(.*)",
-      "destination": "/api/[...path].js",
-      "has": [
-        {
-          "type": "query",
-          "key": "token"
-        }
-      ]
+      "source": "/api/auth/whitelist",
+      "destination": "/api/auth/whitelist.js"
     },
     {
       "source": "/api/(.*)",
