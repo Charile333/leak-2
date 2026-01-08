@@ -9,6 +9,7 @@ import Analysis from './pages/Analysis';
 import Documentation from './pages/Documentation';
 import Settings from './pages/Settings';
 import Login from './pages/Login';
+import LoginVerify from './pages/LoginVerify';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import AuthWrapper from './components/AuthWrapper';
 
@@ -31,8 +32,10 @@ function App() {
       <Router>
         <AuthWrapper>
           <Routes>
-            {/* 登录页面 - 不需要认证 */}
+            {/* 登录页面 */}
             <Route path="/login" element={<Login />} />
+            {/* 登录链接验证页面 */}
+            <Route path="/login/verify" element={<LoginVerify />} />
             
             {/* 受保护的页面 - 需要登录 */}
             <Route

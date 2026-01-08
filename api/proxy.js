@@ -1,5 +1,25 @@
 import axios from 'axios';
 import { Buffer } from 'buffer';
+import nodemailer from 'nodemailer';
+import jwt from 'jsonwebtoken';
+
+// JWT配置
+const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
+const JWT_EXPIRY = '5m'; // 5分钟过期
+
+// 邮件配置 - 支持SendGrid
+const SMTP_CONFIG = {
+  host: process.env.SMTP_HOST || 'smtp.sendgrid.net',
+  port: process.env.SMTP_PORT ? parseInt(process.env.SMTP_PORT) : 587,
+  secure: process.env.SMTP_SECURE === 'true', // 使用TLS
+  auth: {
+    user: process.env.SMTP_USER || 'apikey', // SendGrid使用apikey作为用户名
+    pass: process.env.SMTP_PASS || '' // SendGrid API密钥
+  }
+};
+
+// 创建邮件传输器
+const transporter = nodemailer.createTransport(SMTP_CONFIG);
 
 export default async function handler(req, res) {
   try {

@@ -4,6 +4,7 @@ import type { ReactNode } from 'react';
 interface AuthContextType {
   isAuthenticated: boolean;
   loginWithCredentials: (email: string) => Promise<{ success: boolean; message?: string }>;
+  verifyLoginLink: (token: string) => Promise<{ success: boolean; message?: string }>;
   logout: () => void;
 }
 
@@ -64,6 +65,49 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  // 登录链接验证方法
+  const verifyLoginLink = async (token: string): Promise<{ success: boolean; message?: string }> => {
+    try {
+      // 根据环境动态选择API地址
+      const isProduction = import.meta.env.PROD;
+      const BASE_URL = isProduction ? '' : 'http://localhost:3001';
+      const API_PREFIX = isProduction ? '/api' : '';
+      const verifyUrl = `${BASE_URL}${API_PREFIX}/auth/login/verify?token=${token}`;
+      
+      // 调用登录链接验证API
+      const response = await fetch(verifyUrl, {
+        method: 'GET',
+        credentials: 'same-origin', // 仅在同域请求中包含凭证
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        return { 
+          success: false, 
+          message: data.message || '登录验证失败'
+        };
+      }
+
+      // 验证成功，设置认证状态
+      setIsAuthenticated(true);
+      localStorage.setItem('leakradar_auth', 'true');
+      
+      // 保存用户信息
+      if (data.user) {
+        localStorage.setItem('leakradar_user', JSON.stringify(data.user));
+      }
+
+      return { success: true };
+    } catch (error: any) {
+      console.error('登录验证错误:', error);
+      return { 
+        success: false, 
+        message: error.message || '登录验证失败，请检查网络连接' 
+      };
+    }
+  };
+
   // 登出方法
   const logout = () => {
     setIsAuthenticated(false);
@@ -72,7 +116,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
   
   return (
-    <AuthContext.Provider value={{ isAuthenticated, loginWithCredentials, logout }}>
+    <AuthContext.Provider value={{ isAuthenticated, loginWithCredentials, verifyLoginLink, logout }}>
       {children}
     </AuthContext.Provider>
   );

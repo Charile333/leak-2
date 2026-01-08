@@ -1,9 +1,29 @@
 import http from 'http';
 import https from 'https';
 import dotenv from 'dotenv';
+import nodemailer from 'nodemailer';
+import jwt from 'jsonwebtoken';
 
 // 加载环境变量
 dotenv.config();
+
+// JWT配置
+const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
+const JWT_EXPIRY = '5m'; // 5分钟过期
+
+// 邮件配置 - 支持SendGrid
+const SMTP_CONFIG = {
+  host: process.env.SMTP_HOST || 'smtp.sendgrid.net',
+  port: process.env.SMTP_PORT ? parseInt(process.env.SMTP_PORT) : 587,
+  secure: process.env.SMTP_SECURE === 'true', // 使用TLS
+  auth: {
+    user: process.env.SMTP_USER || 'apikey', // SendGrid使用apikey作为用户名
+    pass: process.env.SMTP_PASS || '' // SendGrid API密钥
+  }
+};
+
+// 创建邮件传输器
+const transporter = nodemailer.createTransport(SMTP_CONFIG);
 
 // 获取API密钥和白名单（从环境变量）
 const LEAKRADAR_API_KEY = process.env.LEAKRADAR_API_KEY || process.env.VITE_LEAKRADAR_API_KEY;
@@ -85,7 +105,7 @@ const server = http.createServer((req, res) => {
     }
   }
   
-  // 处理登录API请求
+  // 处理登录API请求 - 发送登录链接
   if (url === '/api/auth/login') {
     if (req.method === 'POST') {
       // 读取请求体
@@ -104,20 +124,57 @@ const server = http.createServer((req, res) => {
                 return;
               }
               
-              console.log(`[Whitelist] User ${email} granted access (in whitelist)`);
+              console.log(`[Whitelist] User ${email} granted access (in whitelist), sending login link`);
               
-              // 由于LeakRadar API没有登录端点，直接返回成功响应
-              // 应用将使用API密钥进行后续请求验证
-              res.writeHead(200, { 'Content-Type': 'application/json' });
-              res.end(JSON.stringify({
-                success: true,
-                message: '登录成功',
-                user: {
-                  email: email,
-                  name: email.split('@')[0],
-                  role: 'user'
+              // 生成JWT令牌，用于登录链接验证
+              const token = jwt.sign(
+                { email, type: 'login' },
+                JWT_SECRET,
+                { expiresIn: JWT_EXPIRY }
+              );
+              
+              // 生成登录链接
+              const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5174';
+              const loginLink = `${frontendUrl}/login/verify?token=${token}`;
+              
+              // 发送登录邮件
+              const mailOptions = {
+                from: process.env.SMTP_FROM || 'noreply@example.com',
+                to: email,
+                subject: 'Lysir谍卫 - 登录链接',
+                html: `
+                  <h1>Lysir谍卫</h1>
+                  <p>您好！</p>
+                  <p>您请求了登录Lysir谍卫平台的链接。</p>
+                  <p>请点击以下链接登录：</p>
+                  <p><a href="${loginLink}" style="display: inline-block; padding: 10px 20px; background-color: #4CAF50; color: white; text-decoration: none; border-radius: 5px;">登录Lysir谍卫</a></p>
+                  <p>该链接将在5分钟后失效。</p>
+                  <p>如果您没有请求此链接，请忽略此邮件。</p>
+                  <p>--</p>
+                  <p>Lysir谍卫团队</p>
+                `
+              };
+              
+              // 发送邮件
+              transporter.sendMail(mailOptions, (error, info) => {
+                if (error) {
+                  console.error('[Mail Error] Failed to send login link:', error.message);
+                  res.writeHead(500, { 'Content-Type': 'application/json' });
+                  res.end(JSON.stringify({
+                    error: 'Internal Server Error',
+                    message: '发送登录链接失败，请稍后重试'
+                  }));
+                  return;
                 }
-              }));
+                
+                console.log(`[Mail] Login link sent to ${email}: ${info.messageId}`);
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({
+                  success: true,
+                  message: '登录链接已发送到您的邮箱，请检查并点击链接登录'
+                }));
+              });
+              
               return;
         } catch (error) {
           console.error('[Dev Server Error] Invalid JSON:', error.message);
@@ -141,6 +198,73 @@ const server = http.createServer((req, res) => {
       res.end(JSON.stringify({
         error: 'Method Not Allowed',
         message: 'Only POST requests are allowed for this endpoint'
+      }));
+      return;
+    }
+  }
+  
+  // 处理登录链接验证API请求
+  if (url.startsWith('/api/auth/login/verify')) {
+    if (req.method === 'GET') {
+      // 提取令牌
+      const urlObj = new URL(`http://localhost${url}`);
+      const token = urlObj.searchParams.get('token');
+      
+      if (!token) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+          error: 'Bad Request',
+          message: '缺少登录令牌'
+        }));
+        return;
+      }
+      
+      try {
+        // 验证令牌
+        const decoded = jwt.verify(token, JWT_SECRET);
+        
+        // 检查令牌类型
+        if (decoded.type !== 'login') {
+          throw new Error('Invalid token type');
+        }
+        
+        const { email } = decoded;
+        
+        console.log(`[Login Verify] User ${email} verified successfully`);
+        
+        // 返回登录成功响应
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+          success: true,
+          message: '登录验证成功',
+          user: {
+            email: email,
+            name: email.split('@')[0],
+            role: 'user'
+          }
+        }));
+        return;
+      } catch (error) {
+        console.error('[Login Verify] Token verification failed:', error.message);
+        
+        // 检查是否是过期错误
+        let message = '登录链接无效或已过期';
+        if (error.name === 'TokenExpiredError') {
+          message = '登录链接已过期，请重新请求登录';
+        }
+        
+        res.writeHead(401, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+          error: 'Unauthorized',
+          message: message
+        }));
+        return;
+      }
+    } else {
+      res.writeHead(405, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({
+        error: 'Method Not Allowed',
+        message: 'Only GET requests are allowed for this endpoint'
       }));
       return;
     }
