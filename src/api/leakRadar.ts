@@ -6,9 +6,9 @@
  * 请在 .env 文件中设置 VITE_BACKEND_URL=http://你的EC2公网IP:3000
  */
 
-// 使用Vite代理，通过/api前缀转发到后端
-const BASE_URL = ''; // 使用当前域名，通过Vite代理转发
-const API_PREFIX = '/api'; // Vite代理前缀
+// 直接连接到后端服务器，绕过Vite代理问题
+const BASE_URL = 'http://localhost:3001'; // 直接使用后端服务器地址
+const API_PREFIX = ''; // 无需代理前缀
 
 export interface LeakRadarProfile {
   success: boolean;
