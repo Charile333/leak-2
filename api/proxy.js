@@ -49,11 +49,12 @@ export default async function handler(req, res) {
     let targetPath = url.pathname;
     
     // 演示模式：强制限制每次查询最多10条结果
-    // 设置固定的page_size为10
+    // 设置固定的page_size为10（搜索结果限制）
     url.searchParams.set('page_size', '10');
-    // 如果是解锁请求，添加限制参数
+    // 如果是解锁请求（包括同步和异步），添加限制参数
+    // 根据API文档，解锁操作应该使用max参数，而不是limit参数
     if (targetPath.includes('/unlock')) {
-      url.searchParams.set('limit', '10');
+      url.searchParams.set('max', '10');
     }
     
     const searchParams = url.search || '';

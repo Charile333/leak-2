@@ -112,7 +112,19 @@ async function handleApiRequest(req, res) {
     
     // 处理LeakRadar API请求
     const upstreamUrl = 'https://api.leakradar.io';
-    const targetUrl = `${upstreamUrl}${url.replace(/^\/api/, '')}`;
+    let targetUrl = `${upstreamUrl}${url.replace(/^\/api/, '')}`;
+    
+    // 演示模式：强制限制每次查询最多10条结果
+    // 将targetUrl转换为URL对象，方便操作查询参数
+    const urlObj = new URL(targetUrl);
+    urlObj.searchParams.set('page_size', '10');
+    // 如果是解锁请求，添加限制参数
+    // 根据API文档，解锁操作应该使用max参数，而不是limit参数
+    if (targetUrl.includes('/unlock')) {
+      urlObj.searchParams.set('max', '10');
+    }
+    // 转换回字符串
+    targetUrl = urlObj.toString();
     
     console.log(`[Backend Proxy] -> ${targetUrl}`);
     
