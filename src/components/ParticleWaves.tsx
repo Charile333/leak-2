@@ -56,7 +56,7 @@ const ParticleWaves: React.FC = () => {
     geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
     geometry.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
 
-    // Shader Material - 实现与源文件相同的着色器效果
+    // Shader Material - 实现与源文件相同的着色器效果，但修复动画逻辑
     const material = new THREE.ShaderMaterial({
       uniforms: {
         time: { value: 0.0 }
@@ -69,10 +69,10 @@ const ParticleWaves: React.FC = () => {
         void main() {
           vSize = size;
           
-          // 与源文件相同的波浪动画逻辑
-          float time2 = (1.0 - time) * 5.0;
-          float x = position.x * 0.005; // 缩放因子调整
-          float z = position.z * 0.005;
+          // 修复时间计算，使用递增的时间值
+          float time2 = time * 5.0;
+          float x = position.x * 0.01; // 调整缩放因子以获得更明显的波浪效果
+          float z = position.z * 0.01;
           
           float sinX = sin(x + time2 * 0.7) * 50.0;
           float sinZ = sin(z + time2 * 0.5) * 50.0;
@@ -83,7 +83,7 @@ const ParticleWaves: React.FC = () => {
             position.z
           );
           
-          // 与源文件相同的大小动画逻辑
+          // 修复大小动画逻辑
           float sinSX = (sin(x + time2 * 0.7) + 1.0) * 5.0;
           float sinSZ = (sin(z + time2 * 0.5) + 1.0) * 5.0;
           float newSize = sinSX + sinSZ;
