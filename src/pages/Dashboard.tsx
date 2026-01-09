@@ -154,10 +154,14 @@ const Dashboard = () => {
   // 防止搜索时页面跳动：当用户开始输入新查询时隐藏搜索结果
   useEffect(() => {
     // 当用户开始输入新的搜索查询，且不是正在搜索时，隐藏结果区域
+    // 但是要避免在搜索完成后立即隐藏结果
     if (searchQuery && !isSearching) {
-      setShowResults(false);
+      // 只有当results为空时才隐藏结果，避免在搜索完成后立即隐藏
+      if (!results) {
+        setShowResults(false);
+      }
     }
-  }, [searchQuery, isSearching]);
+  }, [searchQuery, isSearching, results]);
   
   // DNS数据集相关状态
   const [activeSearchType, setActiveSearchType] = useState<'ip' | 'domain' | 'url' | 'cve'>('ip');
