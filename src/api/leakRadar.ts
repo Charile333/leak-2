@@ -7,12 +7,12 @@
  */
 
 // 根据环境动态选择API地址
-// 开发环境强制使用本地后端服务器地址，确保API请求正确路由
-// 生产环境使用当前域名的/api路径（Vercel部署的API函数）
+// 开发环境使用本地后端服务器地址
+// 生产环境直接使用真实的LeakRadar API地址
 const BASE_URL = import.meta.env.DEV 
   ? 'http://localhost:3001'  // 开发环境使用本地后端
-  : '';  // 生产环境使用当前域名，无需额外前缀
-const API_PREFIX = '/api';
+  : 'https://api.leakradar.io';  // 生产环境直接使用LeakRadar API
+const API_PREFIX = import.meta.env.DEV ? '/api' : '';  // 生产环境不使用/api前缀
 
 export interface LeakRadarProfile {
   success: boolean;
