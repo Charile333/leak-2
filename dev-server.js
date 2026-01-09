@@ -27,9 +27,37 @@ const transporter = nodemailer.createTransport(SMTP_CONFIG);
 
 // 获取API密钥和白名单（从环境变量）
 const LEAKRADAR_API_KEY = process.env.LEAKRADAR_API_KEY || process.env.VITE_LEAKRADAR_API_KEY;
-const WHITELISTED_USERS = process.env.WHITELISTED_USERS 
-  ? JSON.parse(process.env.WHITELISTED_USERS)
-  : [];
+
+// 解析白名单，支持JSON数组和逗号分隔格式
+let WHITELISTED_USERS = [];
+try {
+  if (process.env.WHITELISTED_USERS) {
+    const whitelistValue = process.env.WHITELISTED_USERS;
+    
+    // 尝试解析为JSON数组
+    try {
+      WHITELISTED_USERS = JSON.parse(whitelistValue);
+      if (!Array.isArray(WHITELISTED_USERS)) {
+        throw new Error("Parsed whitelist is not an array");
+      }
+    } catch (jsonError) {
+      // 解析为逗号分隔字符串
+      if (typeof whitelistValue === 'string') {
+        WHITELISTED_USERS = whitelistValue
+          .split(',')
+          .map(email => email.trim())
+          .filter(email => email.length > 0);
+        console.log('[Dev Server] Using comma-separated whitelist:', WHITELISTED_USERS);
+      } else {
+        throw jsonError;
+      }
+    }
+  }
+} catch (e) {
+  console.error('[Dev Server] Error parsing whitelist:', e.message);
+  WHITELISTED_USERS = [];
+}
+
 const OTX_API_KEY = process.env.OTX_API_KEY || process.env.VITE_OTX_API_KEY;
 
 // 白名单用户密码配置（开发环境使用）

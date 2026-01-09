@@ -32,8 +32,42 @@ export default async function handler(req, res) {
       return sendJSONResponse(200, { success: true, message: 'OPTIONS request handled' });
     }
 
-    // 白名单用户 - 直接硬编码，避免环境变量解析问题
-    const WHITELISTED_USERS = ['konaa2651@gmail.com', 'Lysirsec@outlook.com'];
+    // 从环境变量获取白名单，支持多种格式
+    let WHITELISTED_USERS = [];
+    try {
+      // 尝试从环境变量获取白名单
+      if (process.env.WHITELISTED_USERS) {
+        const whitelistValue = process.env.WHITELISTED_USERS;
+        
+        // 支持JSON数组格式：["email1", "email2"]
+        try {
+          WHITELISTED_USERS = JSON.parse(whitelistValue);
+          if (!Array.isArray(WHITELISTED_USERS)) {
+            throw new Error("Parsed whitelist is not an array");
+          }
+        } catch (jsonError) {
+          // 支持逗号分隔格式：email1,email2,email3
+          if (typeof whitelistValue === 'string') {
+            WHITELISTED_USERS = whitelistValue
+              .split(',')
+              .map(email => email.trim())
+              .filter(email => email.length > 0);
+            console.log('[Login Handler] Using comma-separated whitelist:', WHITELISTED_USERS);
+          } else {
+            throw jsonError;
+          }
+        }
+      }
+      
+      // 如果解析后白名单为空，添加默认用户
+      if (!Array.isArray(WHITELISTED_USERS) || WHITELISTED_USERS.length === 0) {
+        WHITELISTED_USERS = ['konaa2651@gmail.com', 'Lysirsec@outlook.com'];
+      }
+    } catch (e) {
+      console.error('[Login Handler] Error parsing whitelist:', e.message);
+      // 解析错误时使用默认值
+      WHITELISTED_USERS = ['konaa2651@gmail.com', 'Lysirsec@outlook.com'];
+    }
     console.log('[Login Handler] Using whitelist:', WHITELISTED_USERS);
 
     if (req.method === 'POST') {
