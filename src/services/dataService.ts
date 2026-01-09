@@ -163,13 +163,18 @@ export const dataService = {
         // 可以在这里添加UI提示，但根据要求不显示积分相关UI
       }
       
-      // Fetch credentials for display - 为每个分类获取完整的limit条数据
-      // 这样每个分类在初始搜索时都能显示足够的数据
+      // Fetch credentials for display - 为每个分类获取数据
+      // 限制每个分类返回的数据量为limit，确保只返回已解锁的前10条
       let [empRes, custRes, thirdRes] = await Promise.all([
         leakRadarApi.searchDomainCategory(domain, 'employees', limit, offset).catch(() => ({ items: [], total: 0, success: false } as LeakRadarSearchResult)),
         leakRadarApi.searchDomainCategory(domain, 'customers', limit, offset).catch(() => ({ items: [], total: 0, success: false } as LeakRadarSearchResult)),
         leakRadarApi.searchDomainCategory(domain, 'third_parties', limit, offset).catch(() => ({ items: [], total: 0, success: false } as LeakRadarSearchResult)),
       ]);
+      
+      // 只返回每个分类中已解锁的前10条数据
+      empRes.items = empRes.items.filter(item => item.unlocked || item.password_plaintext).slice(0, 10);
+      custRes.items = custRes.items.filter(item => item.unlocked || item.password_plaintext).slice(0, 10);
+      thirdRes.items = thirdRes.items.filter(item => item.unlocked || item.password_plaintext).slice(0, 10);
 
       // 检查获取的数据是否已解锁，如果未解锁，尝试再次获取
       const isDataUnlocked = empRes.items.some(item => item.unlocked || item.password_plaintext) || 
@@ -375,7 +380,7 @@ export const dataService = {
       let res = await leakRadarApi.searchDomainCategory(domain, category, limit, offset);
       
       // 检查获取的数据是否已解锁，如果未解锁，尝试再次获取
-      const isDataUnlocked = res.items.some(item => item.unlocked || item.password_plaintext);
+      let isDataUnlocked = res.items.some(item => item.unlocked || item.password_plaintext);
       
       if (!isDataUnlocked && isUnlocked) {
         console.log(`[Debug] 首次获取的${category}分类数据未解锁，等待1秒后重试...`);
@@ -385,7 +390,11 @@ export const dataService = {
         res = await leakRadarApi.searchDomainCategory(domain, category, limit, offset).catch(() => ({ items: [], total: 0, success: false } as LeakRadarSearchResult));
         
         console.log(`[Debug] ${category}分类数据重试获取完成`);
+        isDataUnlocked = res.items.some(item => item.unlocked || item.password_plaintext);
       }
+      
+      // 只返回已解锁的前10条数据
+      res.items = res.items.filter(item => item.unlocked || item.password_plaintext).slice(0, 10);
       
       const transformItem = (item: any, type: LeakedCredential['type']): LeakedCredential => {
         let strength: LeakedCredential['strength'] = 'Medium';
