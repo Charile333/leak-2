@@ -1032,111 +1032,121 @@ const Dashboard = () => {
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-white/5">
-                          {filteredCredentials.map((credential, index) => (
-                            <tr 
-                              key={credential.id || index} 
-                              className="transition-all duration-200 hover:bg-white/10 hover:shadow-[inset_0_0_0_1px_rgba(168,85,247,0.2)] group"
-                            >
-                              {/* URL和子域名标签页只显示URL和次数 */}
-                              {activeTab === 'URLs' || activeTab === '子域名' ? (
-                                [
-                                  <td key="url" className="px-8 py-5 whitespace-nowrap">
-                                    <div className="flex items-center gap-2">
-                                      <Globe className="w-4 h-4 text-accent group-hover:scale-110 transition-transform" />
-                                      <div className="text-sm text-white font-medium group-hover:text-accent transition-colors">
-                                        {credential.website || credential.source || 'N/A'}
-                                      </div>
-                                    </div>
-                                  </td>,
-                                  <td key="count" className="px-8 py-5 whitespace-nowrap">
-                                    <div className="inline-flex items-center justify-center px-3 py-1 rounded-full bg-accent/20 text-accent text-sm font-semibold">
-                                      {credential.count || 1}
-                                    </div>
-                                  </td>
-                                ]
-                              ) : (
-                                // 其他标签页显示完整数据
-                                [
-                                  <td key="url" className="px-8 py-5 whitespace-nowrap">
-                                    <div className="flex items-center gap-2">
-                                      <Globe className="w-4 h-4 text-blue-400" />
-                                      <div className="text-sm text-white font-medium">
-                                        {credential.website || credential.source || 'N/A'}
-                                      </div>
-                                    </div>
-                                  </td>,
-                                  <td key="type" className="px-8 py-5 whitespace-nowrap">
-                                    <div className="inline-flex items-center justify-center px-3 py-1 rounded-full text-xs font-bold">
-                                      {credential.email && credential.email.includes('@') ? (
-                                        <span className="bg-blue-500/20 text-blue-400">EMAIL</span>
-                                      ) : (
-                                        <span className="bg-green-500/20 text-green-400">USERNAME</span>
-                                      )}
-                                    </div>
-                                  </td>,
-                                  <td key="email" className="px-8 py-5 whitespace-nowrap">
-                                    <div className="text-sm text-white font-medium truncate max-w-[250px]">
-                                      {credential.email || credential.username || 'N/A'}
-                                    </div>
-                                  </td>,
-                                  <td key="password" className="px-8 py-5 whitespace-nowrap">
-                                    <div className="flex items-center gap-3">
-                                      {autoUnlock ? (
-                                        <div className="text-sm font-medium">
-                                          {credential.password_plaintext ? (
-                                            <span className="text-white font-mono bg-white/5 px-2 py-1 rounded">
-                                              {credential.password_plaintext}
-                                            </span>
-                                          ) : credential.password_hash ? (
-                                            <span className="text-gray-400 font-mono">{credential.password_hash.slice(0, 15)}...</span>
-                                          ) : (
-                                            <span className="text-gray-500 italic">N/A</span>
-                                          )}
+                          {filteredCredentials.length > 0 ? (
+                            filteredCredentials.map((credential, index) => (
+                              <tr 
+                                key={credential.id || index} 
+                                className="transition-all duration-200 hover:bg-white/10 hover:shadow-[inset_0_0_0_1px_rgba(168,85,247,0.2)] group"
+                              >
+                                {/* URL和子域名标签页只显示URL和次数 */}
+                                {activeTab === 'URLs' || activeTab === '子域名' ? (
+                                  [
+                                    <td key="url" className="px-8 py-5 whitespace-nowrap">
+                                      <div className="flex items-center gap-2">
+                                        <Globe className="w-4 h-4 text-accent group-hover:scale-110 transition-transform" />
+                                        <div className="text-sm text-white font-medium group-hover:text-accent transition-colors">
+                                          {credential.website || credential.source || 'N/A'}
                                         </div>
-                                      ) : (
-                                        <div>
-                                          {showPasswords[credential.id || index] ? (
-                                            <div className="flex items-center gap-2">
-                                              {credential.password_plaintext ? (
-                                                <span className="text-white font-mono bg-white/5 px-2 py-1 rounded">
-                                                  {credential.password_plaintext}
-                                                </span>
-                                              ) : credential.password_hash ? (
-                                                <span className="text-gray-400 font-mono">{credential.password_hash.slice(0, 15)}...</span>
-                                              ) : (
-                                                <span className="text-gray-500 italic">N/A</span>
-                                              )}
-                                              <button
-                                                onClick={() => togglePassword(credential.id || index)}
-                                                className="p-1 bg-white/10 rounded-full text-gray-400 hover:text-white hover:bg-white/20 transition-colors"
-                                              >
-                                                <EyeOff className="w-4 h-4" />
-                                              </button>
-                                            </div>
-                                          ) : (
-                                            <div className="flex items-center gap-2">
-                                              <span className="text-gray-400 font-mono">••••••••</span>
-                                              <button
-                                                onClick={() => togglePassword(credential.id || index)}
-                                                className="p-1 bg-white/10 rounded-full text-gray-400 hover:text-white hover:bg-white/20 transition-colors"
-                                              >
-                                                <Eye className="w-4 h-4" />
-                                              </button>
-                                            </div>
-                                          )}
+                                      </div>
+                                    </td>,
+                                    <td key="count" className="px-8 py-5 whitespace-nowrap">
+                                      <div className="inline-flex items-center justify-center px-3 py-1 rounded-full bg-accent/20 text-accent text-sm font-semibold">
+                                        {credential.count || 1}
+                                      </div>
+                                    </td>
+                                  ]
+                                ) : (
+                                  // 其他标签页显示完整数据
+                                  [
+                                    <td key="url" className="px-8 py-5 whitespace-nowrap">
+                                      <div className="flex items-center gap-2">
+                                        <Globe className="w-4 h-4 text-blue-400" />
+                                        <div className="text-sm text-white font-medium">
+                                          {credential.website || credential.source || 'N/A'}
                                         </div>
-                                      )}
-                                    </div>
-                                  </td>,
-                                  <td key="indexed" className="px-8 py-5 whitespace-nowrap">
-                                    <div className="text-sm text-gray-400 font-medium">
-                                      {formatDate(credential.leaked_at || '')}
-                                    </div>
-                                  </td>
-                                ]
-                              )}
+                                      </div>
+                                    </td>,
+                                    <td key="type" className="px-8 py-5 whitespace-nowrap">
+                                      <div className="inline-flex items-center justify-center px-3 py-1 rounded-full text-xs font-bold">
+                                        {credential.email && credential.email.includes('@') ? (
+                                          <span className="bg-blue-500/20 text-blue-400">EMAIL</span>
+                                        ) : (
+                                          <span className="bg-green-500/20 text-green-400">USERNAME</span>
+                                        )}
+                                      </div>
+                                    </td>,
+                                    <td key="email" className="px-8 py-5 whitespace-nowrap">
+                                      <div className="text-sm text-white font-medium truncate max-w-[250px]">
+                                        {credential.email || credential.username || 'N/A'}
+                                      </div>
+                                    </td>,
+                                    <td key="password" className="px-8 py-5 whitespace-nowrap">
+                                      <div className="flex items-center gap-3">
+                                        {autoUnlock ? (
+                                          <div className="text-sm font-medium">
+                                            {credential.password_plaintext ? (
+                                              <span className="text-white font-mono bg-white/5 px-2 py-1 rounded">
+                                                {credential.password_plaintext}
+                                              </span>
+                                            ) : credential.password_hash ? (
+                                              <span className="text-gray-400 font-mono">{credential.password_hash.slice(0, 15)}...</span>
+                                            ) : (
+                                              <span className="text-gray-500 italic">N/A</span>
+                                            )}
+                                          </div>
+                                        ) : (
+                                          <div>
+                                            {showPasswords[credential.id || index] ? (
+                                              <div className="flex items-center gap-2">
+                                                {credential.password_plaintext ? (
+                                                  <span className="text-white font-mono bg-white/5 px-2 py-1 rounded">
+                                                    {credential.password_plaintext}
+                                                  </span>
+                                                ) : credential.password_hash ? (
+                                                  <span className="text-gray-400 font-mono">{credential.password_hash.slice(0, 15)}...</span>
+                                                ) : (
+                                                  <span className="text-gray-500 italic">N/A</span>
+                                                )}
+                                                <button
+                                                  onClick={() => togglePassword(credential.id || index)}
+                                                  className="p-1 bg-white/10 rounded-full text-gray-400 hover:text-white hover:bg-white/20 transition-colors"
+                                                >
+                                                  <EyeOff className="w-4 h-4" />
+                                                </button>
+                                              </div>
+                                            ) : (
+                                              <div className="flex items-center gap-2">
+                                                <span className="text-gray-400 font-mono">••••••••</span>
+                                                <button
+                                                  onClick={() => togglePassword(credential.id || index)}
+                                                  className="p-1 bg-white/10 rounded-full text-gray-400 hover:text-white hover:bg-white/20 transition-colors"
+                                                >
+                                                  <Eye className="w-4 h-4" />
+                                                </button>
+                                              </div>
+                                            )}
+                                          </div>
+                                        )}
+                                      </div>
+                                    </td>,
+                                    <td key="indexed" className="px-8 py-5 whitespace-nowrap">
+                                      <div className="text-sm text-gray-400 font-medium">
+                                        {formatDate(credential.leaked_at || '')}
+                                      </div>
+                                    </td>
+                                  ]
+                                )}
+                              </tr>
+                            ))
+                          ) : (
+                            <tr>
+                              <td colSpan={activeTab === 'URLs' || activeTab === '子域名' ? 2 : 5} className="px-8 py-20 text-center">
+                                <div className="text-gray-500 text-lg">
+                                  {activeTab === '报告' ? '该域名的报告数据已加载，请切换到其他标签页查看详细数据' : '当前标签页暂无数据'}
+                                </div>
+                              </td>
                             </tr>
-                          ))}
+                          )}
                         </tbody>
                       </table>
                     </div>
