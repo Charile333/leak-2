@@ -14,7 +14,7 @@ const ParticleWaves: React.FC = () => {
     if (!containerRef.current) return;
 
     const container = containerRef.current;
-    const particleCount = 8000; // 增加粒子数量，提高视觉效果
+    const particleCount = 5000; // 减少粒子数量，提高性能，同时保持视觉效果
 
     // 初始化场景
     const scene = new THREE.Scene();
@@ -28,7 +28,7 @@ const ParticleWaves: React.FC = () => {
       10,
       100000
     );
-    camera.position.set(0, 300, 800); // 调整相机位置，获得更好的视角
+    camera.position.set(0, 200, 500);
     cameraRef.current = camera;
 
     // 创建粒子几何体
@@ -37,7 +37,7 @@ const ParticleWaves: React.FC = () => {
     const sizes = new Float32Array(particleCount);
 
     // 初始化粒子位置和大小
-    const separation = 80; // 减少粒子间距，使粒子更密集
+    const separation = 100;
     const amount = Math.sqrt(particleCount);
     const offset = amount / 2;
 
@@ -55,32 +55,32 @@ const ParticleWaves: React.FC = () => {
     geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
     geometry.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
 
-    // 创建粒子材质 - 更好地复刻tsl-partide-waves效果
+    // 创建粒子材质
     const material = new THREE.ShaderMaterial({
       uniforms: {
         time: { value: 0.0 },
-        uColor: { value: new THREE.Color(0x6366f1) }, // 添加主色调，使用紫色调，更接近原效果
       },
       vertexShader: `
         uniform float time;
         
         void main() {
           vec3 pos = position;
-          float x = pos.x * 0.02;
-          float z = pos.z * 0.02;
+          float x = pos.x * 0.5;
+          float z = pos.z * 0.5;
           
-          // 调整时间参数，使动画更流畅
-          float time2 = time * 0.5;
+          // 使用直接的时间计算，确保动画正常向前播放
+          float time2 = time * 2.0; // 调整速度，使动画更明显
           
-          // 波浪运动 - 调整参数，复刻tsl-partide-waves的波浪效果
-          float sinX = sin(x + time2) * 150.0; // 调整振幅
-          float sinZ = sin(z + time2 * 0.7) * 150.0; // 调整振幅和频率
+          // 波浪运动 - 调整参数使动画更明显
+          float sinX = sin(x + time2 * 0.7) * 80.0; // 增加振幅
+          float sinZ = sin(z + time2 * 0.5) * 80.0; // 增加振幅
           
           pos.y = sinX + sinZ;
           
-          // 大小变化 - 调整参数，使粒子大小变化更自然
-          float sizeMod = sin(x * 2.0 + time2 * 1.2) * 0.5 + 1.0;
-          float particleSize = sizeMod * 10.0;
+          // 大小变化 - 调整参数使粒子大小变化更明显
+          float sinSX = sin(x + time2 * 0.7) + 1.0;
+          float sinSZ = sin(z + time2 * 0.5) + 1.0;
+          float particleSize = (sinSX + sinSZ) * 8.0; // 增加粒子大小
           
           vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);
           gl_PointSize = particleSize * (300.0 / -mvPosition.z);
@@ -88,8 +88,6 @@ const ParticleWaves: React.FC = () => {
         }
       `,
       fragmentShader: `
-        uniform vec3 uColor;
-        
         void main() {
           // 圆形粒子
           vec2 vUv = gl_PointCoord.xy - vec2(0.5);
@@ -99,18 +97,14 @@ const ParticleWaves: React.FC = () => {
             discard;
           }
           
-          // 添加渐变效果，更接近原效果
+          // 白色粒子，添加轻微的透明度变化，使效果更柔和
           float alpha = 1.0 - distance * 2.0;
-          float alpha2 = pow(alpha, 2.0); // 平方衰减，使中心更亮，边缘更柔和
-          
-          // 使用主色调，添加亮度变化
-          vec3 color = uColor * (alpha2 * 1.2 + 0.3);
-          gl_FragColor = vec4(color, alpha2 * 0.8);
+          gl_FragColor = vec4(1.0, 1.0, 1.0, alpha);
         }
       `,
-      transparent: true,
-      depthWrite: false,
-      blending: THREE.AdditiveBlending,
+      transparent: true, // 启用透明，使效果更柔和
+      depthWrite: false, // 禁用深度写入，提高性能
+      blending: THREE.AdditiveBlending, // 使用加法混合，使粒子更明亮
       vertexColors: false,
     });
 
