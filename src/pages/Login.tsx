@@ -275,9 +275,9 @@ const Login: React.FC = () => {
             <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
           ) : (
             <>
-              发送登录链接
-              <ArrowRight className="w-4 h-4" />
-            </>
+                登录
+                <ArrowRight className="w-4 h-4" />
+              </>
           )}
         </motion.button>
           </form>

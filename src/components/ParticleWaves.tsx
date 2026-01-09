@@ -66,12 +66,12 @@ const ParticleWaves: React.FC = () => {
         attribute float size;
         
         void main() {
-          // 与源文件完全相同的时间计算
-          float time2 = (1.0 - time) * 5.0;
+          // 修复时间计算，使用递增的时间值
+          float time2 = time * 2.0;
           float x = float(gl_VertexID % int(${Math.sqrt(particleCount)})) * 0.5;
           float z = float(gl_VertexID / int(${Math.sqrt(particleCount)})) * 0.5;
           
-          // 与源文件完全相同的波浪动画
+          // 波浪动画
           float sinX = sin(x + time2 * 0.7) * 50.0;
           float sinZ = sin(z + time2 * 0.5) * 50.0;
           
@@ -81,7 +81,7 @@ const ParticleWaves: React.FC = () => {
             position.z
           );
           
-          // 与源文件完全相同的大小动画
+          // 粒子大小动画
           float sinSX = (sin(x + time2 * 0.7) + 1.0) * 5.0;
           float sinSZ = (sin(z + time2 * 0.5) + 1.0) * 5.0;
           float newSize = sinSX + sinSZ;
