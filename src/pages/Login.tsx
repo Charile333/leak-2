@@ -8,10 +8,13 @@ import ParticleWaves from '../components/ParticleWaves';
 
 const Login: React.FC = () => {
   const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
   const [emailError, setEmailError] = useState('');
+  const [passwordError, setPasswordError] = useState('');
   const { loginWithCredentials } = useAuth();
 
   // 从localStorage加载记住的邮箱
@@ -35,6 +38,7 @@ const Login: React.FC = () => {
     
     // 重置错误信息
     setEmailError('');
+    setPasswordError('');
     setError('');
     
     // 邮箱验证
@@ -43,6 +47,12 @@ const Login: React.FC = () => {
       isValid = false;
     } else if (!validateEmail(email)) {
       setEmailError('请输入有效的邮箱格式');
+      isValid = false;
+    }
+    
+    // 密码验证
+    if (!password.trim()) {
+      setPasswordError('请输入密码');
       isValid = false;
     }
     
@@ -71,15 +81,17 @@ const Login: React.FC = () => {
         localStorage.removeItem('rememberedEmail');
       }
       
-      const result = await loginWithCredentials(trimmedEmail);
+      const result = await loginWithCredentials(trimmedEmail, password);
       if (!result.success) {
         setError(result.message || '登录失败');
+        setSuccess('');
       } else {
-        // 登录链接发送成功，显示成功消息，不跳转到首页
-        // 用户需要点击邮箱中的登录链接才能完成登录
+        // 登录成功，显示成功消息
         setError('');
-        // 可以在这里添加成功消息显示
-        alert('登录链接已发送到您的邮箱，请查收并点击链接完成登录');
+        setSuccess(result.message || '登录成功');
+        // 清空输入框
+        setEmail('');
+        setPassword('');
       }
     } catch (err: any) {
       setError(err.message || '登录失败，请检查您的输入或网络连接');
@@ -166,6 +178,39 @@ const Login: React.FC = () => {
                 />
               </div>
             </div>
+            
+            {/* Password Input */}
+            <div className="space-y-2 mt-4">
+              <div className="flex items-center justify-between">
+                <label htmlFor="password" className="block text-sm font-medium text-gray-300">
+                  密码
+                </label>
+                {passwordError && (
+                  <motion.div 
+                    className="flex items-center text-xs text-red-400"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                  >
+                    <HelpCircle className="w-3 h-3 mr-1" />
+                    {passwordError}
+                  </motion.div>
+                )}
+              </div>
+              <div className="relative">
+                <motion.input
+                  type="password"
+                  id="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="请输入密码"
+                  className={`w-full px-4 py-3 bg-white/5 border rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 transition-all ${passwordError ? 'border-red-500 focus:ring-red-500' : 'border-white/10 focus:ring-accent'}`}
+                  disabled={isLoading}
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.7, duration: 0.4 }}
+                />
+              </div>
+            </div>
 
             {/* Remember Me */}
             <div className="flex items-center text-sm mt-2">
@@ -199,6 +244,19 @@ const Login: React.FC = () => {
               >
                 <HelpCircle className="w-4 h-4 flex-shrink-0" />
                 <span>{error}</span>
+              </motion.div>
+            )}
+            
+            {/* Global Success Message */}
+            {success && (
+              <motion.div
+                initial={{ opacity: 0, height: 0, y: -10 }}
+                animate={{ opacity: 1, height: 'auto', y: 0 }}
+                exit={{ opacity: 0, height: 0, y: -10 }}
+                className="p-3 bg-green-500/10 border border-green-500/20 rounded-lg text-green-400 text-sm flex items-center gap-2"
+              >
+                <HelpCircle className="w-4 h-4 flex-shrink-0" />
+                <span>{success}</span>
               </motion.div>
             )}
 

@@ -32,6 +32,12 @@ const WHITELISTED_USERS = process.env.WHITELISTED_USERS
   : [];
 const OTX_API_KEY = process.env.OTX_API_KEY || process.env.VITE_OTX_API_KEY;
 
+// 白名单用户密码配置（开发环境使用）
+const USER_PASSWORDS = {
+  'konaa2651@gmail.com': 'password123',
+  'Lysirsec@outlook.com': 'password123'
+};
+
 console.log('🔍 环境变量检查：');
 console.log('   LEAKRADAR_API_KEY:', LEAKRADAR_API_KEY ? '已找到' : '未找到');
 console.log('   WHITELISTED_USERS:', WHITELISTED_USERS.length > 0 ? `已找到 ${WHITELISTED_USERS.length} 个用户` : '未找到');
@@ -47,6 +53,12 @@ if (WHITELISTED_USERS.length === 0) {
   console.warn('⚠️  警告：WHITELISTED_USERS 未设置，添加示例用户到白名单');
   WHITELISTED_USERS.push('konaa2651@gmail.com');
   console.log('   示例用户已添加：konaa2651@gmail.com');
+}
+
+// 开发环境默认密码提示
+console.log('📝 开发环境默认密码：');
+for (const email of WHITELISTED_USERS) {
+  console.log(`   ${email}: ${USER_PASSWORDS[email] || 'password123'}`);
 }
 
 // 创建HTTP服务器
@@ -105,13 +117,13 @@ const server = http.createServer((req, res) => {
     }
   }
   
-  // 处理登录API请求 - 发送登录链接和验证登录链接
+  // 处理登录API请求 - 密码验证登录
   if (url === '/api/auth/login') {
     if (req.method === 'POST') {
       // 读取请求体
       getRequestBody(req).then(body => {
         try {
-          const { email } = JSON.parse(body);
+          const { email, password } = JSON.parse(body);
           
           // 白名单验证
           if (!WHITELISTED_USERS.includes(email)) {
@@ -124,47 +136,31 @@ const server = http.createServer((req, res) => {
             return;
           }
           
-          console.log(`[Whitelist] User ${email} granted access (in whitelist), sending login link`);
+          // 密码验证
+          const expectedPassword = USER_PASSWORDS[email] || 'password123';
+          if (password !== expectedPassword) {
+            console.log(`[Login] User ${email} failed password validation`);
+            res.writeHead(401, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+              error: 'Unauthorized',
+              message: '密码错误，请重新输入'
+            }));
+            return;
+          }
           
-          // 生成JWT令牌，用于登录链接验证
-          const token = jwt.sign(
-            { email, type: 'login' },
-            JWT_SECRET,
-            { expiresIn: JWT_EXPIRY }
-          );
+          console.log(`[Login] User ${email} authenticated successfully`);
           
-          // 生成登录链接
-          const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5174';
-          const loginLink = `${frontendUrl}/login/verify?token=${token}`;
-          
-          // 发送登录邮件
-          const mailOptions = {
-            from: process.env.SMTP_FROM || 'noreply@example.com',
-            to: email,
-            subject: 'Lysir谍卫 - 登录链接',
-            html: `
-              <h1>Lysir谍卫</h1>
-              <p>您好！</p>
-              <p>您请求了登录Lysir谍卫平台的链接。</p>
-              <p>请点击以下链接登录：</p>
-              <p><a href="${loginLink}" style="display: inline-block; padding: 10px 20px; background-color: #4CAF50; color: white; text-decoration: none; border-radius: 5px;">登录Lysir谍卫</a></p>
-              <p>该链接将在5分钟后失效。</p>
-              <p>如果您没有请求此链接，请忽略此邮件。</p>
-              <p>--</p>
-              <p>Lysir谍卫团队</p>
-            `
-          };
-          
-          // 开发环境中跳过实际发送邮件，直接返回成功响应
-          console.log(`[Dev Mode] Login link for ${email}: ${loginLink}`);
+          // 返回登录成功响应
           res.writeHead(200, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({
             success: true,
-            message: '登录链接已生成（开发模式），请查看控制台获取登录链接',
-            loginLink: loginLink
+            message: '登录成功',
+            user: {
+              email: email,
+              name: email.split('@')[0],
+              role: 'user'
+            }
           }));
-          return;
-          
           return;
         } catch (error) {
           console.error('[Dev Server Error] Invalid JSON:', error.message);
@@ -183,137 +179,17 @@ const server = http.createServer((req, res) => {
         }));
       });
       return;
-    } else if (req.method === 'GET') {
-      // 提取令牌
-      const urlObj = new URL(`http://localhost${url}`);
-      const token = urlObj.searchParams.get('token');
-      
-      if (!token) {
-        res.writeHead(400, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({
-          error: 'Bad Request',
-          message: '缺少登录令牌'
-        }));
-        return;
-      }
-      
-      try {
-        // 验证令牌
-        const decoded = jwt.verify(token, JWT_SECRET);
-        
-        // 检查令牌类型
-        if (decoded.type !== 'login') {
-          throw new Error('Invalid token type');
-        }
-        
-        const { email } = decoded;
-        
-        console.log(`[Login Verify] User ${email} verified successfully`);
-        
-        // 返回登录成功响应
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({
-          success: true,
-          message: '登录验证成功',
-          user: {
-            email: email,
-            name: email.split('@')[0],
-            role: 'user'
-          }
-        }));
-        return;
-      } catch (error) {
-        console.error('[Login Verify] Token verification failed:', error.message);
-        
-        // 检查是否是过期错误
-        let message = '登录链接无效或已过期';
-        if (error.name === 'TokenExpiredError') {
-          message = '登录链接已过期，请重新请求登录';
-        }
-        
-        res.writeHead(401, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({
-          error: 'Unauthorized',
-          message: message
-        }));
-        return;
-      }
     } else {
       res.writeHead(405, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({
         error: 'Method Not Allowed',
-        message: 'Only POST and GET requests are allowed for this endpoint'
+        message: 'Only POST requests are allowed for this endpoint'
       }));
       return;
     }
   }
   
-  // 处理登录链接验证API请求
-  if (url.startsWith('/api/auth/login/verify')) {
-    if (req.method === 'GET') {
-      // 提取令牌
-      const urlObj = new URL(`http://localhost${url}`);
-      const token = urlObj.searchParams.get('token');
-      
-      if (!token) {
-        res.writeHead(400, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({
-          error: 'Bad Request',
-          message: '缺少登录令牌'
-        }));
-        return;
-      }
-      
-      try {
-        // 验证令牌
-        const decoded = jwt.verify(token, JWT_SECRET);
-        
-        // 检查令牌类型
-        if (decoded.type !== 'login') {
-          throw new Error('Invalid token type');
-        }
-        
-        const { email } = decoded;
-        
-        console.log(`[Login Verify] User ${email} verified successfully`);
-        
-        // 返回登录成功响应
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({
-          success: true,
-          message: '登录验证成功',
-          user: {
-            email: email,
-            name: email.split('@')[0],
-            role: 'user'
-          }
-        }));
-        return;
-      } catch (error) {
-        console.error('[Login Verify] Token verification failed:', error.message);
-        
-        // 检查是否是过期错误
-        let message = '登录链接无效或已过期';
-        if (error.name === 'TokenExpiredError') {
-          message = '登录链接已过期，请重新请求登录';
-        }
-        
-        res.writeHead(401, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({
-          error: 'Unauthorized',
-          message: message
-        }));
-        return;
-      }
-    } else {
-      res.writeHead(405, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({
-        error: 'Method Not Allowed',
-        message: 'Only GET requests are allowed for this endpoint'
-      }));
-      return;
-    }
-  }
+  // 登录链接验证API已移除，使用密码验证方式
   
   // 只处理/api请求
   if (!url.startsWith('/api')) {

@@ -18,22 +18,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return savedAuth ? JSON.parse(savedAuth) : false;
   });
 
-  // 登录方法 - 调用白名单登录API
-  const loginWithCredentials = async (email: string): Promise<{ success: boolean; message?: string }> => {
+  // 登录方法 - 调用密码登录API
+  const loginWithCredentials = async (email: string, password?: string): Promise<{ success: boolean; message?: string }> => {
     try {
       // 根据环境动态选择API地址
-    const isProduction = import.meta.env.PROD;
-    const BASE_URL = isProduction ? '' : 'http://localhost:3001';
-    const API_PREFIX = '/api'; // 始终使用/api前缀
-    const loginUrl = `${BASE_URL}${API_PREFIX}/auth/login`;
+      const isProduction = import.meta.env.PROD;
+      const BASE_URL = isProduction ? '' : 'http://localhost:3001';
+      const API_PREFIX = '/api'; // 始终使用/api前缀
+      const loginUrl = `${BASE_URL}${API_PREFIX}/auth/login`;
       
-      // 调用白名单登录API
+      // 调用密码登录API
       const response = await fetch(loginUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ email }),
+        body: JSON.stringify({ email, password }),
         credentials: 'same-origin', // 仅在同域请求中包含凭证
       });
 
@@ -46,11 +46,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         };
       }
 
-      // 发送登录链接成功，不直接设置认证状态
-      // 只有点击登录链接后才会设置认证状态
+      // 登录成功，设置认证状态
+      setIsAuthenticated(true);
+      localStorage.setItem('leakradar_auth', 'true');
+      
+      // 保存用户信息
+      if (data.user) {
+        localStorage.setItem('leakradar_user', JSON.stringify(data.user));
+      }
+
       return { 
         success: true, 
-        message: data.message || '登录链接已发送，请查收邮箱'
+        message: data.message || '登录成功'
       };
     } catch (error: any) {
       console.error('登录错误:', error);
