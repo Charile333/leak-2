@@ -128,10 +128,19 @@ class LeakRadarAPI {
   }
 
   private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+    // 优先使用实例中的API密钥，其次使用环境变量
+    const apiKey = import.meta.env.VITE_LEAKRADAR_API_KEY || import.meta.env.LEAKRADAR_API_KEY;
+    
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
       'Accept': 'application/json',
     };
+
+    // 添加API密钥到请求头
+    if (apiKey) {
+      headers['Authorization'] = `Bearer ${apiKey}`;
+      headers['X-API-Key'] = apiKey;
+    }
 
     if (options.headers) {
       Object.entries(options.headers).forEach(([key, value]) => {
@@ -147,6 +156,7 @@ class LeakRadarAPI {
       const url = `${BASE_URL}${API_PREFIX}${formattedEndpoint}`;
       
       console.log(`[LeakRadar API] Sending request: ${url}`);
+      console.log(`[LeakRadar API] Using API Key: ${apiKey ? 'Yes' : 'No'}`);
       
       const response = await fetch(url, {
         ...options,
@@ -156,22 +166,35 @@ class LeakRadarAPI {
 
       console.log(`[LeakRadar API] Received response: ${response.status} for ${url}`);
 
-      if (!response.ok) {
-        let errorMsg = `请求失败 (${response.status})`;
-        let detail = '';
-        try {
-          const errorData = await response.json();
-          console.error(`[LeakRadar API] Error Detail for ${endpoint}:`, errorData);
-          // 将错误详情转为字符串，方便在 Error 对象中查看
-          detail = typeof errorData === 'object' ? JSON.stringify(errorData) : String(errorData);
-        } catch (e) {
-          detail = await response.text().catch(() => '无法读取错误响应体');
-          console.error(`[LeakRadar API] Raw Error Text for ${endpoint}:`, detail);
-        }
-        throw new Error(`${errorMsg}: ${detail}`);
+      // 获取原始响应文本，用于调试和错误处理
+      const responseText = await response.text();
+      console.log(`[LeakRadar API] Response Text (first 100 chars):`, responseText.substring(0, 100));
+      
+      // 检查响应是否为HTML（通常是错误或重定向）
+      if (responseText.startsWith('<!DOCTYPE') || responseText.startsWith('<html')) {
+        throw new Error(`API返回HTML而非JSON：${response.status} ${response.statusText}`);
       }
 
-      return response.json();
+      if (!response.ok) {
+        let errorMsg = `请求失败 (${response.status})`;
+        try {
+          const errorData = JSON.parse(responseText);
+          console.error(`[LeakRadar API] Error Detail for ${endpoint}:`, errorData);
+          // 将错误详情转为字符串，方便在 Error 对象中查看
+          errorMsg = `${errorMsg}: ${typeof errorData === 'object' ? JSON.stringify(errorData) : String(errorData)}`;
+        } catch (e) {
+          console.error(`[LeakRadar API] Raw Error Text for ${endpoint}:`, responseText);
+          errorMsg = `${errorMsg}: ${responseText}`;
+        }
+        throw new Error(errorMsg);
+      }
+
+      // 尝试解析JSON响应
+      try {
+        return JSON.parse(responseText) as T;
+      } catch (jsonError) {
+        throw new Error(`JSON解析失败：${jsonError.message}。响应内容：${responseText}`);
+      }
     } catch (error: any) {
       // 提取错误信息
       let msg = 'Unknown Error';
@@ -192,6 +215,11 @@ class LeakRadarAPI {
       // 更友好的错误信息处理
       if (msg.includes('Failed to fetch') || msg.includes('NetworkError')) {
         throw new Error('无法连接到服务器，请检查网络连接或服务器状态');
+      }
+      
+      // 处理HTML响应错误
+      if (msg.includes('API返回HTML而非JSON')) {
+        throw new Error('API请求失败，服务器返回了HTML页面。请检查API端点配置或服务器状态。');
       }
       
       throw new Error(msg);
