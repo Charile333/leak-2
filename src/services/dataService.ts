@@ -295,11 +295,48 @@ export const dataService = {
           
           // 调试日志，查看API返回的原始数据结构
           console.log(`[Debug] URLs API Response items:`, urlsRes.items);
+          console.log(`[Debug] Full URLs API Response:`, urlsRes);
+          console.log(`[Debug] URLs API Response items length:`, urlsRes.items.length);
+          if (urlsRes.items.length > 0) {
+            console.log(`[Debug] First URL Item:`, urlsRes.items[0]);
+            console.log(`[Debug] First URL Item Type:`, typeof urlsRes.items[0]);
+            console.log(`[Debug] First URL Item Keys:`, typeof urlsRes.items[0] === 'object' ? Object.keys(urlsRes.items[0]) : 'N/A');
+          }
           
           return urlsRes.items.map((urlItem: any, index: number) => {
-            // 直接使用API返回的count值，不设置默认值为1，避免覆盖真实数据
-            // 如果API返回0，也应该显示0
-            const countValue = typeof urlItem.count === 'number' ? urlItem.count : 1;
+            let url = '';
+            let countValue = 1;
+            
+            // 检查URL项的数据类型
+            if (typeof urlItem === 'string') {
+              // 如果是字符串，直接使用作为URL，次数默认为1
+              url = urlItem;
+              console.log(`[Debug] String URL: ${url}, using default count 1`);
+            } else if (typeof urlItem === 'object' && urlItem !== null) {
+              // 如果是对象，提取URL和出现次数
+              url = urlItem.url || urlItem.link || urlItem.href || urlItem.address || '';
+              
+              // 检查API返回的数据结构，寻找出现次数相关字段
+              // 可能的字段名：count, times, occurrences, frequency
+              const possibleCountFields = ['count', 'times', 'occurrences', 'frequency', 'appearances'];
+              
+              // 遍历可能的字段名，找到第一个存在且为数字的字段
+              for (const field of possibleCountFields) {
+                if (typeof urlItem[field] === 'number') {
+                  countValue = urlItem[field];
+                  console.log(`[Debug] Found count in field '${field}': ${countValue} for URL ${url}`);
+                  break;
+                }
+              }
+              
+              // 特殊情况：如果API返回的是类似 { "https://example.com": 5 } 这样的键值对
+              if (countValue === 1 && Object.keys(urlItem).length === 1 && typeof urlItem[Object.keys(urlItem)[0]] === 'number') {
+                const key = Object.keys(urlItem)[0];
+                url = key;
+                countValue = urlItem[key];
+                console.log(`[Debug] Detected key-value pair: ${url}: ${countValue}`);
+              }
+            }
             
             return {
               id: `url-${index}-${Math.random()}`,
@@ -308,7 +345,7 @@ export const dataService = {
               password_plaintext: '',
               password_hash: '',
               hash_type: '',
-              website: urlItem.url || urlItem || '',
+              website: url || urlItem || '',
               source: '',
               leaked_at: '',
               type: 'Employee',
