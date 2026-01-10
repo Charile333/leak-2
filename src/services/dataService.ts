@@ -324,11 +324,48 @@ export const dataService = {
           
           // 调试日志，查看API返回的原始数据结构
           console.log(`[Debug] Subdomains API Response items:`, subdomainsRes.items);
+          console.log(`[Debug] Full Subdomains API Response:`, subdomainsRes);
+          console.log(`[Debug] Subdomains API Response items length:`, subdomainsRes.items.length);
+          if (subdomainsRes.items.length > 0) {
+            console.log(`[Debug] First Subdomain Item:`, subdomainsRes.items[0]);
+            console.log(`[Debug] First Subdomain Item Type:`, typeof subdomainsRes.items[0]);
+            console.log(`[Debug] First Subdomain Item Keys:`, typeof subdomainsRes.items[0] === 'object' ? Object.keys(subdomainsRes.items[0]) : 'N/A');
+          }
           
           return subdomainsRes.items.map((subdomainItem: any, index: number) => {
-            // 直接使用API返回的count值，不设置默认值为1，避免覆盖真实数据
-            // 如果API返回0，也应该显示0
-            const countValue = typeof subdomainItem.count === 'number' ? subdomainItem.count : 1;
+            let subdomain = '';
+            let countValue = 1;
+            
+            // 检查子域名项的数据类型
+            if (typeof subdomainItem === 'string') {
+              // 如果是字符串，直接使用作为子域名，次数默认为1
+              subdomain = subdomainItem;
+              console.log(`[Debug] String subdomain: ${subdomain}, using default count 1`);
+            } else if (typeof subdomainItem === 'object' && subdomainItem !== null) {
+              // 如果是对象，提取子域名和出现次数
+              subdomain = subdomainItem.subdomain || subdomainItem.domain || subdomainItem.name || '';
+              
+              // 检查API返回的数据结构，寻找出现次数相关字段
+              // 可能的字段名：count, times, occurrences, frequency
+              const possibleCountFields = ['count', 'times', 'occurrences', 'frequency', 'appearances'];
+              
+              // 遍历可能的字段名，找到第一个存在且为数字的字段
+              for (const field of possibleCountFields) {
+                if (typeof subdomainItem[field] === 'number') {
+                  countValue = subdomainItem[field];
+                  console.log(`[Debug] Found count in field '${field}': ${countValue} for subdomain ${subdomain}`);
+                  break;
+                }
+              }
+              
+              // 特殊情况：如果API返回的是类似 { "subdomain.com": 5 } 这样的键值对
+              if (countValue === 1 && Object.keys(subdomainItem).length === 1 && typeof subdomainItem[Object.keys(subdomainItem)[0]] === 'number') {
+                const key = Object.keys(subdomainItem)[0];
+                subdomain = key;
+                countValue = subdomainItem[key];
+                console.log(`[Debug] Detected key-value pair: ${subdomain}: ${countValue}`);
+              }
+            }
             
             return {
               id: `sub-${index}-${Math.random()}`,
@@ -337,7 +374,7 @@ export const dataService = {
               password_plaintext: '',
               password_hash: '',
               hash_type: '',
-              website: subdomainItem.subdomain || subdomainItem || '',
+              website: subdomain || subdomainItem || '',
               source: '',
               leaked_at: '',
               type: 'Employee',
