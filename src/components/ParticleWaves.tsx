@@ -91,9 +91,9 @@ const ParticleWaves: React.FC = () => {
           // 更新位置
           vec3 newPosition = vec3(position.x, y, position.z);
           
-          // 计算粒子大小 - 放大粒子
-          float sinSX = (sin(x * 0.5 + time2 * uSpeed * 5.0 * 0.7) + 1.0) * 8.0;
-          float sinSZ = (sin(z * 0.5 + time2 * uSpeed * 5.0 * 0.5) + 1.0) * 8.0;
+          // 计算粒子大小 - 再次放大粒子
+          float sinSX = (sin(x * 0.5 + time2 * uSpeed * 5.0 * 0.7) + 1.0) * 12.0;
+          float sinSZ = (sin(z * 0.5 + time2 * uSpeed * 5.0 * 0.5) + 1.0) * 12.0;
           float particleSize = sinSX + sinSZ;
           
           // 转换到裁剪空间
