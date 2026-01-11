@@ -10,7 +10,8 @@ import {
   User
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
-import dieLogo from '../../assets/diep.png';
+// 使用public目录下的logo
+const dieLogo = '/diewei.png';
 import { useAuth } from '../../context/AuthContext';
 
 interface SidebarProps {

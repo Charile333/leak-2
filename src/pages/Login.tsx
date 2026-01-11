@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { ArrowRight, HelpCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import dieLogo from '../assets/diep.png';
+// 使用public目录下的logo
+const dieLogo = '/diewei2.png';
 import purpleLogo from '../assets/紫色2.png';
 import { useAuth } from '../context/AuthContext';
 import ParticleWaves from '../components/ParticleWaves';
