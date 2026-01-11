@@ -171,10 +171,12 @@ export const dataService = {
         leakRadarApi.searchDomainCategory(domain, 'third_parties', limit, offset).catch(() => ({ items: [], total: 0, success: false } as LeakRadarSearchResult)),
       ]);
       
-      // 只返回每个分类中已解锁的前10条数据
-      empRes.items = empRes.items.filter(item => item.unlocked || item.password_plaintext).slice(0, 10);
-      custRes.items = custRes.items.filter(item => item.unlocked || item.password_plaintext).slice(0, 10);
-      thirdRes.items = thirdRes.items.filter(item => item.unlocked || item.password_plaintext).slice(0, 10);
+      // 返回所有数据，包括已解锁和未解锁的数据
+      // 不再过滤未解锁数据，让前端根据数据类型和索引位置决定显示样式
+      // 但仍限制数量为limit条，避免数据过多
+      empRes.items = empRes.items.slice(0, limit);
+      custRes.items = custRes.items.slice(0, limit);
+      thirdRes.items = thirdRes.items.slice(0, limit);
 
       // 检查获取的数据是否已解锁，如果未解锁，尝试再次获取
       const isDataUnlocked = empRes.items.some(item => item.unlocked || item.password_plaintext) || 
@@ -467,8 +469,10 @@ export const dataService = {
         isDataUnlocked = res.items.some(item => item.unlocked || item.password_plaintext);
       }
       
-      // 只返回已解锁的前10条数据
-      res.items = res.items.filter(item => item.unlocked || item.password_plaintext).slice(0, 10);
+      // 返回所有数据，包括已解锁和未解锁的数据
+      // 不再过滤未解锁数据，让前端根据数据类型和索引位置决定显示样式
+      // 但仍限制数量为limit条，避免数据过多
+      res.items = res.items.slice(0, limit);
       
       const transformItem = (item: any, type: LeakedCredential['type']): LeakedCredential => {
         let strength: LeakedCredential['strength'] = 'Medium';
