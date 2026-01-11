@@ -194,32 +194,27 @@ const Dashboard = () => {
       // 生成CSV内容
       const csvHeader = 'URL,TYPE,EMAIL/USERNAME,PASSWORD,Indexed At\n';
       
-      // 生成CSV行
-      const csvRows = fullResults.items.map((item: any, index: number) => {
-        const url = item.website || item.url || domain || '';
-        
-        // CSV转义处理函数
-        const escapeCsv = (value: string) => {
-          if (value.includes(',') || value.includes('"') || value.includes('\n')) {
-            return `"${value.replace(/"/g, '""')}"`;
-          }
-          return value;
-        };
-        
-        // 只导出前10条完整数据，剩下的数据只显示URL
-        if (index < 10) {
-          // 前10条完整数据，包含所有字段
-          const type = item.email && item.email.includes('@') ? 'EMAIL' : 'USERNAME';
-          const emailUsername = item.email || item.username || '';
-          const password = item.password_plaintext || item.password || '';
-          const leakedAt = item.leaked_at || item.added_at || '';
-          
-          return `${escapeCsv(url)},${escapeCsv(type)},${escapeCsv(emailUsername)},${escapeCsv(password)},${escapeCsv(leakedAt)}\n`;
-        } else {
-          // 第11条及以后的数据，只显示URL，其他字段留空
-          return `${escapeCsv(url)},,,\n`;
+      // 生成CSV行 - 只导出前10条完整信息
+    const csvRows = fullResults.items.slice(0, 10).map((item: any) => {
+      const url = item.website || item.url || domain || '';
+      
+      // CSV转义处理函数
+      const escapeCsv = (value: string) => {
+        if (value.includes(',') || value.includes('"') || value.includes('\n')) {
+          return `"${value.replace(/"/g, '""')}"`;
         }
-      }).join('');
+        return value;
+      };
+      
+      // 前10条完整数据，包含所有字段
+      const type = item.email && item.email.includes('@') ? 'EMAIL' : 'USERNAME';
+      const emailUsername = item.email || item.username || '';
+      const password = item.password_plaintext || item.password || '';
+      const leakedAt = item.leaked_at || item.added_at || '';
+      
+      return `${escapeCsv(url)},${escapeCsv(type)},${escapeCsv(emailUsername)},${escapeCsv(password)},${escapeCsv(leakedAt)}
+`;
+    }).join('');
       
       // 创建CSV blob
       const csvContent = csvHeader + csvRows;
