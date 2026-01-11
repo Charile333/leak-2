@@ -1056,15 +1056,20 @@ const Dashboard = () => {
                                 {activeTab === 'URLs' || activeTab === '子域名' ? (
                                   [
                                     <td key="url" className="px-8 py-5 whitespace-nowrap">
-                                      <div className="flex items-center gap-2">
+                                      <div className={`flex items-center gap-2 ${index >= 10 ? 'relative overflow-hidden' : ''}`}>
                                         <Globe className="w-4 h-4 text-accent group-hover:scale-110 transition-transform" />
-                                        <div className="text-sm text-white font-medium group-hover:text-accent transition-colors">
+                                        <div className={`text-sm text-white font-medium group-hover:text-accent transition-colors ${index >= 10 ? 'blur-sm opacity-50 relative z-10' : ''}`}>
                                           {credential.website || credential.source || 'N/A'}
                                         </div>
+                                        {index >= 10 && (
+                                          <div className="absolute inset-0 flex items-center justify-center bg-black/30 text-white font-bold text-sm opacity-0 group-hover:opacity-100 transition-opacity z-20">
+                                            已隐藏
+                                          </div>
+                                        )}
                                       </div>
                                     </td>,
                                     <td key="count" className="px-8 py-5 whitespace-nowrap">
-                                      <div className="inline-flex items-center justify-center px-3 py-1 rounded-full bg-accent/20 text-accent text-sm font-semibold">
+                                      <div className={`inline-flex items-center justify-center px-3 py-1 rounded-full bg-accent/20 text-accent text-sm font-semibold ${index >= 10 ? 'blur-sm opacity-50' : ''}`}>
                                         {credential.count || 1}
                                       </div>
                                     </td>
@@ -1073,15 +1078,20 @@ const Dashboard = () => {
                                   // 其他标签页显示完整数据
                                   [
                                     <td key="url" className="px-8 py-5 whitespace-nowrap">
-                                      <div className="flex items-center gap-2">
+                                      <div className={`flex items-center gap-2 ${index >= 10 ? 'relative overflow-hidden' : ''}`}>
                                         <Globe className="w-4 h-4 text-blue-400" />
-                                        <div className="text-sm text-white font-medium">
+                                        <div className={`text-sm text-white font-medium ${index >= 10 ? 'blur-sm opacity-50 relative z-10' : ''}`}>
                                           {credential.website || credential.source || 'N/A'}
                                         </div>
+                                        {index >= 10 && (
+                                          <div className="absolute inset-0 flex items-center justify-center bg-black/30 text-white font-bold text-sm opacity-0 group-hover:opacity-100 transition-opacity z-20">
+                                            已隐藏
+                                          </div>
+                                        )}
                                       </div>
                                     </td>,
                                     <td key="type" className="px-8 py-5 whitespace-nowrap">
-                                      <div className="inline-flex items-center justify-center px-3 py-1 rounded-full text-xs font-bold">
+                                      <div className={`inline-flex items-center justify-center px-3 py-1 rounded-full text-xs font-bold ${index >= 10 ? 'blur-sm opacity-50' : ''}`}>
                                         {credential.email && credential.email.includes('@') ? (
                                           <span className="bg-blue-500/20 text-blue-400">EMAIL</span>
                                         ) : (
@@ -1090,22 +1100,27 @@ const Dashboard = () => {
                                       </div>
                                     </td>,
                                     <td key="email" className="px-8 py-5 whitespace-nowrap">
-                                      <div className="text-sm text-white font-medium truncate max-w-[250px]">
+                                      <div className={`text-sm text-white font-medium truncate max-w-[250px] ${index >= 10 ? 'blur-sm opacity-50 relative z-10' : ''}`}>
                                         {credential.email || credential.username || 'N/A'}
                                       </div>
+                                      {index >= 10 && (
+                                        <div className="absolute inset-0 flex items-center justify-center bg-black/30 text-white font-bold text-sm opacity-0 group-hover:opacity-100 transition-opacity z-20">
+                                          已隐藏
+                                        </div>
+                                      )}
                                     </td>,
                                     <td key="password" className="px-8 py-5 whitespace-nowrap">
-                                      <div className="flex items-center gap-3">
+                                      <div className={`flex items-center gap-3 ${index >= 10 ? 'relative overflow-hidden' : ''}`}>
                                         {autoUnlock ? (
                                           <div className="text-sm font-medium">
                                             {credential.password_plaintext ? (
-                                              <span className="text-white font-mono bg-white/5 px-2 py-1 rounded">
+                                              <span className={`text-white font-mono bg-white/5 px-2 py-1 rounded ${index >= 10 ? 'blur-sm opacity-50 relative z-10' : ''}`}>
                                                 {credential.password_plaintext}
                                               </span>
                                             ) : credential.password_hash ? (
-                                              <span className="text-gray-400 font-mono">{credential.password_hash.slice(0, 15)}...</span>
+                                              <span className={`text-gray-400 font-mono ${index >= 10 ? 'blur-sm opacity-50' : ''}`}>{credential.password_hash.slice(0, 15)}...</span>
                                             ) : (
-                                              <span className="text-gray-500 italic">N/A</span>
+                                              <span className={`text-gray-500 italic ${index >= 10 ? 'blur-sm opacity-50' : ''}`}>N/A</span>
                                             )}
                                           </div>
                                         ) : (
@@ -1113,27 +1128,27 @@ const Dashboard = () => {
                                             {showPasswords[credential.id || index] ? (
                                               <div className="flex items-center gap-2">
                                                 {credential.password_plaintext ? (
-                                                  <span className="text-white font-mono bg-white/5 px-2 py-1 rounded">
+                                                  <span className={`text-white font-mono bg-white/5 px-2 py-1 rounded ${index >= 10 ? 'blur-sm opacity-50 relative z-10' : ''}`}>
                                                     {credential.password_plaintext}
                                                   </span>
                                                 ) : credential.password_hash ? (
-                                                  <span className="text-gray-400 font-mono">{credential.password_hash.slice(0, 15)}...</span>
+                                                  <span className={`text-gray-400 font-mono ${index >= 10 ? 'blur-sm opacity-50' : ''}`}>{credential.password_hash.slice(0, 15)}...</span>
                                                 ) : (
-                                                  <span className="text-gray-500 italic">N/A</span>
+                                                  <span className={`text-gray-500 italic ${index >= 10 ? 'blur-sm opacity-50' : ''}`}>N/A</span>
                                                 )}
                                                 <button
                                                   onClick={() => togglePassword(credential.id || index)}
-                                                  className="p-1 bg-white/10 rounded-full text-gray-400 hover:text-white hover:bg-white/20 transition-colors"
+                                                  className={`p-1 bg-white/10 rounded-full text-gray-400 hover:text-white hover:bg-white/20 transition-colors ${index >= 10 ? 'opacity-50' : ''}`}
                                                 >
                                                   <EyeOff className="w-4 h-4" />
                                                 </button>
                                               </div>
                                             ) : (
                                               <div className="flex items-center gap-2">
-                                                <span className="text-gray-400 font-mono">••••••••</span>
+                                                <span className={`text-gray-400 font-mono ${index >= 10 ? 'blur-sm opacity-50' : ''}`}>••••••••</span>
                                                 <button
                                                   onClick={() => togglePassword(credential.id || index)}
-                                                  className="p-1 bg-white/10 rounded-full text-gray-400 hover:text-white hover:bg-white/20 transition-colors"
+                                                  className={`p-1 bg-white/10 rounded-full text-gray-400 hover:text-white hover:bg-white/20 transition-colors ${index >= 10 ? 'opacity-50' : ''}`}
                                                 >
                                                   <Eye className="w-4 h-4" />
                                                 </button>
@@ -1141,10 +1156,15 @@ const Dashboard = () => {
                                             )}
                                           </div>
                                         )}
+                                        {index >= 10 && (
+                                          <div className="absolute inset-0 flex items-center justify-center bg-black/30 text-white font-bold text-sm opacity-0 group-hover:opacity-100 transition-opacity z-20">
+                                            已隐藏
+                                          </div>
+                                        )}
                                       </div>
                                     </td>,
                                     <td key="indexed" className="px-8 py-5 whitespace-nowrap">
-                                      <div className="text-sm text-gray-400 font-medium">
+                                      <div className={`text-sm text-gray-400 font-medium ${index >= 10 ? 'blur-sm opacity-50' : ''}`}>
                                         {formatDate(credential.leaked_at || '')}
                                       </div>
                                     </td>
