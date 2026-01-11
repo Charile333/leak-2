@@ -57,12 +57,12 @@ const ParticleWaves: React.FC = () => {
     geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
     geometry.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
 
-    // Shader Material - 调整动画速度、粒子大小和颜色
+    // Shader Material - 优化动画效果，接近源文件
     const material = new THREE.ShaderMaterial({
       uniforms: {
         uTime: { value: 0.0 },
         uAmplitude: { value: 50.0 },
-        uSpeed: { value: 0.1 }, // 降低动画速度
+        uSpeed: { value: 0.1 }, // 保持较慢的动画速度
         uParticleSize: { value: 1.0 }
       },
       vertexShader: `
@@ -80,20 +80,20 @@ const ParticleWaves: React.FC = () => {
           float x = mod(instanceIndex, gridSize) - gridSize / 2.0;
           float z = floor(instanceIndex / gridSize) - gridSize / 2.0;
           
-          // 降低动画速度
-          float time2 = 1.0 - uTime * 2.0;
+          // 使用源文件的时间计算方式
+          float time2 = 1.0 - uTime * 5.0;
           
-          // 计算波浪动画 - 调整速度参数
-          float sinX = sin(x * 0.5 + time2 * uSpeed * 2.0) * uAmplitude;
-          float sinZ = sin(z * 0.5 + time2 * uSpeed * 2.0 * 0.7) * uAmplitude;
+          // 计算波浪动画 - 与源文件匹配的频率
+          float sinX = sin(x * 0.5 + time2 * uSpeed * 5.0 * 0.7) * uAmplitude;
+          float sinZ = sin(z * 0.5 + time2 * uSpeed * 5.0 * 0.5) * uAmplitude;
           float y = sinX + sinZ;
           
           // 更新位置
           vec3 newPosition = vec3(position.x, y, position.z);
           
-          // 调整粒子大小 - 与原始文件匹配
-          float sinSX = (sin(x * 0.5 + time2 * uSpeed * 2.0) + 1.0) * 2.5;
-          float sinSZ = (sin(z * 0.5 + time2 * uSpeed * 2.0 * 0.7) + 1.0) * 2.5;
+          // 计算粒子大小 - 与源文件匹配
+          float sinSX = (sin(x * 0.5 + time2 * uSpeed * 5.0 * 0.7) + 1.0) * 5.0;
+          float sinSZ = (sin(z * 0.5 + time2 * uSpeed * 5.0 * 0.5) + 1.0) * 5.0;
           float particleSize = sinSX + sinSZ;
           
           // 转换到裁剪空间
