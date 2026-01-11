@@ -80,21 +80,22 @@ const ParticleWaves: React.FC = () => {
           float x = mod(instanceIndex, gridSize) - gridSize / 2.0;
           float z = floor(instanceIndex / gridSize) - gridSize / 2.0;
           
-          // 使用源文件的时间计算方式
-          float time2 = 1.0 - uTime * 5.0;
+          // 使用直接的时间变量，便于粒子大小动态变化
+          float time = uTime * 2.0;
           
-          // 计算波浪动画 - 与源文件匹配的频率
-          float sinX = sin(x * 0.5 + time2 * uSpeed * 5.0 * 0.7) * uAmplitude;
-          float sinZ = sin(z * 0.5 + time2 * uSpeed * 5.0 * 0.5) * uAmplitude;
+          // 计算波浪动画
+          float sinX = sin(x * 0.05 + time * uSpeed * 3.0) * uAmplitude;
+          float sinZ = sin(z * 0.05 + time * uSpeed * 2.0) * uAmplitude;
           float y = sinX + sinZ;
           
           // 更新位置
           vec3 newPosition = vec3(position.x, y, position.z);
           
-          // 计算粒子大小 - 再次放大粒子
-          float sinSX = (sin(x * 0.5 + time2 * uSpeed * 5.0 * 0.7) + 1.0) * 12.0;
-          float sinSZ = (sin(z * 0.5 + time2 * uSpeed * 5.0 * 0.5) + 1.0) * 12.0;
-          float particleSize = sinSX + sinSZ;
+          // 计算粒子大小 - 使用不同的频率和振幅，创造动态变化
+          float sizeVariation = (sin(x * 0.1 + time * 1.0) + cos(z * 0.1 + time * 1.5) + 2.0) * 8.0;
+          // 添加更多变化，使每个粒子大小独立动态变化
+          float uniqueVariation = sin(x * 0.01 + z * 0.01 + time * 0.5) * 4.0;
+          float particleSize = sizeVariation + uniqueVariation;
           
           // 转换到裁剪空间
           vec4 mvPosition = modelViewMatrix * vec4(newPosition, 1.0);
