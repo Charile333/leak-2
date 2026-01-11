@@ -62,7 +62,7 @@ const ParticleWaves: React.FC = () => {
       uniforms: {
         uTime: { value: 0.0 },
         uAmplitude: { value: 50.0 },
-        uSpeed: { value: 0.5 }, // 调整速度接近源文件
+        uSpeed: { value: 0.25 }, // 放慢动画速度
         uParticleSize: { value: 1.0 }
       },
       vertexShader: `
