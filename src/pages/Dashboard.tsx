@@ -480,6 +480,8 @@ const Dashboard = () => {
       }
 
       setIsSearching(false);
+      // 搜索结果出来后默认显示报告子标签
+      setActiveTab('报告');
       setShowResults(true);
       setCurrentPage(page);
       
