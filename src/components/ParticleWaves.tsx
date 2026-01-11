@@ -73,29 +73,35 @@ const ParticleWaves: React.FC = () => {
         attribute float size;
         
         void main() {
-          // 直接使用实例索引计算x和z位置
+          // 使用实例索引计算每个粒子的独立位置
           float instanceIndex = float(gl_VertexID);
           float gridSize = ${Math.sqrt(particleCount)};
           
           float x = mod(instanceIndex, gridSize) - gridSize / 2.0;
           float z = floor(instanceIndex / gridSize) - gridSize / 2.0;
           
-          // 使用直接的时间变量，便于粒子大小动态变化
-          float time = uTime * 2.0;
+          // 使用直接的时间变量
+          float time = uTime * 1.5;
           
-          // 计算波浪动画
-          float sinX = sin(x * 0.05 + time * uSpeed * 3.0) * uAmplitude;
-          float sinZ = sin(z * 0.05 + time * uSpeed * 2.0) * uAmplitude;
-          float y = sinX + sinZ;
+          // 为每个粒子添加独立的随机相位偏移，避免同步运动
+          float randomOffset = fract(sin(instanceIndex * 12.9898 + instanceIndex * 78.233) * 43758.5453);
+          
+          // 计算波浪动画 - 使用不同的频率和相位，创造异步运动
+          float wave1 = sin(x * 0.05 + time * uSpeed * 3.0 + randomOffset * 2.0) * uAmplitude;
+          float wave2 = cos(z * 0.05 + time * uSpeed * 2.0 + randomOffset * 3.0) * uAmplitude;
+          float y = wave1 + wave2;
           
           // 更新位置
           vec3 newPosition = vec3(position.x, y, position.z);
           
-          // 计算粒子大小 - 使用不同的频率和振幅，创造动态变化
-          float sizeVariation = (sin(x * 0.1 + time * 1.0) + cos(z * 0.1 + time * 1.5) + 2.0) * 8.0;
-          // 添加更多变化，使每个粒子大小独立动态变化
-          float uniqueVariation = sin(x * 0.01 + z * 0.01 + time * 0.5) * 4.0;
-          float particleSize = sizeVariation + uniqueVariation;
+          // 计算粒子大小 - 显著的大小变化效果
+          float baseSize = 8.0;
+          // 使用不同的频率和随机偏移，创造每个粒子独立的大小变化
+          float sizeWave1 = sin(x * 0.1 + time * 1.0 + randomOffset * 4.0) * 12.0;
+          float sizeWave2 = cos(z * 0.1 + time * 1.5 + randomOffset * 5.0) * 12.0;
+          float sizeWave3 = sin(x * 0.05 + z * 0.05 + time * 2.0 + randomOffset * 6.0) * 8.0;
+          // 总粒子大小，包含显著的动态变化
+          float particleSize = baseSize + sizeWave1 + sizeWave2 + sizeWave3;
           
           // 转换到裁剪空间
           vec4 mvPosition = modelViewMatrix * vec4(newPosition, 1.0);
