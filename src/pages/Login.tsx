@@ -133,7 +133,7 @@ const Login: React.FC = () => {
             <img 
               src={dieLogo} 
               alt="Product Logo" 
-              className="h-32 w-32 object-contain" 
+              className="h-40 w-40 object-contain" 
             />
           </motion.div>
         </div>
