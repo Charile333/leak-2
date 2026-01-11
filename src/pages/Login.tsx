@@ -103,9 +103,9 @@ const Login: React.FC = () => {
     <div className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden">
       {/* 粒子波背景 */}
       <ParticleWaves />
-      <div className="flex flex-col items-center justify-center w-full max-w-md relative z-10">
+      <div className="flex flex-col items-center justify-center w-full max-w-lg relative z-10">
         {/* Logo */}
-        <div className="text-center mb-2">
+        <div className="text-center mb-1">
           <motion.div
             initial={{ scale: 0.8, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
@@ -122,7 +122,7 @@ const Login: React.FC = () => {
 
         {/* Login Form */}
         <motion.div
-          className="glass-card p-8 border border-white/10 rounded-2xl shadow-xl mx-auto"
+          className="glass-card p-8 border border-white/10 rounded-2xl shadow-xl mx-auto w-full max-w-md"
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ delay: 0.5, duration: 0.5 }}
