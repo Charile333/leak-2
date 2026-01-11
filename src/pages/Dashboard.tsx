@@ -751,8 +751,8 @@ const Dashboard = () => {
                       className="bg-accent hover:bg-accent/80 disabled:opacity-50 text-white px-12 py-5 rounded-[22px] font-black transition-all text-xl shadow-xl hover:scale-[1.02] active:scale-[0.98] flex items-center gap-3 purple-glow"
                     >
                       {isSearching ? (
-                        <div>
-                          <Loader2 className="w-6 h-6 animate-spin" />
+                        <div className="flex items-center gap-3">
+                          <Loader2 className="w-6 h-6 text-white animate-spin" />
                           检索中...
                         </div>
                       ) : (
@@ -769,6 +769,21 @@ const Dashboard = () => {
 
       {/* 搜索结果区域 */}
       <div id="search-results" className="scroll-mt-24 min-h-[600px]">
+        {/* 搜索加载效果 */}
+        {isSearching && (
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
+            <div className="flex flex-col items-center gap-4">
+              <div className="relative">
+                <Loader2 className="w-12 h-12 text-accent animate-spin" />
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <Loader2 className="w-8 h-8 text-white animate-spin-reverse" />
+                </div>
+              </div>
+              <p className="text-xl text-white font-bold">正在检索数据...</p>
+              <p className="text-sm text-gray-400">请稍候，我们正在分析您的查询</p>
+            </div>
+          </div>
+        )}
         {/* DNS数据集页面结果 */}
         {isDnsPage && showResults && otxResults && (
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 w-full">
