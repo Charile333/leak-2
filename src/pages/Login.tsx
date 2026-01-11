@@ -110,12 +110,12 @@ const Login: React.FC = () => {
         className="w-full max-w-md relative z-10"
       >
         {/* Logo */}
-        <div className="text-center mb-8 mt-8">
+        <div className="text-center mb-4 mt-8">
           <motion.div
             initial={{ scale: 0.8, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             transition={{ delay: 0.2, duration: 0.5, type: "spring", stiffness: 100 }}
-            className="flex items-center justify-center mb-4"
+            className="flex items-center justify-center"
           >
             <img 
               src={dieLogo} 
