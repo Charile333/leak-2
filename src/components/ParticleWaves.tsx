@@ -23,12 +23,13 @@ const ParticleWaves: React.FC = () => {
 
     // Camera
     const camera = new THREE.PerspectiveCamera(
-      50,
+      60,
       window.innerWidth / window.innerHeight,
       10,
       100000
     );
-    camera.position.set(0, 200, 500);
+    camera.position.set(100, 300, 600);
+    camera.lookAt(0, 0, 0);
     cameraRef.current = camera;
 
     // Geometry
@@ -119,8 +120,8 @@ const ParticleWaves: React.FC = () => {
           
           // 移除光效，使用固定透明度
           float alpha = 1.0;
-          // 粒子颜色改为金色，与紫色搭配
-          gl_FragColor = vec4(1.0, 0.843, 0.0, alpha);
+          // 粒子颜色恢复为最开始的亮紫色
+          gl_FragColor = vec4(0.9, 0.4, 1.0, alpha);
         }
       `,
       transparent: true,
