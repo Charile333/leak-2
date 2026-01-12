@@ -105,7 +105,7 @@ const Login: React.FC = () => {
       <ParticleWaves />
       <div className="flex flex-col items-center justify-center w-full max-w-lg relative z-10">
         {/* Logo */}
-        <div className="text-center mb-0">
+        <div className="text-center mb-0 relative z-10">
           <motion.div
             initial={{ scale: 0.8, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
