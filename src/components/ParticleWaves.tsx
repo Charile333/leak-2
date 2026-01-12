@@ -119,8 +119,8 @@ const ParticleWaves: React.FC = () => {
           
           // 移除光效，使用固定透明度
           float alpha = 1.0;
-          // 粒子颜色改为#631c66
-          gl_FragColor = vec4(0.388, 0.11, 0.4, alpha);
+          // 粒子颜色改为金色，与紫色搭配
+          gl_FragColor = vec4(1.0, 0.843, 0.0, alpha);
         }
       `,
       transparent: true,
