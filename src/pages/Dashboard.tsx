@@ -156,17 +156,13 @@ const Dashboard = () => {
   const [exportLoading, setExportLoading] = useState(false);
   const [exportMessage, setExportMessage] = useState<string>('');
   
-  // 防止搜索时页面跳动：当用户开始输入新查询时隐藏搜索结果
+  // 防止搜索时页面跳动：只在用户提交搜索时才处理结果显示/隐藏
   useEffect(() => {
-    // 当用户开始输入新的搜索查询，且不是正在搜索时，隐藏结果区域
-    // 但是要避免在搜索完成后立即隐藏结果
-    if (searchQuery && !isSearching) {
-      // 只有当results为空时才隐藏结果，避免在搜索完成后立即隐藏
-      if (!results) {
-        setShowResults(false);
-      }
+    // 当有搜索结果且搜索已完成时，显示结果
+    if (results && !isSearching) {
+      setShowResults(true);
     }
-  }, [searchQuery, isSearching, results]);
+  }, [results, isSearching]);
   
   // 导出功能实现 - 只保留CSV导出
   const handleExport = async () => {
@@ -276,7 +272,7 @@ const Dashboard = () => {
         return () => clearTimeout(timer);
       }
     }
-  }, [activeTab, showResults, searchQuery]);
+  }, [activeTab, showResults]);
   
   // 当标签页切换到URLs或Subdomains时，如果没有缓存数据，自动加载数据
   useEffect(() => {
@@ -304,7 +300,7 @@ const Dashboard = () => {
     
     setOtxLoading(true);
     setOtxError('');
-    setOtxResults(null);
+    // 不清除otxResults，避免在搜索过程中页面跳动
     
     try {
       let result;
@@ -454,7 +450,6 @@ const Dashboard = () => {
     setIsSearching(true);
 
     if (page === 0) {
-      setShowResults(false);
       // 当进行新的搜索时，清除所有分类缓存
       setCategoryCredentials({});
     }
