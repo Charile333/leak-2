@@ -1437,6 +1437,15 @@ const Dashboard = () => {
                                 </tr>
                               );
                             })
+                          ) : isSearching ? (
+                            <tr>
+                              <td colSpan={activeTab === 'URLs' || activeTab === '子域名' ? 2 : 5} className="px-8 py-20 text-center">
+                                <div className="flex flex-col items-center gap-4">
+                                  <Loader2 className="w-12 h-12 text-accent animate-spin" />
+                                  <div className="text-gray-500 text-lg">数据加载中...</div>
+                                </div>
+                              </td>
+                            </tr>
                           ) : (
                             <tr>
                               <td colSpan={activeTab === 'URLs' || activeTab === '子域名' ? 2 : 5} className="px-8 py-20 text-center">
