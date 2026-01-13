@@ -25,7 +25,7 @@ export const dnsApi = {
         params: { domain, page, limit }
       });
       return response.data;
-    } catch (error) {
+    } catch {
       console.warn('dnsx endpoint failed, falling back to domain endpoint');
       return dnsApi.getSubdomains(domain, undefined, limit);
     }

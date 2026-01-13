@@ -7,11 +7,7 @@ export default defineConfig(({ mode }) => {
   // 加载当前模式下的环境变量
   const env = loadEnv(mode, process.cwd(), ''); // 第三个参数为空字符串，加载所有环境变量 (包括不带 VITE_ 前缀的)
 
-  if (!env.VITE_DNS_API_TOKEN) {
-    console.warn('\x1b[33m%s\x1b[0m', '⚠️  Warning: VITE_DNS_API_TOKEN is not set in .env file.');
-  } else {
-    console.log('\x1b[32m%s\x1b[0m', '✅ DNS API Token loaded from .env');
-  }
+
 
   return {
     plugins: [

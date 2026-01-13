@@ -1,13 +1,14 @@
 import React, { useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { 
+import {
   Search, 
   ChevronDown, 
   Activity,
   Pin,
   LogOut,
-  User
+  User,
+  LayoutGrid
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 // 使用public目录下的logo
@@ -73,6 +74,13 @@ const Sidebar: React.FC<SidebarProps> = ({ isPinned, setIsPinned }) => {
       items: [
         { name: '情报检索中心', path: '/' },
         { name: 'DNS数据集', path: '/dns' },
+      ]
+    },
+    {
+      name: '威胁流',
+      icon: LayoutGrid,
+      items: [
+        { name: '实时威胁流', path: '/activity' },
       ]
     }
   ];

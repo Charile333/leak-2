@@ -132,6 +132,11 @@ const Dashboard = () => {
   const isDnsPage = location.pathname === '/dns';
   
   const [searchQuery, setSearchQuery] = useState('');
+  // DNS数据集相关状态
+  const [activeSearchType, setActiveSearchType] = useState<'ip' | 'domain' | 'url' | 'cve'>('ip');
+  const [otxResults, setOtxResults] = useState<any>(null);
+  const [otxLoading, setOtxLoading] = useState(false);
+  const [otxError, setOtxError] = useState<string>('');
   const [isSearching, setIsSearching] = useState(false);
   const [showResults, setShowResults] = useState(false);
   const [activeTab, setActiveTab] = useState('报告');
@@ -162,12 +167,6 @@ const Dashboard = () => {
       }
     }
   }, [searchQuery, isSearching, results]);
-  
-  // DNS数据集相关状态
-  const [activeSearchType, setActiveSearchType] = useState<'ip' | 'domain' | 'url' | 'cve'>('ip');
-  const [otxResults, setOtxResults] = useState<any>(null);
-  const [otxLoading, setOtxLoading] = useState(false);
-  const [otxError, setOtxError] = useState<string>('');
   
   // 导出功能实现 - 只保留CSV导出
   const handleExport = async () => {
@@ -312,7 +311,7 @@ const Dashboard = () => {
       
       // 为所有类型的查询添加多section数据获取
       switch (activeSearchType) {
-        case 'ip':
+        case 'ip': {
           // 检测是IPv4还是IPv6
           const isIpv6 = searchQuery.includes(':');
           // 并行获取多个section的数据
@@ -328,11 +327,16 @@ const Dashboard = () => {
             ...ipGeneral,
             passive_dns: ipPassiveDns?.passive_dns || [],
             malware: ipMalware?.malware || [],
-            url_list: ipUrlList?.url_list || []
+            url_list: ipUrlList?.url_list || [],
+            // 确保地理位置和信誉评分字段正确
+            country: ipGeneral?.country_name || ipGeneral?.country || 'N/A',
+            city: ipGeneral?.city || 'N/A',
+            reputation: ipGeneral?.reputation || (ipGeneral?.pulse_info?.count > 0 ? '恶意' : '中立')
           };
           break;
+        }
         
-        case 'domain':
+        case 'domain': {
           // 并行获取多个section的数据
           const [generalData, passiveDnsData, whoisData, malwareData] = await Promise.all([
             otxApi.getDomainInfo(searchQuery, 'general'),
@@ -349,8 +353,9 @@ const Dashboard = () => {
             malware: malwareData?.malware || []
           };
           break;
+        }
         
-        case 'url':
+        case 'url': {
           // 并行获取URL的多个section数据
           const [urlGeneral, urlUrlList] = await Promise.all([
             otxApi.getUrlInfo(searchQuery, 'general'),
@@ -363,8 +368,9 @@ const Dashboard = () => {
             url_list: urlUrlList?.url_list || []
           };
           break;
+        }
         
-        case 'cve':
+        case 'cve': {
           // 并行获取CVE的多个section数据
           const [cveGeneral, cveTopPulses] = await Promise.all([
             otxApi.getCveInfo(searchQuery, 'general'),
@@ -377,6 +383,7 @@ const Dashboard = () => {
             top_n_pulses: cveTopPulses?.top_n_pulses || []
           };
           break;
+        }
         
         default:
           throw new Error('未知的搜索类型');
@@ -480,10 +487,12 @@ const Dashboard = () => {
       }
 
       setIsSearching(false);
-      // 搜索结果出来后默认显示报告子标签
+    // 只有在初始搜索（第0页）时才默认显示报告子标签
+    if (page === 0) {
       setActiveTab('报告');
-      setShowResults(true);
-      setCurrentPage(page);
+    }
+    setShowResults(true);
+    setCurrentPage(page);
       
       if (page === 0) {
         setTimeout(() => {
@@ -610,7 +619,7 @@ const Dashboard = () => {
       const date = new Date(dateStr);
       if (isNaN(date.getTime())) return dateStr;
       return `${date.getFullYear()}/${(date.getMonth() + 1).toString().padStart(2, '0')}/${date.getDate().toString().padStart(2, '0')}`;
-    } catch (e) {
+    } catch {
       return dateStr;
     }
   };
@@ -692,12 +701,11 @@ const Dashboard = () => {
                             onClick={() => {
                               setActiveSearchType(type as any);
                             }}
-                            disabled
                             className={cn(
-                              "px-6 py-3 rounded-full text-sm font-bold transition-all duration-300 cursor-not-allowed",
+                              "px-6 py-3 rounded-full text-sm font-bold transition-all duration-300",
                               activeSearchType === type
                                 ? "bg-accent/50 text-white/70 shadow-lg"
-                                : "text-gray-500"
+                                : "text-gray-500 hover:bg-white/10"
                             )}
                           >
                             {label}
@@ -718,15 +726,18 @@ const Dashboard = () => {
                           activeSearchType === 'url' ? "输入URL (例如: https://example.com)..." :
                           "输入CVE编号 (例如: CVE-2021-44228)..."
                         }
-                        disabled
-                        className="flex-1 bg-transparent border-none text-white/70 placeholder:text-gray-500 focus:ring-0 px-8 py-5 text-xl font-medium cursor-not-allowed"
+                        className="flex-1 bg-transparent border-none text-white placeholder:text-gray-500 focus:ring-0 px-8 py-5 text-xl font-medium"
                       />
-                      <button 
+                      <button
                         type="submit"
-                        disabled
-                        className="bg-accent/50 text-white/70 px-12 py-5 rounded-[22px] font-black transition-all text-xl shadow-xl cursor-not-allowed"
+                        disabled={otxLoading}
+                        className="bg-accent hover:bg-accent/80 disabled:opacity-50 text-white px-12 py-5 rounded-[22px] font-black transition-all text-xl shadow-xl hover:scale-[1.02] active:scale-[0.98] flex items-center gap-3 purple-glow"
                       >
-                        立即检索
+                        {otxLoading ? (
+                          <Loader2 size={20} className="animate-spin" />
+                        ) : (
+                          <Search size={20} />
+                        )}
                       </button>
                     </div>
                     
@@ -784,30 +795,239 @@ const Dashboard = () => {
                 </h2>
                 
                 {/* IP查询结果优化展示 */}
-                {activeSearchType === 'ip' && (
+                {(activeSearchType === 'ip' || activeSearchType === 'domain' || activeSearchType === 'url' || activeSearchType === 'cve') && (
                   <div className="space-y-6">
                     {/* 概览信息 */}
                     <div className="bg-[#25252e] rounded-lg p-6">
                       <h3 className="text-lg font-bold text-white mb-4">概览信息</h3>
                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                        <div>
-                          <p className="text-xs text-gray-500 uppercase tracking-widest mb-1">IP地址</p>
-                          <p className="text-sm font-bold text-white">{otxResults.indicator || 'N/A'}</p>
-                        </div>
-                        <div>
-                          <p className="text-xs text-gray-500 uppercase tracking-widest mb-1">ASN归属</p>
-                          <p className="text-sm font-bold text-white">{otxResults.asn || 'N/A'}</p>
-                        </div>
-                        <div>
-                          <p className="text-xs text-gray-500 uppercase tracking-widest mb-1">地理位置</p>
-                          <p className="text-sm font-bold text-white">{`${otxResults.country || 'N/A'} ${otxResults.city || ''}`}</p>
-                        </div>
-                        <div>
-                          <p className="text-xs text-gray-500 uppercase tracking-widest mb-1">信誉评分</p>
-                          <p className="text-sm font-bold text-white">{otxResults.reputation || 'N/A'}</p>
-                        </div>
+                        {activeSearchType === 'ip' && (
+                          <>
+                            <div>
+                              <p className="text-xs text-gray-500 uppercase tracking-widest mb-1">IP地址</p>
+                              <p className="text-sm font-bold text-white">{otxResults.indicator || 'N/A'}</p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-gray-500 uppercase tracking-widest mb-1">ASN归属</p>
+                              <p className="text-sm font-bold text-white">{otxResults.asn || 'N/A'}</p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-gray-500 uppercase tracking-widest mb-1">地理位置</p>
+                              <p className="text-sm font-bold text-white">{`${otxResults.country || 'N/A'} ${otxResults.city || ''}`}</p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-gray-500 uppercase tracking-widest mb-1">信誉评分</p>
+                              <p className="text-sm font-bold text-white">{otxResults.reputation || (otxResults.pulse_info?.count > 0 ? '恶意' : '中立')}</p>
+                            </div>
+                          </>
+                        )}
+                        
+                        {activeSearchType === 'domain' && (
+                          <>
+                            <div>
+                              <p className="text-xs text-gray-500 uppercase tracking-widest mb-1">域名</p>
+                              <p className="text-sm font-bold text-white">{otxResults.indicator || 'N/A'}</p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-gray-500 uppercase tracking-widest mb-1">威胁情报数量</p>
+                              <p className="text-sm font-bold text-white">{otxResults.pulse_info?.count || 0}</p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-gray-500 uppercase tracking-widest mb-1">信誉评分</p>
+                              <p className="text-sm font-bold text-white">{otxResults.reputation || (otxResults.pulse_info?.count > 0 ? '恶意' : '中立')}</p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-gray-500 uppercase tracking-widest mb-1">注册状态</p>
+                              <p className="text-sm font-bold text-white">{otxResults.whois?.registrar ? '已注册' : '未知'}</p>
+                            </div>
+                          </>
+                        )}
+                        
+                        {activeSearchType === 'url' && (
+                          <>
+                            <div>
+                              <p className="text-xs text-gray-500 uppercase tracking-widest mb-1">URL</p>
+                              <p className="text-sm font-bold text-white break-all">{otxResults.indicator || 'N/A'}</p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-gray-500 uppercase tracking-widest mb-1">域名</p>
+                              <p className="text-sm font-bold text-white">{otxResults.domain || 'N/A'}</p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-gray-500 uppercase tracking-widest mb-1">IP地址</p>
+                              <p className="text-sm font-bold text-white">{otxResults.ip || 'N/A'}</p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-gray-500 uppercase tracking-widest mb-1">信誉评分</p>
+                              <p className="text-sm font-bold text-white">{otxResults.reputation || (otxResults.pulse_info?.count > 0 ? '恶意' : '中立')}</p>
+                            </div>
+                          </>
+                        )}
+                        
+                        {activeSearchType === 'cve' && (
+                          <>
+                            <div>
+                              <p className="text-xs text-gray-500 uppercase tracking-widest mb-1">CVE编号</p>
+                              <p className="text-sm font-bold text-white">{otxResults.indicator || 'N/A'}</p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-gray-500 uppercase tracking-widest mb-1">CVSS评分</p>
+                              <p className="text-sm font-bold text-white">{otxResults.base_score || 'N/A'}</p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-gray-500 uppercase tracking-widest mb-1">发布日期</p>
+                              <p className="text-sm font-bold text-white">{otxResults.published || 'N/A'}</p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-gray-500 uppercase tracking-widest mb-1">威胁等级</p>
+                              <p className="text-sm font-bold text-white">{otxResults.pulse_info?.count > 0 ? '高' : '中'}</p>
+                            </div>
+                          </>
+                        )}
                       </div>
                     </div>
+                    
+                    {/* DNS反查（被动DNS） - IP和域名查询都可能有 */}
+                    {(activeSearchType === 'ip' || activeSearchType === 'domain') && otxResults.passive_dns && otxResults.passive_dns.length > 0 && (
+                      <div className="bg-[#25252e] rounded-lg p-6">
+                        <h3 className="text-lg font-bold text-white mb-4">被动DNS记录</h3>
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-left">
+                            <thead>
+                              <tr className="border-b border-white/10">
+                                <th className="pb-3 text-xs font-bold text-gray-500 uppercase tracking-wider">域名</th>
+                                <th className="pb-3 text-xs font-bold text-gray-500 uppercase tracking-wider">类型</th>
+                                <th className="pb-3 text-xs font-bold text-gray-500 uppercase tracking-wider">首次出现</th>
+                                <th className="pb-3 text-xs font-bold text-gray-500 uppercase tracking-wider">最后出现</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {otxResults.passive_dns.map((record: any, index: number) => (
+                                <tr key={index} className="border-b border-white/5 hover:bg-white/5">
+                                  <td className="py-3 text-sm text-white">{record.hostname}</td>
+                                  <td className="py-3 text-sm text-white">{record.type}</td>
+                                  <td className="py-3 text-sm text-white">{record.first}</td>
+                                  <td className="py-3 text-sm text-white">{record.last}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* 恶意样本 - IP和域名查询都可能有 */}
+                    {(activeSearchType === 'ip' || activeSearchType === 'domain') && otxResults.malware && otxResults.malware.length > 0 && (
+                      <div className="bg-[#25252e] rounded-lg p-6">
+                        <h3 className="text-lg font-bold text-white mb-4">关联恶意样本</h3>
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-left">
+                            <thead>
+                              <tr className="border-b border-white/10">
+                                <th className="pb-3 text-xs font-bold text-gray-500 uppercase tracking-wider">家族</th>
+                                <th className="pb-3 text-xs font-bold text-gray-500 uppercase tracking-wider">名称</th>
+                                <th className="pb-3 text-xs font-bold text-gray-500 uppercase tracking-wider">MD5</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {otxResults.malware.map((record: any, index: number) => (
+                                <tr key={index} className="border-b border-white/5 hover:bg-white/5">
+                                  <td className="py-3 text-sm text-white">{record.family}</td>
+                                  <td className="py-3 text-sm text-white">{record.name}</td>
+                                  <td className="py-3 text-sm text-white">{record.md5}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* URL列表 - IP和URL查询都可能有 */}
+                    {(activeSearchType === 'ip' || activeSearchType === 'url') && otxResults.url_list && otxResults.url_list.length > 0 && (
+                      <div className="bg-[#25252e] rounded-lg p-6">
+                        <h3 className="text-lg font-bold text-white mb-4">关联URL列表</h3>
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-left">
+                            <thead>
+                              <tr className="border-b border-white/10">
+                                <th className="pb-3 text-xs font-bold text-gray-500 uppercase tracking-wider">URL</th>
+                                <th className="pb-3 text-xs font-bold text-gray-500 uppercase tracking-wider">域名</th>
+                                <th className="pb-3 text-xs font-bold text-gray-500 uppercase tracking-wider">路径</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {otxResults.url_list.map((record: any, index: number) => (
+                                <tr key={index} className="border-b border-white/5 hover:bg-white/5">
+                                  <td className="py-3 text-sm text-white break-all">{record.url}</td>
+                                  <td className="py-3 text-sm text-white">{record.domain}</td>
+                                  <td className="py-3 text-sm text-white">{record.path}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* WHOIS信息 - 域名查询特有 */}
+                    {activeSearchType === 'domain' && otxResults.whois && (
+                      <div className="bg-[#25252e] rounded-lg p-6">
+                        <h3 className="text-lg font-bold text-white mb-4">WHOIS信息</h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                          <div>
+                            <p className="text-xs text-gray-500 uppercase tracking-widest mb-1">注册商</p>
+                            <p className="text-sm font-bold text-white">{otxResults.whois.registrar || 'N/A'}</p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-gray-500 uppercase tracking-widest mb-1">注册日期</p>
+                            <p className="text-sm font-bold text-white">{otxResults.whois.creation_date || 'N/A'}</p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-gray-500 uppercase tracking-widest mb-1">到期日期</p>
+                            <p className="text-sm font-bold text-white">{otxResults.whois.expiration_date || 'N/A'}</p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-gray-500 uppercase tracking-widest mb-1">更新日期</p>
+                            <p className="text-sm font-bold text-white">{otxResults.whois.updated_date || 'N/A'}</p>
+                          </div>
+                          <div className="md:col-span-2">
+                            <p className="text-xs text-gray-500 uppercase tracking-widest mb-1">名称服务器</p>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mt-2">
+                              {(otxResults.whois.name_servers || []).map((ns: string, index: number) => (
+                                <p key={index} className="text-sm font-bold text-white bg-white/5 p-2 rounded">{ns}</p>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* CVE详情 - CVE查询特有 */}
+                    {activeSearchType === 'cve' && otxResults.description && (
+                      <div className="bg-[#25252e] rounded-lg p-6">
+                        <h3 className="text-lg font-bold text-white mb-4">漏洞描述</h3>
+                        <div className="prose prose-invert max-w-none">
+                          <p className="text-sm text-gray-300 whitespace-pre-wrap">{otxResults.description}</p>
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* 相关威胁情报 - CVE查询特有 */}
+                    {activeSearchType === 'cve' && otxResults.top_n_pulses && otxResults.top_n_pulses.length > 0 && (
+                      <div className="bg-[#25252e] rounded-lg p-6">
+                        <h3 className="text-lg font-bold text-white mb-4">相关威胁情报</h3>
+                        <div className="space-y-4">
+                          {otxResults.top_n_pulses.map((pulse: any, index: number) => (
+                            <div key={index} className="bg-white/5 p-4 rounded-lg">
+                              <h4 className="text-sm font-bold text-white">{pulse.name}</h4>
+                              <p className="text-xs text-gray-400 mt-1">{pulse.description.substring(0, 150)}...</p>
+                              <p className="text-xs text-gray-500 mt-2">{pulse.author_name} • {new Date(pulse.modified).toLocaleDateString()}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

@@ -10,6 +10,7 @@ import Documentation from './pages/Documentation';
 import Settings from './pages/Settings';
 import Login from './pages/Login';
 import LoginVerify from './pages/LoginVerify';
+import Activity from './pages/Activity';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import AuthWrapper from './components/AuthWrapper';
 
@@ -48,16 +49,7 @@ function App() {
                 </PrivateRoute>
               }
             />
-            <Route
-              path="/dns"
-              element={
-                <PrivateRoute>
-                  <MainLayout>
-                    <Dashboard />
-                  </MainLayout>
-                </PrivateRoute>
-              }
-            />
+
             <Route
               path="/monitor"
               element={
@@ -134,6 +126,26 @@ function App() {
                 <PrivateRoute>
                   <MainLayout>
                     <div className="p-8 text-center text-gray-500">告警中心模块正在开发中...</div>
+                  </MainLayout>
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="/activity"
+              element={
+                <PrivateRoute>
+                  <MainLayout>
+                    <Activity />
+                  </MainLayout>
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="/dns"
+              element={
+                <PrivateRoute>
+                  <MainLayout>
+                    <Dashboard />
                   </MainLayout>
                 </PrivateRoute>
               }
