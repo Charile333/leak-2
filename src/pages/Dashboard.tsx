@@ -487,9 +487,9 @@ const Dashboard = () => {
       }
 
       setIsSearching(false);
-    // 只有在初始搜索（第0页）且当前标签页不是URLs或子域名时，才默认显示报告子标签
-    // 避免点击URLs或子域名标签页时自动切换回报告页面
-    if (page === 0 && activeTab !== 'URLs' && activeTab !== '子域名') {
+    // 只有在初始搜索时（通过表单提交，e有值）且当前标签页不是URLs或子域名时，才默认显示报告子标签
+    // 避免点击URLs或子域名标签页时自动切换回报告页面，同时避免分页时切换标签页
+    if (e && page === 0 && activeTab !== 'URLs' && activeTab !== '子域名') {
       setActiveTab('报告');
     }
     setShowResults(true);
