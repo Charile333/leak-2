@@ -274,7 +274,7 @@ const Dashboard = () => {
     }
   }, [activeTab, showResults]);
   
-  // 当标签页切换到URLs或Subdomains时，如果没有缓存数据，自动加载数据
+  // 当标签页切换到URLs或Subdomains时，自动加载最新数据
   useEffect(() => {
     if (showResults && activeTab && searchQuery) {
       const categoryMap: Record<string, string> = {
@@ -286,12 +286,17 @@ const Dashboard = () => {
       };
       const currentCategory = categoryMap[activeTab];
       
-      // 对于URLs和Subdomains标签页，如果没有缓存数据，自动加载
-      if (currentCategory && (currentCategory === 'urls' || currentCategory === 'subdomains') && !categoryCredentials[currentCategory]) {
+      // 对于URLs和Subdomains标签页，总是重新加载最新数据
+      if (currentCategory && (currentCategory === 'urls' || currentCategory === 'subdomains')) {
+        // 清除旧的缓存数据，确保加载最新数据
+        setCategoryCredentials(prev => ({
+          ...prev,
+          [currentCategory]: []
+        }));
         handleSearch(undefined, 'default', 0);
       }
     }
-  }, [activeTab, showResults, categoryCredentials, searchQuery]);
+  }, [activeTab, showResults, searchQuery]);
   
   // OTX API 查询函数
   const handleOtxSearch = async (e?: React.FormEvent) => {
@@ -533,10 +538,8 @@ const Dashboard = () => {
     if (activeTab === 'URLs' || activeTab === '子域名') {
       if (hasPagedData) {
         list = [...categoryCredentials[currentCategory]];
-      } else if (hasResults) {
-        // 初始化数据时，URL和子域名标签也应该有数据
-        list = [...results.credentials];
       }
+      // 只有当有缓存数据时才显示，否则显示空列表，避免显示错误数据
     } 
     // 其他标签的数据处理
     else if (hasResults) {
