@@ -1,5 +1,6 @@
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import MainLayout from './components/layout/MainLayout';
+import Home from './pages/Home';
 import Dashboard from './pages/Dashboard';
 import DomainMonitor from './pages/DomainMonitor';
 import LeakQuery from './pages/LeakQuery';
@@ -33,6 +34,9 @@ function App() {
       <Router>
         <AuthWrapper>
           <Routes>
+            {/* 首页 */}
+            <Route path="/" element={<Home />} />
+            
             {/* 登录页面 */}
             <Route path="/login" element={<Login />} />
             {/* 登录链接验证页面 */}
@@ -40,7 +44,7 @@ function App() {
             
             {/* 受保护的页面 - 需要登录 */}
             <Route
-              path="/"
+              path="/dashboard"
               element={
                 <PrivateRoute>
                   <MainLayout>
