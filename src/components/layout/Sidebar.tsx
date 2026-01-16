@@ -8,11 +8,7 @@ import {
   Pin,
   LogOut,
   User,
-  LayoutGrid,
-  Monitor,
-  PieChart,
-  BookOpen,
-  Settings
+  LayoutGrid
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 // 使用public目录下的logo

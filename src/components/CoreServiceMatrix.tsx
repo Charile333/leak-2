@@ -1,6 +1,14 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Shield, Search, Database, Lock, Eye, FileText, Globe, Server } from 'lucide-react';
+import { 
+  Database, 
+  Search, 
+  Code, 
+  FileText,
+  AlertTriangle,
+  Fingerprint
+} from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import SphereScan from './ui/SphereScan';
 
 const services = [

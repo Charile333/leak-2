@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { ArrowRight, Shield, Globe, Brain } from 'lucide-react';
+import { ArrowRight, Shield } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import ParticleWaves from '../components/ParticleWaves';
 import {
@@ -17,7 +17,6 @@ import LiquidGradientBackground from '../components/LiquidGradientBackground';
 import FullPageScroll from '../components/FullPageScroll';
 import CoreServiceMatrix from '../components/CoreServiceMatrix';
 import { 
-  CoreServicesSection, 
   TechAdvantagesSection, 
   ServiceProcessSection, 
   PartnersSection 

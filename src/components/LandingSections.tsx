@@ -18,6 +18,7 @@ import {
   AlertTriangle,
   ArrowRight
 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 // 核心服务数据
 const coreServices = [
