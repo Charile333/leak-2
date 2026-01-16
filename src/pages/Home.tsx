@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { ArrowRight, Shield, Globe, Users, Database, Brain, Activity, Clock, Calendar, Zap, Layers, BarChart3, PieChart, Building2, Landmark, ShieldCheck, Globe2, Cpu, Plane, Ship, Smartphone, Lock, Search, Key } from 'lucide-react';
+import { ArrowRight, Shield, Globe, Brain, Zap, Layers, BarChart3, PieChart, Key } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import {
   XAxis,
@@ -725,7 +725,7 @@ const Home: React.FC = () => {
                     {/* Icon moved to bottom left, smaller size, no border */}
                     <div className="relative z-10 mt-auto">
                       <div className="group-hover:text-accent transition-colors duration-300">
-                        {React.cloneElement(item.icon as React.ReactElement, { className: "w-6 h-6" })}
+                        {React.cloneElement(item.icon as React.ReactElement<any>, { className: "w-6 h-6" })}
                       </div>
                     </div>
                   </div>
