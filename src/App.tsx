@@ -3,12 +3,6 @@ import MainLayout from './components/layout/MainLayout';
 import Home from './pages/Home';
 import Dashboard from './pages/Dashboard';
 import DomainMonitor from './pages/DomainMonitor';
-import LeakQuery from './pages/LeakQuery';
-import HashLookup from './pages/HashLookup';
-import PageMonitor from './pages/PageMonitor';
-import Analysis from './pages/Analysis';
-import Documentation from './pages/Documentation';
-import Settings from './pages/Settings';
 import Login from './pages/Login';
 import LoginVerify from './pages/LoginVerify';
 import Activity from './pages/Activity';
@@ -60,66 +54,6 @@ function App() {
                 <PrivateRoute>
                   <MainLayout>
                     <DomainMonitor />
-                  </MainLayout>
-                </PrivateRoute>
-              }
-            />
-            <Route
-              path="/leak-query"
-              element={
-                <PrivateRoute>
-                  <MainLayout>
-                    <LeakQuery />
-                  </MainLayout>
-                </PrivateRoute>
-              }
-            />
-            <Route
-              path="/hash-lookup"
-              element={
-                <PrivateRoute>
-                  <MainLayout>
-                    <HashLookup />
-                  </MainLayout>
-                </PrivateRoute>
-              }
-            />
-            <Route
-              path="/page-monitor"
-              element={
-                <PrivateRoute>
-                  <MainLayout>
-                    <PageMonitor />
-                  </MainLayout>
-                </PrivateRoute>
-              }
-            />
-            <Route
-              path="/analysis"
-              element={
-                <PrivateRoute>
-                  <MainLayout>
-                    <Analysis />
-                  </MainLayout>
-                </PrivateRoute>
-              }
-            />
-            <Route
-              path="/documentation"
-              element={
-                <PrivateRoute>
-                  <MainLayout>
-                    <Documentation />
-                  </MainLayout>
-                </PrivateRoute>
-              }
-            />
-            <Route
-              path="/settings"
-              element={
-                <PrivateRoute>
-                  <MainLayout>
-                    <Settings />
                   </MainLayout>
                 </PrivateRoute>
               }

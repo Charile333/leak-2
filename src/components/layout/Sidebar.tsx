@@ -8,7 +8,11 @@ import {
   Pin,
   LogOut,
   User,
-  LayoutGrid
+  LayoutGrid,
+  Monitor,
+  PieChart,
+  BookOpen,
+  Settings
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 // 使用public目录下的logo
@@ -72,7 +76,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isPinned, setIsPinned }) => {
       name: '检索',
       icon: Search,
       items: [
-        { name: '情报检索中心', path: '/' },
+        { name: '情报检索中心', path: '/dashboard' },
         { name: 'DNS数据集', path: '/dns' },
       ]
     },

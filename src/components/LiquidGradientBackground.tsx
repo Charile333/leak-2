@@ -335,7 +335,7 @@ class GradientBackground {
               color = pow(color, vec3(0.92));
               
               float brightness1 = length(color);
-              float mixFactor1 = Math.max(brightness1 * 1.2, 0.15);
+              float mixFactor1 = max(brightness1 * 1.2, 0.15);
               color = mix(uDarkNavy, color, mixFactor1);
               
               float maxBrightness = 1.0;
@@ -374,7 +374,7 @@ class GradientBackground {
               color.b += sin(timeShift * 1.2) * 0.02;
               
               float brightness2 = length(color);
-              float mixFactor2 = Math.max(brightness2 * 1.2, 0.15);
+              float mixFactor2 = max(brightness2 * 1.2, 0.15);
               color = mix(uDarkNavy, color, mixFactor2);
               
               color = clamp(color, vec3(0.0), vec3(1.0));
@@ -411,6 +411,10 @@ class GradientBackground {
         1,
         1
       );
+      // Recompute bounding sphere to avoid NaN errors
+      if (this.mesh.geometry.attributes.position) {
+         this.mesh.geometry.computeBoundingSphere();
+      }
     }
     if (this.uniforms.uResolution) {
       this.uniforms.uResolution.value.set(width, height);
@@ -432,7 +436,7 @@ class App {
     this.renderer = new THREE.WebGLRenderer({
       antialias: true,
       powerPreference: 'high-performance',
-      alpha: false,
+      alpha: true,
       stencil: false,
       depth: false
     });
@@ -440,6 +444,11 @@ class App {
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     // 设置renderer的DOM元素ID，与源文件一致
     this.renderer.domElement.id = 'webGLApp';
+    // 确保canvas元素在最底层显示
+    this.renderer.domElement.style.position = 'absolute';
+    this.renderer.domElement.style.top = '0';
+    this.renderer.domElement.style.left = '0';
+    this.renderer.domElement.style.zIndex = '-1';
     container.appendChild(this.renderer.domElement);
     
     this.camera = new THREE.PerspectiveCamera(
@@ -450,8 +459,8 @@ class App {
     );
     this.camera.position.z = 50;
     this.scene = new THREE.Scene();
-    // 使用源文件的背景色
-    this.scene.background = new THREE.Color(0x0a0e27);
+    // 设置透明背景，让液体渐变效果完全显示
+    this.scene.background = null;
     this.clock = new THREE.Clock();
 
     this.touchTexture = new TouchTexture();
@@ -472,6 +481,18 @@ class App {
     uniforms.uSpeed.value = 1.5;
     uniforms.uColor1Weight.value = 0.5;
     uniforms.uColor2Weight.value = 1.8;
+    // 恢复原始的橙色+海军蓝配色方案
+    uniforms.uColor1.value = new THREE.Vector3(0.945, 0.353, 0.133); // F15A22 - Orange
+    uniforms.uColor2.value = new THREE.Vector3(0.039, 0.055, 0.153); // 0a0e27 - Navy Blue
+    uniforms.uColor3.value = new THREE.Vector3(0.945, 0.353, 0.133); // F15A22 - Orange
+    uniforms.uColor4.value = new THREE.Vector3(0.039, 0.055, 0.153); // 0a0e27 - Navy Blue
+    uniforms.uColor5.value = new THREE.Vector3(0.945, 0.353, 0.133); // F15A22 - Orange
+    uniforms.uColor6.value = new THREE.Vector3(0.039, 0.055, 0.153); // 0a0e27 - Navy Blue
+    uniforms.uDarkNavy.value.set(0.039, 0.055, 0.153); // #0a0e27 - Navy blue base color
+    
+    // 保持其他优化设置
+    uniforms.uIntensity.value = 1.8;
+    uniforms.uGrainIntensity.value = 0.08;
 
     this.render();
     this.tick();
