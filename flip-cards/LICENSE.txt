@@ -1,6 +1,7 @@
 The MIT License (MIT)
 
-Copyright (c) 2026 Filip Zrnzevic (https://codepen.io/filipz/pen/PwPbBpv)
+Copyright (c) 2026 GSAP (https://codepen.io/GreenSock/pen/Yzdzxem)
+Fork of an original work Caterpillar (https://codepen.io/msadak/pen/vYvBMpY)
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal

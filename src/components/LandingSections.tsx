@@ -203,105 +203,61 @@ export const CoreServicesSection: React.FC = () => (
   </section>
 );
 
-export const TechAdvantagesSection: React.FC = () => {
-  const [activeTechIndex, setActiveTechIndex] = useState<number | null>(null);
+import { FlipCardStack } from './FlipCardStack';
+import { FlipCardOriginal } from './FlipCardOriginal';
 
+export const TechAdvantagesSection: React.FC = () => {
   return (
-    <section className="h-full flex flex-col justify-between relative overflow-hidden pb-0">
+    <section className="h-full flex flex-col justify-between relative overflow-hidden pb-0 bg-gradient-to-br from-purple-900/30 via-black to-orange-900/20">
+      {/* 橙色渐变光晕 - 调整位置和强度 */}
+      <div className="absolute top-[-20%] left-[-10%] w-[600px] h-[600px] bg-orange-500/10 rounded-full blur-[100px] pointer-events-none z-0" />
+      
+      {/* 紫色渐变光晕 - 添加在右下角 */}
+      <div className="absolute bottom-[-20%] right-[-10%] w-[600px] h-[600px] bg-purple-600/10 rounded-full blur-[100px] pointer-events-none z-0" />
+      
       <div className="absolute inset-0 bg-accent/5 skew-y-3 transform origin-top-left scale-110" />
-      <div className="container mx-auto px-4 relative z-10 h-full flex flex-col justify-end">
+      <div className="container mx-auto px-4 relative z-10 h-full flex flex-col justify-center items-center">
         <motion.div
           initial={{ opacity: 0 }}
           whileInView={{ opacity: 1 }}
           viewport={{ once: true }}
-          className="text-center absolute top-20 left-0 right-0"
+          className="text-center mb-12"
         >
-          <h2 className="text-3xl md:text-5xl font-bold mb-4">不可复制的技术竞争力</h2>
+          <h2 className="text-3xl md:text-5xl font-bold mb-4">核心优势壁垒</h2>
           <div className="w-20 h-1 bg-accent mx-auto rounded-full" />
         </motion.div>
 
-        {/* 半圆和圆环背景装饰 - 使用独立组件 */}
-        <HalfCircleBackground />
-        
-        {/* 中心信息展示区域 - 仅当有选中的图标时显示 */}
-        <AnimatePresence>
-          {activeTechIndex !== null && (
-            <motion.div 
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 20 }}
-              className="absolute bottom-0 left-1/2 -translate-x-1/2 w-[600px] h-[260px] z-30 flex flex-col items-center justify-center text-center px-8 pb-4 pointer-events-none"
-            >
-              <h3 className="text-2xl font-bold text-white mb-6">
-                {techAdvantages[activeTechIndex].title}
-              </h3>
-              <div className="space-y-4">
-                {techAdvantages[activeTechIndex].details?.map((detail, idx) => (
-                  <p key={idx} className="text-sm text-white/80 leading-relaxed">
-                    {detail}
-                  </p>
-                ))}
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 max-w-6xl mx-auto relative z-10 w-full mb-0 h-[400px]">
-          {techAdvantages.map((tech, index) => {
-            // Ring 3 (Outer Solid) has radius 510px
-            // Center Icon: Top of the ring -> bottom-[510px]
-            // Side Icons: Positioned along the arc
-            // Using translate to fine-tune exact position on the ring
-            
-            return (
-              <motion.div
-                key={index}
-                initial={{ opacity: 0, scale: 0.9 }}
-                whileInView={{ opacity: 1, scale: 1 }}
-                viewport={{ once: true }}
-                transition={{ delay: index * 0.2 }}
-                className={`absolute left-1/2 -translate-x-1/2 flex flex-col items-center ${
-                  index === 0 ? 'lg:-translate-x-[450px] bottom-[230px]' : // Adjusted for Ring 3
-                  index === 1 ? 'bottom-[480px]' : // Adjusted for Ring 3 (Radius ~510px)
-                  'lg:translate-x-[450px] bottom-[230px]' // Adjusted for Ring 3
-                }`}
-              >
-                {/* 图标样式设计：去掉外边框，图标圆环放大，里面的图标缩小 */}
-                {/* 图标圆缩小一点: w-32 h-32 -> w-28 h-28 */}
-                <div 
-                  className={`w-28 h-28 rounded-full bg-[#0a0a0a] shadow-[0_0_30px_rgba(168,85,247,0.4)] flex flex-col items-center justify-center relative z-20 group cursor-pointer transition-all duration-300 hover:scale-110 hover:border-2 hover:border-accent ${activeTechIndex === index ? 'scale-110 border-2 border-accent shadow-[0_0_50px_rgba(168,85,247,0.6)]' : ''}`}
-                  onClick={() => setActiveTechIndex(activeTechIndex === index ? null : index)}
-                >
-                  {/* 里面的图标缩小并向上移动 */}
-                  <tech.icon className="w-8 h-8 text-accent mb-2" />
-                  
-                  {/* 将文字放入图标圆环里面 */}
-                  <div className="text-xs font-bold text-white/80 text-center leading-tight px-3 scale-90">
-                    {index === 0 ? "全源情报捕获" : 
-                     index === 1 ? "智能风险决策" : 
-                     "闭环处置支撑"}
-                  </div>
-                </div>
-              </motion.div>
-            );
-          })}
-        </div>
+        <FlipCardStack />
       </div>
     </section>
   );
 };
 
+export const FlipCardDemoSection: React.FC = () => (
+  <section className="h-full flex items-center justify-center bg-black relative overflow-hidden">
+    <div className="absolute inset-0 bg-gradient-to-t from-purple-900/20 to-transparent pointer-events-none" />
+    <div className="container mx-auto px-4 flex flex-col items-start">
+      <FlipCardStack />
+    </div>
+  </section>
+);
+
 
 
 export const ServiceProcessSection: React.FC = () => (
   <section className="h-full flex items-center justify-center bg-gradient-to-b from-transparent to-black/30">
-    <div className="container mx-auto px-4 w-full">
+    <div className="container mx-auto px-4 w-full -mt-32">
       <motion.div
         initial={{ opacity: 0 }}
         whileInView={{ opacity: 1 }}
         viewport={{ once: true }}
-        className="text-center mb-16"
+        className="text-center mb-16 flex flex-col items-center"
       >
+        <img 
+          src="/diewei-w.png" 
+          alt="Diewei Logo" 
+          className="h-16 w-auto object-contain mb-6 opacity-80" 
+        />
         <h2 className="text-3xl md:text-5xl font-bold mb-4">从部署到防护，全程无忧</h2>
         <p className="text-white/60">标准化四步服务流程，确保安全落地</p>
       </motion.div>

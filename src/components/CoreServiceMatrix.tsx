@@ -52,7 +52,10 @@ const services = [
 const CoreServiceMatrix: React.FC = () => {
   return (
     <div className="h-full flex items-center justify-center relative z-10 overflow-hidden py-10">
-      <div className="container mx-auto px-4">
+      {/* 紫色光效 - 从右侧投射 */}
+      <div className="absolute right-[-10%] top-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-purple-900/30 rounded-full blur-[150px] pointer-events-none z-0" />
+      
+      <div className="container mx-auto px-4 relative z-10">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
@@ -73,9 +76,10 @@ const CoreServiceMatrix: React.FC = () => {
             {services.filter(s => s.position.startsWith('left')).map((service, idx) => (
               <motion.div
                 key={idx}
-                initial={{ opacity: 0, x: -50 }}
-                whileInView={{ opacity: 1, x: 0 }}
-                transition={{ duration: 0.6, delay: idx * 0.2 }}
+                initial={{ opacity: 0, x: -100, filter: "blur(10px)" }}
+                whileInView={{ opacity: 1, x: 0, filter: "blur(0px)" }}
+                viewport={{ once: false, amount: 0.5 }}
+                transition={{ duration: 0.8, delay: idx * 0.3, type: "spring", stiffness: 50 }}
                 className="flex flex-col md:flex-row items-center md:items-start gap-4 text-center md:text-right group"
               >
                 <div className="flex-1">
@@ -95,9 +99,10 @@ const CoreServiceMatrix: React.FC = () => {
 
           {/* Center Column - Sphere Scan */}
           <motion.div
-            initial={{ opacity: 0, scale: 0.8 }}
-            whileInView={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.8 }}
+            initial={{ opacity: 0, scale: 0.5, rotate: -180 }}
+            whileInView={{ opacity: 1, scale: 1, rotate: 0 }}
+            viewport={{ once: false, amount: 0.5 }}
+            transition={{ duration: 1.2, type: "spring", bounce: 0.4 }}
             className="relative h-[400px] w-full flex items-center justify-center"
           >
             <div className="absolute inset-0 bg-accent/5 blur-[100px] rounded-full" />
@@ -121,9 +126,10 @@ const CoreServiceMatrix: React.FC = () => {
             {services.filter(s => s.position.startsWith('right')).map((service, idx) => (
               <motion.div
                 key={idx}
-                initial={{ opacity: 0, x: 50 }}
-                whileInView={{ opacity: 1, x: 0 }}
-                transition={{ duration: 0.6, delay: idx * 0.2 }}
+                initial={{ opacity: 0, x: 100, filter: "blur(10px)" }}
+                whileInView={{ opacity: 1, x: 0, filter: "blur(0px)" }}
+                viewport={{ once: false, amount: 0.5 }}
+                transition={{ duration: 0.8, delay: idx * 0.3, type: "spring", stiffness: 50 }}
                 className="flex flex-col md:flex-row-reverse items-center md:items-start gap-4 text-center md:text-left group"
               >
                 <div className="flex-1">

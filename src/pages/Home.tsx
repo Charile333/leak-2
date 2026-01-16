@@ -17,9 +17,11 @@ import LiquidGradientBackground from '../components/LiquidGradientBackground';
 import FullPageScroll from '../components/FullPageScroll';
 import CoreServiceMatrix from '../components/CoreServiceMatrix';
 import { 
+  CoreServicesSection, 
   TechAdvantagesSection, 
   ServiceProcessSection, 
-  PartnersSection 
+  PartnersSection,
+  FlipCardDemoSection
 } from '../components/LandingSections';
 import { leakRadarApi } from '../api/leakRadar';
 
@@ -68,36 +70,36 @@ const StatsDisplay: React.FC = () => {
   return (
     <motion.div
       whileHover={{ boxShadow: "0 20px 40px -10px rgba(109, 40, 217, 0.3)" }}
-      className="bg-white/10 backdrop-blur-xl border border-white/20 rounded-2xl p-8 max-w-5xl mx-auto hover:shadow-xl transition-all duration-300"
+      className="bg-white/10 backdrop-blur-xl border border-white/20 rounded-xl p-6 max-w-2xl mx-auto hover:shadow-xl transition-all duration-300 scale-90"
     >
-      <div className="flex flex-col md:flex-row items-center justify-between gap-8">
-        {/* 左侧：总泄露记录（放大显示） */}
-        <div className="flex-1 text-center md:text-left p-4">
-          <p className="text-white/60 text-lg mb-4">总泄露记录</p>
-          <p className="text-6xl md:text-8xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-white via-white to-white/70">
+      <div className="flex flex-col items-center gap-6">
+        {/* 上方：总泄露记录（放大显示） */}
+        <div className="w-full text-center p-2 border-b border-white/10 pb-6">
+          <p className="text-white/60 text-base mb-2">总泄露记录</p>
+          <p className="text-5xl md:text-7xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-white via-white to-white/70">
             {formatNumber(stats.leaks.total)}
           </p>
         </div>
         
-        {/* 右侧：其他三个数据（缩小显示） */}
-        <div className="flex flex-row md:flex-col gap-6 md:gap-4 w-full md:w-auto">
-          <div className="flex-1 bg-white/5 rounded-xl p-4 border border-white/10 flex flex-col items-center md:items-end min-w-[120px]">
-            <p className="text-white/50 text-xs mb-1">今日新增</p>
-            <p className="text-2xl font-bold text-accent">
+        {/* 下方：其他三个数据（横向排列） */}
+        <div className="flex flex-row justify-between w-full gap-4">
+          <div className="flex-1 bg-white/5 rounded-lg p-3 border border-white/10 flex flex-col items-center">
+            <p className="text-white/50 text-[10px] mb-1">今日新增</p>
+            <p className="text-xl font-bold text-accent">
               +{formatNumber(stats.leaks.today)}
             </p>
           </div>
           
-          <div className="flex-1 bg-white/5 rounded-xl p-4 border border-white/10 flex flex-col items-center md:items-end min-w-[120px]">
-            <p className="text-white/50 text-xs mb-1">本周新增</p>
-            <p className="text-2xl font-bold text-white">
+          <div className="flex-1 bg-white/5 rounded-lg p-3 border border-white/10 flex flex-col items-center">
+            <p className="text-white/50 text-[10px] mb-1">本周新增</p>
+            <p className="text-xl font-bold text-white">
               +{formatNumber(stats.leaks.this_week)}
             </p>
           </div>
           
-          <div className="flex-1 bg-white/5 rounded-xl p-4 border border-white/10 flex flex-col items-center md:items-end min-w-[120px]">
-            <p className="text-white/50 text-xs mb-1">本月新增</p>
-            <p className="text-2xl font-bold text-white">
+          <div className="flex-1 bg-white/5 rounded-lg p-3 border border-white/10 flex flex-col items-center">
+            <p className="text-white/50 text-[10px] mb-1">本月新增</p>
+            <p className="text-xl font-bold text-white">
               +{formatNumber(stats.leaks.this_month)}
             </p>
           </div>
@@ -315,9 +317,9 @@ const Home: React.FC = () => {
         <nav className="container mx-auto px-4 py-6 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <img 
-              src="/diewei-w.png" 
+              src="/Lysir-w.png" 
               alt="Product Logo" 
-              className="h-10 w-auto object-contain" 
+              className="h-15 w-auto object-contain" 
             />
           </div>
           <div className="flex items-center gap-6">
@@ -356,17 +358,23 @@ const Home: React.FC = () => {
       </div>
 
       {/* 全屏滚动区域 */}
-      <FullPageScroll config={{ animationType: 'slide', animationDuration: 800 }}>
+      <FullPageScroll config={{ animationType: 'fade', animationDuration: 800 }}>
         {/* 第一屏：英雄区域 */}
         <div className="h-full flex items-center justify-center relative overflow-hidden">
           <LiquidGradientBackground />
+          <div className="absolute inset-0 backdrop-blur-[5px] z-0 pointer-events-none" />
           <section className="container mx-auto px-4 flex flex-col items-center text-center relative z-10">
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.8, ease: "easeOut" }}
-              className="max-w-4xl"
+              className="max-w-4xl flex flex-col items-center"
             >
+              <img 
+                src="/diewei-w.png" 
+                alt="Diewei Logo" 
+                className="h-16 w-auto object-contain mb-6 opacity-90" 
+              />
               <h1 className="text-5xl md:text-7xl font-bold text-white mb-6 leading-tight">
                 保护您的 <span className="text-accent">数字资产</span> 免受数据泄露威胁
               </h1>
@@ -406,10 +414,8 @@ const Home: React.FC = () => {
           </div>
         </div>
 
-        {/* 第四屏：技术优势壁垒 */}
-        <div className="h-full relative z-10">
-          <TechAdvantagesSection />
-        </div>
+        {/* 核心功能壁垒展示 */}
+        <FlipCardDemoSection />
 
         {/* 第五屏：服务流程 */}
         <div className="h-full relative z-10 overflow-hidden bg-black">
@@ -472,8 +478,11 @@ const Home: React.FC = () => {
               <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-8">
                 <div>
                   <div className="flex items-center gap-2 mb-4">
-                    <Shield className="w-6 h-6 text-accent" />
-                    <span className="text-lg font-bold text-white">DieWei</span>
+                    <img 
+                      src="/diewei-w.png" 
+                      alt="Diewei Logo" 
+                      className="h-8 w-auto object-contain opacity-80" 
+                    />
                   </div>
                   <p className="text-white/60 text-sm">
                     保护您的数字资产免受数据泄露威胁。

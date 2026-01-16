@@ -413,7 +413,19 @@ class GradientBackground {
       );
       // Recompute bounding sphere to avoid NaN errors
       if (this.mesh.geometry.attributes.position) {
-         this.mesh.geometry.computeBoundingSphere();
+        // Ensure position attribute has no NaNs
+        const positions = this.mesh.geometry.attributes.position.array;
+        let hasNaN = false;
+        for (let i = 0; i < positions.length; i++) {
+          if (isNaN(positions[i])) {
+            hasNaN = true;
+            break;
+          }
+        }
+        
+        if (!hasNaN) {
+          this.mesh.geometry.computeBoundingSphere();
+        }
       }
     }
     if (this.uniforms.uResolution) {

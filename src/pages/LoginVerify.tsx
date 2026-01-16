@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { CheckCircle, XCircle, Loader2 } from 'lucide-react';
-import dieLogo from '../assets/diep.png';
 import purpleLogo from '../assets/紫色2.png';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate, useSearchParams } from 'react-router-dom';
@@ -82,7 +81,7 @@ const LoginVerify: React.FC = () => {
             className="flex items-center justify-center mb-4"
           >
             <img 
-              src={dieLogo} 
+              src="/diep.png" 
               alt="Product Logo" 
               className="h-32 w-32 object-contain rounded-full" 
             />

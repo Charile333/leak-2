@@ -75,6 +75,10 @@ const FullPageScroll: React.FC<FullPageScrollProps> = ({
   const handleScroll = (deltaY: number) => {
     // 判断滚动方向
     const direction = deltaY > 0 ? 'down' : 'up';
+    
+    // 如果动画正在进行，直接返回，避免冲突
+    if (isAnimating) return;
+    
     setScrollDirection(direction);
 
     // 检查是否超过阈值
@@ -93,6 +97,18 @@ const FullPageScroll: React.FC<FullPageScrollProps> = ({
 
     // 执行页面切换动画
     setIsAnimating(true);
+    // 延迟更新 activeIndex，让旧页面先执行退出动画
+    // 注意：这里的 activeIndex 更新时机很重要。
+    // 在 React 中，我们需要先设置 isAnimating 为 true，触发渲染，应用 exit/enter 类名
+    // 然后在动画结束后，更新 activeIndex 并重置 isAnimating
+    
+    // 但是，由于我们需要同时渲染两个页面（当前页和下一页），
+    // 我们的逻辑是：
+    // 1. 设置 isAnimating = true
+    // 2. 组件重渲染，getAnimationClass 会根据 activeIndex (当前页) 和 nextIndex (下一页) 返回对应的动画类
+    // 3. 动画播放完毕
+    // 4. 设置 activeIndex = nextIndex, isAnimating = false
+    
     setTimeout(() => {
       setActiveIndex(nextIndex);
       setIsAnimating(false);
@@ -142,14 +158,16 @@ const FullPageScroll: React.FC<FullPageScrollProps> = ({
 
   // 获取当前活动的动画类名
   const getAnimationClass = (index: number) => {
+    // 如果没有在动画中，只给当前页添加 active
     if (!isAnimating) {
       return index === activeIndex ? 'active' : '';
     }
 
-    const isNext = index === activeIndex + (scrollDirection === 'down' ? 1 : -1);
-    const isPrevious = index === activeIndex;
+    // 确定下一页和当前页
+    const isNext = index === (scrollDirection === 'down' ? activeIndex + 1 : activeIndex - 1);
+    const isCurrent = index === activeIndex;
 
-    if (!isNext && !isPrevious) return '';
+    if (!isNext && !isCurrent) return '';
 
     let animationClass = '';
     const duration = `${animationDuration}ms`;
@@ -161,9 +179,19 @@ const FullPageScroll: React.FC<FullPageScrollProps> = ({
           : `animate-fade-out duration-${duration}`;
         break;
       case 'slide':
-        animationClass = isNext 
-          ? `animate-slide-${scrollDirection === 'down' ? 'up' : 'down'}-in duration-${duration}` 
-          : `animate-slide-${scrollDirection === 'down' ? 'down' : 'up'}-out duration-${duration}`;
+        // slide-up-in: 下一页从下往上进来 (向下滚动)
+        // slide-down-out: 当前页从上往下出去 (向上滚动 - 实际上应该是当前页往下移出)
+        // 修正逻辑：
+        // 向下滚动 (scrollDirection === 'down'): 当前页上移出 (slide-up-out)，下一页上移入 (slide-up-in)
+        // 向上滚动 (scrollDirection === 'up'): 当前页下移出 (slide-down-out)，下一页下移入 (slide-down-in)
+        
+        if (scrollDirection === 'down') {
+             if (isCurrent) animationClass = `animate-slide-up-out duration-${duration}`;
+             if (isNext) animationClass = `animate-slide-up-in duration-${duration}`;
+        } else {
+             if (isCurrent) animationClass = `animate-slide-down-out duration-${duration}`;
+             if (isNext) animationClass = `animate-slide-down-in duration-${duration}`;
+        }
         break;
       case 'scale':
         animationClass = isNext 
