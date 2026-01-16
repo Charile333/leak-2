@@ -87,9 +87,9 @@ const Login: React.FC = () => {
       if (!result.success) {
         setError(result.message || '登录失败');
       } else {
-        // 登录成功，手动重定向到首页
-        console.log('Login successful, navigating to /');
-        navigate('/');
+        // 登录成功，手动重定向到仪表板
+        console.log('Login successful, navigating to /dashboard');
+        navigate('/dashboard');
       }
     } catch (err: any) {
       setError(err.message || '登录失败，请检查您的输入或网络连接');

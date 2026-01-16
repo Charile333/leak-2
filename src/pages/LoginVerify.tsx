@@ -27,9 +27,9 @@ const LoginVerify: React.FC = () => {
         
         if (result.success) {
           setVerificationSuccess(true);
-          // 验证成功后，延迟跳转到首页
+          // 验证成功后，延迟跳转到仪表板
           setTimeout(() => {
-            navigate('/');
+            navigate('/dashboard');
           }, 2000);
         } else {
           throw new Error(result.message || '登录验证失败');

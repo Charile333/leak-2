@@ -7,11 +7,8 @@
  */
 
 // 根据环境动态选择API地址
-// 开发环境使用本地后端服务器地址
-// 生产环境使用Vercel代理，避免CORS问题
-const BASE_URL = import.meta.env.DEV 
-  ? 'http://localhost:3001'  // 开发环境使用本地后端
-  : '';  // 生产环境使用当前域名，通过Vercel代理访问
+// 开发环境和生产环境都使用相对路径，通过Vite代理转发
+const BASE_URL = ''; 
 const API_PREFIX = '/api';
 
 export interface LeakRadarProfile {
