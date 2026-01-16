@@ -15,8 +15,10 @@ export const HalfCircleBackground: React.FC = () => {
       {/* 环3 (最外实线) - gap 80 - w-[1020px] */}
       <div className="absolute bottom-0 w-[1020px] h-[510px] border-t border-l border-r border-accent/40 rounded-t-full" />
 
-      {/* 环2 (中间实线) - gap 70 - w-[860px] */}
-      <div className="absolute bottom-0 w-[860px] h-[430px] border-t border-l border-r border-accent/60 rounded-t-full" />
+      {/* 环2 (中间粒子环) - gap 70 - w-[860px] */}
+      <div className="absolute bottom-0 w-[860px] h-[430px] overflow-hidden">
+        <div className="w-[860px] h-[860px] rounded-full border-[4px] border-dotted border-accent/80 animate-[spin_30s_linear_infinite]" />
+      </div>
 
       {/* 环1 (内层实线) - gap 60 - w-[720px] */}
       <div className="absolute bottom-0 w-[720px] h-[360px] border-t border-l border-r border-accent rounded-t-full opacity-80" />
