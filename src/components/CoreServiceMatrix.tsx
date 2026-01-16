@@ -5,7 +5,8 @@ import {
   Search, 
   FileText,
   Eye,
-  Server
+  Server,
+  Lock
 } from 'lucide-react';
 import SphereScan from './ui/SphereScan';
 
