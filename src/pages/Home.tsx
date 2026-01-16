@@ -412,9 +412,9 @@ const Home: React.FC = () => {
         </div>
 
         {/* 第五屏：服务流程 */}
-        <div className="h-full relative z-10 overflow-hidden">
-          {/* 使用登录页面的动态粒子波背景 */}
-          <div className="absolute inset-0 z-0">
+        <div className="h-full relative z-10 overflow-hidden bg-black">
+          {/* 使用登录页面的动态粒子波背景 - 修改为仅占据底部 2/5 */}
+          <div className="absolute bottom-0 left-0 right-0 h-[40%] z-0">
              <ParticleWaves />
           </div>
           <div className="relative z-10 h-full">
