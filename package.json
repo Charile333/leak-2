@@ -16,6 +16,7 @@
     "dev:all": "concurrently \"npm run server\" \"npm run dev\""
   },
   "dependencies": {
+    "@types/react-scroll": "^1.8.10",
     "@types/three": "^0.182.0",
     "axios": "^1.13.2",
     "clsx": "^2.1.1",
@@ -30,6 +31,7 @@
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-router-dom": "^7.11.0",
+    "react-scroll": "^1.9.3",
     "recharts": "^3.6.0",
     "tailwind-merge": "^3.4.0",
     "three": "^0.182.0"

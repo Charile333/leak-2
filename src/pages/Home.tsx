@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { ArrowRight, Shield, Globe, Brain, Zap, Layers, BarChart3, PieChart, Key } from 'lucide-react';
+import { ArrowRight, Shield, Globe, Brain, Zap, Layers, BarChart3, PieChart, Key, ChevronUp } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { Link as ScrollLink } from 'react-scroll';
 import {
   XAxis,
   YAxis,
@@ -384,11 +385,75 @@ const ChartDisplay: React.FC = () => {
   );
 };
 
+// 底部悬浮导航栏组件
+const BottomAnchorNav: React.FC = () => {
+  const [isVisible, setIsVisible] = useState(false);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      if (window.scrollY > 300) {
+        setIsVisible(true);
+      } else {
+        setIsVisible(false);
+      }
+    };
+
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  const navItems = [
+    { id: 'features', label: '核心能力', icon: <Brain className="w-4 h-4" /> },
+    { id: 'process', label: '服务流程', icon: <Layers className="w-4 h-4" /> },
+    { id: 'data', label: '数据规模', icon: <BarChart3 className="w-4 h-4" /> },
+    { id: 'subscription', label: '情报订阅', icon: <Zap className="w-4 h-4" /> },
+    { id: 'advantages', label: '服务优势', icon: <Shield className="w-4 h-4" /> },
+    { id: 'partners', label: '合作伙伴', icon: <Globe className="w-4 h-4" /> },
+  ];
+
+  return (
+    <div className={`fixed bottom-8 left-1/2 -translate-x-1/2 z-50 transition-all duration-500 ${isVisible ? 'translate-y-0 opacity-100' : 'translate-y-20 opacity-0'}`}>
+      <div className="bg-black/40 backdrop-blur-xl border border-white/10 rounded-full px-2 py-2 flex items-center gap-1 shadow-[0_10px_40px_-10px_rgba(0,0,0,0.5)]">
+        {navItems.map((item) => (
+          <ScrollLink
+            key={item.id}
+            to={item.id}
+            spy={true}
+            smooth={true}
+            offset={-100}
+            duration={800}
+            className="cursor-pointer"
+            activeClass="bg-accent text-white"
+          >
+            <div className="px-4 py-2 rounded-full flex items-center gap-2 text-sm font-medium text-white/60 hover:text-white hover:bg-white/5 transition-all duration-300">
+              {item.icon}
+              <span className="hidden sm:inline">{item.label}</span>
+            </div>
+          </ScrollLink>
+        ))}
+        
+        <div className="w-[1px] h-6 bg-white/10 mx-2" />
+        
+        <ScrollLink
+          to="top"
+          spy={true}
+          smooth={true}
+          duration={800}
+          className="cursor-pointer px-3 py-2 rounded-full text-white/60 hover:text-white hover:bg-white/5 transition-all duration-300"
+        >
+          <ChevronUp className="w-5 h-5" />
+        </ScrollLink>
+      </div>
+    </div>
+  );
+};
+
 const Home: React.FC = () => {
   const navigate = useNavigate();
 
   return (
-    <div className="min-h-screen bg-[#050505] text-white selection:bg-accent selection:text-white font-sans relative overflow-x-hidden">
+    <div id="top" className="min-h-screen bg-[#050505] text-white selection:bg-accent selection:text-white font-sans relative overflow-x-hidden">
+      <BottomAnchorNav />
       {/* 全局背景装饰 - 为页面提供深邃的质感 */}
       <div className="fixed inset-0 z-0 pointer-events-none">
         {/* 顶部主光晕 - 紫色 */}
@@ -405,6 +470,9 @@ const Home: React.FC = () => {
         {/* 头部区域（包含导航栏和英雄区域） - 动态背景仅在此区域显示 */}
         <div className="relative w-full min-h-screen flex flex-col overflow-hidden">
           <ParticleWaves />
+          
+          {/* Hero Overlay - Darkens the hero section slightly for better readability */}
+          <div className="absolute inset-0 bg-black/40 pointer-events-none z-0" />
           
           {/* 导航栏 */}
           <nav className="container mx-auto px-4 py-6 flex items-center justify-between relative z-10">
@@ -486,7 +554,7 @@ const Home: React.FC = () => {
         </div>
 
         {/* 特性区域 */}
-        <section className="container mx-auto px-4 py-20">
+        <section id="features" className="container mx-auto px-4 py-20">
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -577,7 +645,7 @@ const Home: React.FC = () => {
         </section>
 
         {/* 服务流程区域 */}
-        <section className="container mx-auto px-4 py-10">
+        <section id="process" className="container mx-auto px-4 py-10">
           <motion.div
             initial={{ opacity: 0 }}
             whileInView={{ opacity: 1 }}
@@ -640,7 +708,7 @@ const Home: React.FC = () => {
         </section>
 
         {/* 产品介绍区域 - 简化版 */}
-        <section className="container mx-auto px-4 py-20">
+        <section id="data" className="container mx-auto px-4 py-20">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -659,7 +727,7 @@ const Home: React.FC = () => {
         </section>
 
         {/* 特色服务区域 - 账号风险情报订阅 */}
-        <section className="container mx-auto px-4 py-20 relative">
+        <section id="subscription" className="container mx-auto px-4 py-20 relative">
           {/* 背景装饰 */}
           <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-accent/5 rounded-full blur-[120px] pointer-events-none" />
           
@@ -679,55 +747,63 @@ const Home: React.FC = () => {
               </p>
             </motion.div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {/* 特色服务卡片 - 参考图排版优化：左侧大图标 + 右侧文字，交错排列 */}
+            <div className="flex flex-col gap-24 max-w-5xl mx-auto">
               {[
                 {
-                  icon: <Globe className="w-8 h-8 text-accent" />,
+                  icon: <Globe className="w-12 h-12 text-accent" />,
                   title: "全域账号威胁预警",
                   desc: "基于百亿级暗网数据监测能力，以及亿级高危账号泄露情报，实现企业核心数据泄露事件的分钟级预警响应，抢占黄金处置窗口。"
                 },
                 {
-                  icon: <Key className="w-8 h-8 text-accent" />,
+                  icon: <Key className="w-12 h-12 text-accent" />,
                   title: "精准特权账号风控情报",
                   desc: "聚焦特权账号泄露风险，通过域名/邮箱维度精准匹配企业关联的格式化暗网数据，提供可行动威胁情报（IoC），支撑一键封禁、凭证重置等风控闭环。"
                 },
                 {
-                  icon: <Zap className="w-8 h-8 text-accent" />,
+                  icon: <Zap className="w-12 h-12 text-accent" />,
                   title: "轻量化数据订阅服务",
                   desc: "极具竞争力的价格优势，数据订阅模式以及API交付，帮助企业以轻投入、低成本的方式完善组织的数据安全体系，减少ATO攻击造成的系列风险。"
                 }
               ].map((item, index) => (
                 <motion.div
                   key={index}
-                  initial={{ opacity: 0, y: 20 }}
+                  initial={{ opacity: 0, y: 30 }}
                   whileInView={{ opacity: 1, y: 0 }}
-                  viewport={{ once: true }}
-                  transition={{ duration: 0.5, delay: index * 0.1 }}
-                  whileHover={{ y: -5 }}
-                  className="group relative rounded-2xl bg-white/5 p-[1px] transition-all duration-300 hover:bg-gradient-to-b hover:from-accent hover:to-transparent"
+                  viewport={{ once: true, margin: "-100px" }}
+                  transition={{ duration: 0.6 }}
+                  className={`flex flex-col md:flex-row items-center gap-12 ${index % 2 === 1 ? 'md:flex-row-reverse' : ''}`}
                 >
-                  <div className="h-full w-full rounded-2xl bg-black/90 p-8 backdrop-blur-xl relative overflow-hidden flex flex-col justify-between">
-                    {/* Background Index Number */}
-                    <div className="absolute -right-4 -top-8 text-[120px] font-bold text-white/[0.03] select-none pointer-events-none group-hover:text-accent/[0.05] transition-colors duration-500">
-                      0{index + 1}
-                    </div>
-
-                    <div className="relative z-10 flex flex-col">
-                      <h3 className="text-xl font-bold text-white mb-4 group-hover:text-accent transition-colors duration-300">
-                        {item.title}
-                      </h3>
+                  {/* 左侧：图标视觉中心 */}
+                  <div className="relative flex-shrink-0 group">
+                    {/* 背景光环 */}
+                    <div className="absolute inset-0 bg-accent/20 rounded-full blur-[40px] group-hover:bg-accent/30 transition-all duration-500" />
+                    
+                    {/* 核心圆环 */}
+                    <div className="relative w-32 h-32 rounded-full border border-white/10 bg-black/50 backdrop-blur-md flex items-center justify-center shadow-[0_0_30px_rgba(139,92,246,0.15)] group-hover:scale-110 group-hover:border-accent/50 transition-all duration-500">
+                      {/* 内部小圆环 */}
+                      <div className="absolute inset-2 rounded-full border border-white/5" />
                       
-                      <p className="text-white/60 leading-relaxed text-sm mb-8">
-                        {item.desc}
-                      </p>
-                    </div>
-
-                    {/* Icon moved to bottom left, smaller size, no border */}
-                    <div className="relative z-10 mt-auto">
-                      <div className="group-hover:text-accent transition-colors duration-300">
-                        {React.cloneElement(item.icon as React.ReactElement<any>, { className: "w-6 h-6" })}
+                      {/* 图标 */}
+                      <div className="bg-white rounded-full p-4 shadow-lg group-hover:rotate-12 transition-transform duration-500">
+                        {React.cloneElement(item.icon as React.ReactElement<any>, { className: "w-8 h-8 text-accent" })}
                       </div>
                     </div>
+
+                    {/* 装饰线条 - 连接下一个元素 (除最后一个外) */}
+                    {index !== 2 && (
+                       <div className={`hidden md:block absolute top-full left-1/2 w-[2px] h-24 bg-gradient-to-b from-accent/30 to-transparent -translate-x-1/2`} />
+                    )}
+                  </div>
+
+                  {/* 右侧：文字内容 */}
+                  <div className={`flex-1 text-center ${index % 2 === 1 ? 'md:text-right' : 'md:text-left'}`}>
+                    <h3 className="text-2xl md:text-3xl font-bold text-white mb-6 group-hover:text-accent transition-colors duration-300">
+                      {item.title}
+                    </h3>
+                    <p className="text-white/60 leading-relaxed text-lg">
+                      {item.desc}
+                    </p>
                   </div>
                 </motion.div>
               ))}
@@ -735,8 +811,110 @@ const Home: React.FC = () => {
           </div>
         </section>
 
+        {/* 服务优势区域 - 新增板块 */}
+        <section id="advantages" className="container mx-auto px-4 py-20 relative">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.6 }}
+            className="text-center mb-16"
+          >
+            <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">
+              服务优势
+            </h2>
+            <p className="text-accent/80 font-medium tracking-widest uppercase text-sm">
+              不可复制的竞争力壁垒
+            </p>
+          </motion.div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-7xl mx-auto">
+            {[
+              {
+                id: "01",
+                title: "全维情报采集网络",
+                content: (
+                  <ul className="space-y-4 text-white/70 text-sm leading-relaxed">
+                    <li className="flex items-start gap-3">
+                      <span className="w-1.5 h-1.5 rounded-full bg-accent mt-2 flex-shrink-0" />
+                      <span>覆盖全球87个国家/地区的368个威胁情报节点，包括暗网交易市场（16类）、代码托管平台（9类）、黑产通讯渠道（23类）</span>
+                    </li>
+                    <li className="flex items-start gap-3">
+                      <span className="w-1.5 h-1.5 rounded-full bg-accent mt-2 flex-shrink-0" />
+                      <span>建立多语言处理能力，支持中文/英文/俄语/暗网俚语等12种语言体系的NLP分析模块</span>
+                    </li>
+                  </ul>
+                )
+              },
+              {
+                id: "02",
+                title: "认知智能分析中枢",
+                content: (
+                  <ul className="space-y-4 text-white/70 text-sm leading-relaxed">
+                    <li className="flex items-start gap-3">
+                      <span className="w-1.5 h-1.5 rounded-full bg-accent mt-2 flex-shrink-0" />
+                      <span>融合图神经网络（GNN）与动态本体建模技术，构建包含6.8万实体节点的威胁知识图谱</span>
+                    </li>
+                    <li className="flex items-start gap-3">
+                      <span className="w-1.5 h-1.5 rounded-full bg-accent mt-2 flex-shrink-0" />
+                      <span>部署孤立森林异常检测、BERT语义理解等12种AI模型</span>
+                    </li>
+                    <li className="flex items-start gap-3">
+                      <span className="w-1.5 h-1.5 rounded-full bg-accent mt-2 flex-shrink-0" />
+                      <span>采用AST语法树深度分析引擎，支持21种编程语言的敏感模式识别与风险溯源</span>
+                    </li>
+                  </ul>
+                )
+              },
+              {
+                id: "03",
+                title: "战术级响应机制",
+                content: (
+                  <p className="text-white/70 text-sm leading-relaxed text-justify">
+                    理是科技提供平台化服务，用户可获得<span className="text-white font-medium">线上安全专家指导</span>，安全专家在线值守，提供漏洞解读、处置策略优化等实时指导，建立"监测-研判-处置"的快速响应通道；<span className="text-white font-medium">线下安服专家</span>覆盖大部分省市，针对重大事件，线下安服专家可及时响应提供应急服务，协助处置。
+                  </p>
+                )
+              }
+            ].map((item, index) => (
+              <motion.div
+                key={index}
+                initial={{ opacity: 0, y: 30 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ duration: 0.5, delay: index * 0.1 }}
+                whileHover={{ y: -5 }}
+                className="group relative h-full"
+              >
+                <div className="absolute inset-0 bg-gradient-to-b from-accent/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 rounded-2xl" />
+                <div className="relative h-full bg-white/[0.03] backdrop-blur-md border border-white/10 group-hover:border-accent/30 rounded-2xl p-8 transition-all duration-300 flex flex-col overflow-hidden">
+                  {/* Top Accent Line */}
+                  <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-transparent via-accent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+                  
+                  {/* Number Watermark */}
+                  <div className="text-5xl font-bold text-white/5 mb-6 font-mono group-hover:text-accent/10 transition-colors duration-300">
+                    {item.id}
+                  </div>
+                  
+                  <h3 className="text-xl font-bold text-white mb-6 group-hover:text-accent transition-colors duration-300">
+                    {item.title}
+                  </h3>
+                  
+                  <div className="flex-grow">
+                    {item.content}
+                  </div>
+                  
+                  {/* Bottom Decoration */}
+                  <div className="mt-8 flex justify-end">
+                     <div className="w-12 h-[2px] bg-white/10 group-hover:bg-accent/50 transition-colors duration-300" />
+                  </div>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        </section>
+
         {/* 合作客户区域 */}
-        <section className="container mx-auto px-4 py-20 relative overflow-hidden">
+        <section id="partners" className="container mx-auto px-4 py-20 relative overflow-hidden">
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[400px] bg-accent/5 rounded-full blur-[100px] pointer-events-none" />
           
           <motion.div
