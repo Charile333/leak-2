@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
-import { ArrowRight, Shield, Globe, Brain, Zap, Layers, BarChart3, PieChart, Key, ChevronUp } from 'lucide-react';
+import { ArrowRight, Shield, Globe, Brain, Zap, Layers, BarChart3, PieChart, Key, ChevronUp, AlertTriangle, Code, FileText, Server } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Link as ScrollLink } from 'react-scroll';
 import {
@@ -123,7 +123,7 @@ const StatsDisplay: React.FC = () => {
           
           <div className="flex items-center justify-center relative">
              <div className="absolute inset-0 bg-purple-500/20 blur-[100px] rounded-full pointer-events-none" />
-             <span className="relative text-7xl md:text-9xl font-black text-transparent bg-clip-text bg-gradient-to-b from-white via-purple-100 to-purple-300 tracking-tighter drop-shadow-[0_10px_20px_rgba(0,0,0,0.5)]">
+             <span className="relative text-7xl md:text-9xl font-black text-transparent bg-clip-text bg-gradient-to-b from-white via-white to-white/70 tracking-tighter drop-shadow-[0_10px_20px_rgba(0,0,0,0.5)]">
               {formatNumber(stats.leaks.total)}
             </span>
           </div>
@@ -273,7 +273,8 @@ const ChartDisplay: React.FC = () => {
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true }}
       transition={{ duration: 0.6, delay: 0.2 }}
       className="bg-black/40 backdrop-blur-2xl border border-white/5 rounded-3xl p-8 max-w-6xl mx-auto relative overflow-hidden group shadow-[0_0_50px_-10px_rgba(0,0,0,0.5)]"
     >
@@ -387,64 +388,190 @@ const ChartDisplay: React.FC = () => {
 
 // 底部悬浮导航栏组件
 const BottomAnchorNav: React.FC = () => {
-  const [isVisible, setIsVisible] = useState(false);
-
-  useEffect(() => {
-    const handleScroll = () => {
-      if (window.scrollY > 300) {
-        setIsVisible(true);
-      } else {
-        setIsVisible(false);
-      }
-    };
-
-    window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, []);
-
+  const [activeId, setActiveId] = useState('features');
+  
   const navItems = [
     { id: 'features', label: '核心能力', icon: <Brain className="w-4 h-4" /> },
     { id: 'process', label: '服务流程', icon: <Layers className="w-4 h-4" /> },
     { id: 'data', label: '数据规模', icon: <BarChart3 className="w-4 h-4" /> },
     { id: 'subscription', label: '情报订阅', icon: <Zap className="w-4 h-4" /> },
-    { id: 'advantages', label: '服务优势', icon: <Shield className="w-4 h-4" /> },
+    { id: 'services', label: '服务内容', icon: <Shield className="w-4 h-4" /> },
+    { id: 'advantages', label: '服务优势', icon: <Globe className="w-4 h-4" /> },
     { id: 'partners', label: '合作伙伴', icon: <Globe className="w-4 h-4" /> },
   ];
 
+  const activeIndex = navItems.findIndex(item => item.id === activeId);
+  const progressPercentage = (activeIndex / (navItems.length - 1)) * 100;
+
   return (
-    <div className={`fixed bottom-8 left-1/2 -translate-x-1/2 z-50 transition-all duration-500 ${isVisible ? 'translate-y-0 opacity-100' : 'translate-y-20 opacity-0'}`}>
-      <div className="bg-black/40 backdrop-blur-xl border border-white/10 rounded-full px-2 py-2 flex items-center gap-1 shadow-[0_10px_40px_-10px_rgba(0,0,0,0.5)]">
-        {navItems.map((item) => (
-          <ScrollLink
-            key={item.id}
-            to={item.id}
-            spy={true}
-            smooth={true}
-            offset={-100}
-            duration={800}
-            className="cursor-pointer"
-            activeClass="bg-accent text-white"
-          >
-            <div className="px-4 py-2 rounded-full flex items-center gap-2 text-sm font-medium text-white/60 hover:text-white hover:bg-white/5 transition-all duration-300">
-              {item.icon}
-              <span className="hidden sm:inline">{item.label}</span>
-            </div>
-          </ScrollLink>
-        ))}
+    <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 animate-in fade-in slide-in-from-bottom-4 duration-700 w-full max-w-4xl px-4">
+      {/* 去掉外层椭圆边框和背景，仅保留进度条和节点 */}
+      <div className="relative flex items-center justify-between px-4 py-3">
         
-        <div className="w-[1px] h-6 bg-white/10 mx-2" />
+        {/* Navigation Items Container */}
+        <div className="relative flex items-center justify-between w-full mr-4">
+          {/* Progress Line Background - Strictly confined between first and last node centers */}
+          <div className="absolute top-1/2 left-[6px] right-[6px] h-[2px] bg-white/10 -z-20 rounded-full" />
+          
+          {/* Progress Line Active - Follows active node */}
+          <div 
+            className="absolute top-1/2 left-[6px] h-[2px] bg-accent -z-10 rounded-full transition-all duration-500 ease-in-out shadow-[0_0_10px_#8B5CF6]"
+            style={{ width: `calc(${progressPercentage}% - 12px)` }} 
+          />
+          {/* Note: -12px is a slight correction to prevent overshoot visually */}
+
+          {navItems.map((item) => (
+            <ScrollLink
+              key={item.id}
+              to={item.id}
+              spy={true}
+              smooth={true}
+              offset={-100}
+              duration={800}
+              onSetActive={() => setActiveId(item.id)}
+              className="group cursor-pointer relative flex flex-col items-center justify-center w-3"
+              activeClass="active-nav-item"
+            >
+              {/* Node Dot */}
+              <div className="w-3 h-3 rounded-full bg-[#050505] border-2 border-white/20 group-[.active-nav-item]:border-accent group-[.active-nav-item]:bg-accent group-[.active-nav-item]:scale-125 transition-all duration-300 z-10 shadow-[0_0_10px_rgba(0,0,0,0.5)]" />
+              
+              {/* Label */}
+              <div className="absolute -top-10 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 group-[.active-nav-item]:opacity-100 transition-all duration-300 whitespace-nowrap">
+                <span className="text-xs font-medium text-white/80 bg-black/80 px-2 py-1 rounded-md border border-white/10 backdrop-blur-sm">
+                  {item.label}
+                </span>
+              </div>
+            </ScrollLink>
+          ))}
+        </div>
         
+        {/* Back to Top Button */}
         <ScrollLink
           to="top"
           spy={true}
           smooth={true}
           duration={800}
-          className="cursor-pointer px-3 py-2 rounded-full text-white/60 hover:text-white hover:bg-white/5 transition-all duration-300"
+          className="cursor-pointer p-2 rounded-full text-white/40 hover:text-white hover:bg-white/10 transition-all duration-300 ml-2"
         >
           <ChevronUp className="w-5 h-5" />
         </ScrollLink>
       </div>
     </div>
+  );
+};
+
+// 3D Sphere Scan 组件 - 从源文件一比一复刻
+const SphereScan: React.FC = () => {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    // 从源文件复制的常量和配置 - 扫描线颜色改为紫色
+    const CANVAS_WIDTH = 180;
+    const CANVAS_HEIGHT = 180;
+    // 将扫描线颜色改为紫色 (#8B5CF6 是紫色主色调)
+    const PURPLE_FILL = (opacity: number) => `rgba(139, 92, 246, ${Math.max(0, Math.min(1, opacity))})`;
+    // @ts-ignore: Unused variable from source file
+    const PURPLE_STROKE = (opacity: number) => `rgba(139, 92, 246, ${Math.max(0, Math.min(1, opacity))})`;
+    const GLOBAL_SPEED = 0.5;
+
+    // 从源文件复制的缓动函数 - 完全一致
+    function easeInOutCubic(t: number) {
+      return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+    }
+
+    // 设置画布大小 - 完全一致
+    canvas.width = CANVAS_WIDTH;
+    canvas.height = CANVAS_HEIGHT;
+
+    let lastTime = 0;
+    let time = 0;
+
+    // 从源文件复制的3D Sphere Scan动画实现 - 完全一致
+    const centerX = CANVAS_WIDTH / 2,
+          centerY = CANVAS_HEIGHT / 2;
+    const radius = CANVAS_WIDTH * 0.4,
+          numDots = 250;
+    // 为dots数组添加明确的类型声明
+    const dots: Array<{ x: number; y: number; z: number }> = [];
+    
+    // 从源文件复制的点初始化逻辑 - 完全一致
+    for (let i = 0; i < numDots; i++) {
+      const theta = Math.acos(1 - 2 * (i / numDots));
+      const phi = Math.sqrt(numDots * Math.PI) * theta;
+      dots.push({
+        x: radius * Math.sin(theta) * Math.cos(phi),
+        y: radius * Math.sin(theta) * Math.sin(phi),
+        z: radius * Math.cos(theta)
+      });
+    }
+
+    // 从源文件复制的动画函数 - 完全一致
+    const animate = (timestamp: number) => {
+      if (!lastTime) lastTime = timestamp;
+      const deltaTime = timestamp - lastTime;
+      lastTime = timestamp;
+      time += deltaTime * 0.0005 * GLOBAL_SPEED;
+
+      ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+      const rotX = Math.sin(time * 0.3) * 0.5,
+            rotY = time * 0.5;
+      const easedTime = easeInOutCubic((Math.sin(time * 2.5) + 1) / 2);
+      const scanLine = (easedTime * 2 - 1) * radius,
+            scanWidth = 25;
+
+      dots.forEach((dot) => {
+        let { x, y, z } = dot;
+        let nX = x * Math.cos(rotY) - z * Math.sin(rotY);
+        let nZ = x * Math.sin(rotY) + z * Math.cos(rotY);
+        x = nX;
+        z = nZ;
+        let nY = y * Math.cos(rotX) - z * Math.sin(rotX);
+        nZ = y * Math.sin(rotX) + z * Math.cos(rotX);
+        y = nY;
+        z = nZ;
+        const scale = (z + radius * 1.5) / (radius * 2.5);
+        const pX = centerX + x,
+              pY = centerY + y;
+        const distToScan = Math.abs(y - scanLine);
+        let scanInfluence = 
+          distToScan < scanWidth
+            ? Math.cos((distToScan / scanWidth) * (Math.PI / 2))
+            : 0;
+        const size = Math.max(0, scale * 2.0 + scanInfluence * 2.5);
+        const opacity = Math.max(0, scale * 0.6 + scanInfluence * 0.4);
+        ctx.beginPath();
+        ctx.arc(pX, pY, size, 0, Math.PI * 2);
+        ctx.fillStyle = PURPLE_FILL(opacity);
+        ctx.fill();
+      });
+
+      requestAnimationFrame(animate);
+    };
+
+    // 启动动画
+    const animationId = requestAnimationFrame(animate);
+
+    return () => {
+      cancelAnimationFrame(animationId);
+    };
+  }, []);
+
+  return (
+    <canvas
+      ref={canvasRef}
+      className="w-64 h-64 md:w-80 md:h-80"
+      style={{ 
+        background: 'transparent',
+        // 保持与原文件一致的显示效果
+      }}
+    />
   );
 };
 
@@ -474,11 +601,14 @@ const Home: React.FC = () => {
           {/* Hero Overlay - Darkens the hero section slightly for better readability */}
           <div className="absolute inset-0 bg-black/40 pointer-events-none z-0" />
           
+          {/* 渐变过渡效果 - 弱化与下方板块的边界感 */}
+          <div className="absolute bottom-0 left-0 w-full h-32 bg-gradient-to-t from-[#070509] to-transparent pointer-events-none z-10" />
+          
           {/* 导航栏 */}
           <nav className="container mx-auto px-4 py-6 flex items-center justify-between relative z-10">
             <div className="flex items-center gap-2">
               <img 
-                src="/diewei-w.png" 
+                src="/紫色2.png" 
                 alt="Product Logo" 
                 className="h-10 w-auto object-contain" 
               />
@@ -523,28 +653,64 @@ const Home: React.FC = () => {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6 }}
-              className="max-w-4xl"
+              className="max-w-5xl flex flex-col items-center"
             >
-              <h1 className="text-5xl md:text-7xl font-bold text-white mb-6 leading-tight">
-                保护您的 <span className="text-accent">数字资产</span> 免受数据泄露威胁
+              {/* Logo - Added above title */}
+              <motion.div
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ duration: 0.8, delay: 0.2 }}
+                className="mb-8"
+              >
+                <img 
+                  src="/diewei-w.png" 
+                  alt="DieWei Logo" 
+                  className="h-12 w-auto object-contain drop-shadow-[0_0_20px_rgba(139,92,246,0.3)]"
+                />
+              </motion.div>
+
+              <h1 className="text-5xl md:text-7xl font-extrabold mb-8 leading-[1.1] tracking-tight text-transparent bg-clip-text bg-gradient-to-b from-white via-white to-white/70 drop-shadow-sm">
+                理是 <span className="text-transparent bg-clip-text bg-gradient-to-r from-accent to-purple-400">暗网及互联网</span> <br className="hidden md:block" /> 泄露情报服务
               </h1>
-              <p className="text-lg md:text-xl text-white/80 mb-10 leading-relaxed max-w-4xl mx-auto">
-                基于自然语言熵值分析与密码模式识别技术，对暗网数据黑市、GitHub/Gitee等代码平台、Pastebin、钓鱼插件等临时文本存储站点及社交媒体进行深度扫描，精准捕获企业员工/客户账号密码组合
+              <p className="text-lg md:text-2xl text-white/60 mb-12 font-normal tracking-wider max-w-3xl mx-auto">
+                洞悉数字暗流 <span className="mx-2 text-accent/50">•</span> 智筑安全穹顶
               </p>
               <div className="flex flex-col sm:flex-row items-center gap-4 justify-center">
                 <motion.button
-                  whileHover={{ scale: 1.05, boxShadow: "0 10px 25px -5px rgba(109, 40, 217, 0.3)" }}
+                  whileHover={{ 
+                    scale: 1.05, 
+                    boxShadow: "0 20px 40px -10px rgba(109, 40, 217, 0.4)",
+                    backgroundColor: "rgba(109, 40, 217, 0.95)"
+                  }}
                   whileTap={{ scale: 0.98 }}
-                  className="bg-accent hover:bg-accent/90 text-white font-medium px-8 py-4 rounded-full flex items-center gap-2 text-lg"
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ 
+                    duration: 0.3, 
+                    ease: "easeOut"
+                  }}
+                  className="bg-gradient-to-r from-accent to-purple-600 text-white font-semibold px-10 py-4.5 rounded-full flex items-center gap-3 text-lg tracking-wide shadow-lg hover:shadow-xl hover:-translate-y-0.5 transform transition-all duration-300 border border-purple-500/30"
                   onClick={() => navigate('/login')}
                 >
                   立即开始
-                  <ArrowRight className="w-5 h-5" />
+                  <ArrowRight className="w-5 h-5 ml-1 transition-transform duration-300 group-hover:translate-x-1" />
                 </motion.button>
                 <motion.button
-                  whileHover={{ scale: 1.05 }}
+                  whileHover={{ 
+                    scale: 1.05, 
+                    backgroundColor: "rgba(255, 255, 255, 0.15)",
+                    boxShadow: "0 15px 35px -10px rgba(255, 255, 255, 0.2)",
+                    borderColor: "rgba(255, 255, 255, 0.3)"
+                  }}
                   whileTap={{ scale: 0.98 }}
-                  className="bg-white/10 hover:bg-white/20 text-white font-medium px-8 py-4 rounded-full border border-white/20"
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ 
+                    duration: 0.3, 
+                    ease: "easeOut",
+                    delay: 0.1
+                  }}
+                  className="bg-white/10 hover:bg-white/20 text-white font-semibold px-10 py-4.5 rounded-full border border-white/20 shadow-lg hover:shadow-xl hover:-translate-y-0.5 transform transition-all duration-300 backdrop-blur-sm"
                 >
                   了解更多
                 </motion.button>
@@ -553,8 +719,12 @@ const Home: React.FC = () => {
           </section>
         </div>
 
-        {/* 特性区域 */}
-        <section id="features" className="container mx-auto px-4 py-20">
+        {/* 三维防御体的AI元博弈 - 两栏布局 */}
+        <section id="features" className="container mx-auto px-4 py-20 relative overflow-hidden bg-[#070509]">
+          {/* 背景效果 - 网格纹理 */}
+          <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-5 mix-blend-overlay pointer-events-none" />
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(139,92,246,0.1),transparent_70%)]" />
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_bottom_right,rgba(59,130,246,0.1),transparent_70%)]" />
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -567,148 +737,147 @@ const Home: React.FC = () => {
             </p>
           </motion.div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            {[
-              {
-                icon: <Globe className="w-8 h-8" />,
-                title: "全源情报捕获",
-                details: [
-                  "覆盖暗网Tor/I2P网络、35+主流代码平台",
-                  "监控黑产Telegram/Discord社群及钓鱼插件",
-                  "建立包含数据特征指纹的多维情报仓库",
-                  "生成交易模式画像与攻击者身份图谱"
-                ],
-                color: "from-purple-500/20 to-blue-500/5",
-                iconColor: "text-purple-400"
-              },
-              {
-                icon: <Brain className="w-8 h-8" />,
-                title: "智能风险决策",
-                details: [
-                  "建立3200万节点企业数字资产关系网",
-                  "实现0.5%数据碎片→完整业务系统追溯",
-                  "构建完整的APT组织画像链式追溯体系",
-                  "自研NLP框架解析47类黑市变体暗语"
-                ],
-                color: "from-blue-500/20 to-cyan-500/5",
-                iconColor: "text-blue-400"
-              },
-              {
-                icon: <Shield className="w-8 h-8" />,
-                title: "闭环处置支撑",
-                details: [
-                  "提供专业的月度报告以及年度总结报告",
-                  "7*24小时线上咨询与专家驻场服务",
-                  "给予全流程事件闭环支撑与应急响应",
-                  "有效减缓外泄行为带来的负面影响"
-                ],
-                color: "from-emerald-500/20 to-teal-500/5",
-                iconColor: "text-emerald-400"
-              }
-            ].map((feature, index) => (
-              <motion.div
-                key={index}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.6, delay: 0.3 + index * 0.1 }}
-                whileHover={{ y: -5 }}
-                className="group relative h-full"
-              >
-                <div className={`absolute inset-0 bg-gradient-to-br ${feature.color} opacity-0 group-hover:opacity-100 transition-opacity duration-500 rounded-2xl blur-xl`} />
-                <div className="relative h-full bg-white/5 backdrop-blur-xl border border-white/10 hover:border-white/20 rounded-2xl p-8 transition-colors duration-300 flex flex-col">
-                  {/* Header */}
-                  <div className="flex items-center gap-4 mb-6">
-                    <div className={`p-3 rounded-xl bg-white/5 border border-white/10 ${feature.iconColor} group-hover:scale-110 transition-transform duration-300`}>
-                      {feature.icon}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
+            {/* 左侧：三张卡片 */}
+            <div className="grid grid-cols-1 gap-4">
+              {[
+                {
+                  icon: <Globe className="w-5 h-5" />,
+                  title: "全源情报捕获",
+                  details: [
+                    "覆盖暗网Tor/I2P网络、35+主流代码平台",
+                    "监控黑产Telegram/Discord社群及钓鱼插件",
+                    "建立包含数据特征指纹的多维情报仓库",
+                    "生成交易模式画像与攻击者身份图谱"
+                  ],
+                  color: "from-purple-500/20 to-blue-500/5",
+                  iconColor: "text-purple-400"
+                },
+                {
+                  icon: <Brain className="w-5 h-5" />,
+                  title: "智能风险决策",
+                  details: [
+                    "建立3200万节点企业数字资产关系网",
+                    "实现0.5%数据碎片→完整业务系统追溯",
+                    "构建完整的APT组织画像链式追溯体系",
+                    "自研NLP框架解析47类黑市变体暗语"
+                  ],
+                  color: "from-blue-500/20 to-cyan-500/5",
+                  iconColor: "text-blue-400"
+                },
+                {
+                  icon: <Shield className="w-5 h-5" />,
+                  title: "闭环处置支撑",
+                  details: [
+                    "提供专业的月度报告以及年度总结报告",
+                    "7*24小时线上咨询与专家驻场服务",
+                    "给予全流程事件闭环支撑与应急响应",
+                    "有效减缓外泄行为带来的负面影响"
+                  ],
+                  color: "from-emerald-500/20 to-teal-500/5",
+                  iconColor: "text-emerald-400"
+                }
+              ].map((feature, index) => (
+                <motion.div
+                  key={index}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.6, delay: 0.3 + index * 0.1 }}
+                  whileHover={{ y: -5 }}
+                  className="group relative"
+                >
+                  <div className={`absolute inset-0 bg-gradient-to-br ${feature.color} opacity-0 group-hover:opacity-100 transition-opacity duration-500 rounded-lg blur-lg`} />
+                  <div className="relative bg-white/5 backdrop-blur-md border border-white/10 hover:border-white/20 rounded-lg p-4 transition-colors duration-300 flex flex-col">
+                    {/* Header */}
+                    <div className="flex items-center gap-2 mb-3">
+                      <div className={`p-1.5 rounded-md bg-white/5 border border-white/10 ${feature.iconColor} group-hover:scale-110 transition-transform duration-300`}>
+                        {feature.icon}
+                      </div>
+                      <h3 className="text-base font-bold text-white">{feature.title}</h3>
                     </div>
-                    <h3 className="text-xl font-bold text-white">{feature.title}</h3>
-                  </div>
 
-                  {/* List */}
-                  <ul className="space-y-3">
-                    {feature.details.map((detail, idx) => (
-                      <li key={idx} className="flex items-start gap-3 text-white/70 text-sm leading-relaxed group-hover:text-white/90 transition-colors">
-                        <span className={`mt-1.5 w-1.5 h-1.5 rounded-full ${feature.iconColor.replace('text-', 'bg-')} flex-shrink-0`} />
-                        <span>{detail}</span>
-                      </li>
-                    ))}
-                  </ul>
+                    {/* List */}
+                    <ul className="space-y-1.5">
+                      {feature.details.map((detail, idx) => (
+                        <li key={idx} className="flex items-start gap-1.5 text-white/70 text-xs leading-relaxed group-hover:text-white/90 transition-colors">
+                          <span className={`mt-1 w-1.5 h-1.5 rounded-full ${feature.iconColor.replace('text-', 'bg-')} flex-shrink-0`} />
+                          <span>{detail}</span>
+                        </li>
+                      ))}
+                    </ul>
 
-                  {/* Number Watermark */}
-                  <div className="absolute top-4 right-4 text-6xl font-bold text-white/5 select-none pointer-events-none">
-                    0{index + 1}
+                    {/* Number Watermark */}
+                    <div className="absolute top-2 right-2 text-3xl font-bold text-white/5 select-none pointer-events-none">
+                      0{index + 1}
+                    </div>
                   </div>
-                </div>
-              </motion.div>
-            ))}
+                </motion.div>
+              ))}
+            </div>
+
+            {/* 右侧：1-4的服务流程 */}
+            <div className="relative">
+              {[
+                {
+                  id: 1,
+                  title: "首次排查",
+                  description: "多维度扫描企业数字资产，建立敏感数据智能基线，输出泄露情报与优先级处置建议"
+                },
+                {
+                  id: 2,
+                  title: "实时监测",
+                  description: "基于AI驱动的动态指纹识别技术，7×24小时追踪数据流转路径，实现异常行为识别准确率与分钟级应急响应"
+                },
+                {
+                  id: 3,
+                  title: "线上咨询以及支撑",
+                  description: "安全专家团队驻场护航，提供合规解读、攻防策略优化及事件溯源服务，确保48小时内闭环处置"
+                },
+                {
+                  id: 4,
+                  title: "月度报告以及年度报告",
+                  description: "可视化呈现风险趋势、处置效能及合规水位，附带攻击面收敛方案与防护体系迭代路线图，风险暴露面降低30%+"
+                }
+              ].map((step, index, array) => (
+                <motion.div 
+                  key={index} 
+                  initial={{ opacity: 0, x: 20 }}
+                  whileInView={{ opacity: 1, x: 0 }}
+                  viewport={{ once: true }}
+                  transition={{ duration: 0.5, delay: 0.3 + index * 0.1 }}
+                  className="flex gap-8 relative mb-16"
+                >
+                  {/* 连接线 */}
+                  {index !== array.length - 1 && (
+                    <div className="absolute left-[2rem] top-20 bottom-[-2rem] w-0.5 bg-gradient-to-b from-accent to-transparent opacity-50" />
+                  )}
+                  
+                  {/* 数字圆圈 */}
+                  <div className="flex-shrink-0">
+                    <div className="w-16 h-16 rounded-full border-4 border-accent flex items-center justify-center bg-black/40 backdrop-blur-sm shadow-[0_0_20px_rgba(139,92,246,0.3)] z-10 relative group-hover:scale-110 transition-transform duration-300">
+                      <span className="text-2xl font-bold text-white">{step.id}</span>
+                    </div>
+                  </div>
+                  
+                  {/* 内容 */}
+                  <div className="pb-16 pt-1">
+                    <h3 className="text-2xl font-bold text-white mb-4">{step.title}</h3>
+                    <p className="text-lg text-white/70 leading-relaxed">
+                      {step.description}
+                    </p>
+                  </div>
+                </motion.div>
+              ))}
+            </div>
           </div>
         </section>
 
-        {/* 服务流程区域 */}
-        <section id="process" className="container mx-auto px-4 py-10">
-          <motion.div
-            initial={{ opacity: 0 }}
-            whileInView={{ opacity: 1 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.6 }}
-            className="max-w-4xl mx-auto"
-          >
-            {[
-              {
-                id: 1,
-                title: "首次排查",
-                description: "多维度扫描企业数字资产，建立敏感数据智能基线，输出泄露情报与优先级处置建议"
-              },
-              {
-                id: 2,
-                title: "实时监测",
-                description: "基于AI驱动的动态指纹识别技术，7×24小时追踪数据流转路径，实现异常行为识别准确率与分钟级应急响应"
-              },
-              {
-                id: 3,
-                title: "线上咨询以及支撑",
-                description: "安全专家团队驻场护航，提供合规解读、攻防策略优化及事件溯源服务，确保48小时内闭环处置"
-              },
-              {
-                id: 4,
-                title: "月度报告以及年度报告",
-                description: "可视化呈现风险趋势、处置效能及合规水位，附带攻击面收敛方案与防护体系迭代路线图，风险暴露面降低30%+"
-              }
-            ].map((step, index, array) => (
-              <motion.div 
-                key={index} 
-                initial={{ opacity: 0, x: -20 }}
-                whileInView={{ opacity: 1, x: 0 }}
-                viewport={{ once: true }}
-                transition={{ duration: 0.5, delay: index * 0.2 }}
-                className="flex gap-8 relative"
-              >
-                {/* 连接线 */}
-                {index !== array.length - 1 && (
-                  <div className="absolute left-[2rem] top-20 bottom-[-2rem] w-0.5 bg-gradient-to-b from-accent to-transparent opacity-50" />
-                )}
-                
-                {/* 数字圆圈 */}
-                <div className="flex-shrink-0">
-                  <div className="w-16 h-16 rounded-full border-4 border-accent flex items-center justify-center bg-black/40 backdrop-blur-sm shadow-[0_0_20px_rgba(139,92,246,0.3)] z-10 relative group-hover:scale-110 transition-transform duration-300">
-                    <span className="text-2xl font-bold text-white">{step.id}</span>
-                  </div>
-                </div>
-                
-                {/* 内容 */}
-                <div className="pb-16 pt-1">
-                  <h3 className="text-3xl font-bold text-white mb-4">{step.title}</h3>
-                  <p className="text-lg text-white/70 leading-relaxed max-w-2xl">
-                    {step.description}
-                  </p>
-                </div>
-              </motion.div>
-            ))}
-          </motion.div>
-        </section>
-
         {/* 产品介绍区域 - 简化版 */}
-        <section id="data" className="container mx-auto px-4 py-20">
+        <section id="data" className="container mx-auto px-4 py-20 relative overflow-hidden">
+          {/* 背景效果 - 数据可视化风格 */}
+          <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-5 mix-blend-overlay pointer-events-none" />
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(236,72,153,0.1),transparent_70%)]" />
+          <div className="absolute inset-0 bg-[linear-gradient(45deg,rgba(0,0,0,0.3)_25%,transparent_25%,transparent_75%,rgba(0,0,0,0.3)_75%,rgba(0,0,0,0.3))] bg-[size:100px_100px] opacity-20" />
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -727,9 +896,12 @@ const Home: React.FC = () => {
         </section>
 
         {/* 特色服务区域 - 账号风险情报订阅 */}
-        <section id="subscription" className="container mx-auto px-4 py-20 relative">
-          {/* 背景装饰 */}
+        <section id="subscription" className="container mx-auto px-4 py-20 relative overflow-hidden">
+          {/* 背景装饰 - 科技网格风格 */}
+          <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-5 mix-blend-overlay pointer-events-none" />
           <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-accent/5 rounded-full blur-[120px] pointer-events-none" />
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_bottom_left,rgba(16,185,129,0.1),transparent_70%)]" />
+          <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(0,0,0,0.1)_1px,transparent_1px),linear-gradient(rgba(0,0,0,0.1)_1px,transparent_1px)] bg-[size:40px_40px] opacity-30" />
           
           <div className="max-w-6xl mx-auto">
             <motion.div
@@ -811,8 +983,147 @@ const Home: React.FC = () => {
           </div>
         </section>
 
+        {/* 服务内容区域 */}
+        <section id="services" className="container mx-auto px-4 py-20 relative overflow-hidden">
+          {/* 背景效果 - 动态波纹风格 */}
+          <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-5 mix-blend-overlay pointer-events-none" />
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_center,rgba(79,70,229,0.1),transparent_70%)]" />
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_bottom_center,rgba(168,85,247,0.1),transparent_70%)]" />
+          <div className="absolute inset-0 bg-[linear-gradient(135deg,rgba(0,0,0,0.2)_25%,transparent_25%,transparent_75%,rgba(0,0,0,0.2)_75%,rgba(0,0,0,0.2))] bg-[size:60px_60px] opacity-20" />
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.6 }}
+            className="text-center mb-20"
+          >
+            <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">
+              服务内容
+            </h2>
+            <p className="text-white/60 tracking-widest uppercase text-sm">
+              全方位泄露情报服务体系
+            </p>
+          </motion.div>
+
+          {/* 三栏布局：左侧3个卡片 + 中心动画 + 右侧3个卡片 */}
+          <div className="flex flex-col lg:flex-row items-center justify-center gap-8 max-w-6xl mx-auto">
+            {/* 左侧3个卡片 */}
+            <div className="flex flex-col gap-8 w-full lg:w-1/3">
+              {[
+                {
+                id: "01",
+                title: "暗网情报监测",
+                description: "覆盖AlphaBay、Hydra等23个国际暗网交易市场，监测中文/俄语/暗网暗语论坛对话，追踪数字货币交易链与勒索信息泄露动态",
+                icon: <Globe className="w-6 h-6 text-purple-400" />
+              },
+              {
+                id: "02",
+                title: "黑产舆情监测",
+                description: "监控Telegram、Discord等146个黑产聚集平台，识别银行卡四件套\"爬虫API\"等38类黑产术语，日均分析2TB级非结构化数据",
+                icon: <AlertTriangle className="w-6 h-6 text-purple-400" />
+              },
+              {
+                id: "03",
+                title: "代码泄露监测",
+                description: "采用AST语法树分析技术，扫描GitHub、GitLab等12个代码库，识别Java/Python等21种语言的密钥硬编码、核心算法暴露等7类风险",
+                icon: <Code className="w-6 h-6 text-purple-400" />
+              }
+              ].map((service, index) => (
+                <motion.div
+                  key={index}
+                  initial={{ opacity: 0, x: -50, y: 20 }}
+                  whileInView={{ opacity: 1, x: 0, y: 0 }}
+                  viewport={{ once: true, margin: "-100px" }}
+                  whileHover={{
+                    x: -5,
+                    opacity: 1
+                  }}
+                  transition={{ duration: 0.6, delay: index * 0.1, ease: "easeOut" }}
+                  className="cursor-pointer transition-all duration-300"
+                >
+                  <div className="flex items-center gap-3 mb-3 justify-start">
+                    <div className="w-10 h-10 flex items-center justify-center">
+                      {service.icon}
+                    </div>
+                    <h3 className="text-xl font-semibold text-white">{service.title}</h3>
+                  </div>
+                  <p className="text-white/70 text-sm leading-relaxed pl-13">
+                    {service.description}
+                  </p>
+                </motion.div>
+              ))}
+            </div>
+
+            {/* 中心3D Sphere Scan动画 */}
+            <div className="flex-shrink-0">
+              <motion.div
+                initial={{ opacity: 0, scale: 0.8 }}
+                whileInView={{ opacity: 1, scale: 1 }}
+                viewport={{ once: true }}
+                transition={{ duration: 0.8, ease: "easeOut" }}
+                className="relative"
+              >
+                {/* 3D Sphere Scan Canvas */}
+                <SphereScan />
+              </motion.div>
+            </div>
+
+            {/* 右侧3个卡片 */}
+            <div className="flex flex-col gap-8 w-full lg:w-1/3">
+              {[
+                {
+                id: "04",
+                title: "敏感文件监测",
+                description: "扫描百度网盘、MEGA等38个共享平台，基于文档DNA指纹算法，建立PDF/DOCX/CAD等132种文件格式的特征库，实现敏感文档传播路径的拓扑重构与泄露源头定位",
+                icon: <FileText className="w-6 h-6 text-purple-400" />
+              },
+              {
+                id: "05",
+                title: "资产失陷监测",
+                description: "基于十亿级DNS解析历史数据库和IP信誉图谱，构建C2通信特征匹配引擎，结合HTTPS证书指纹、JA3指纹等9类指纹特征，实现失陷资产72小时内自动识别与IOC提取",
+                icon: <Server className="w-6 h-6 text-purple-400" />
+              },
+              {
+                id: "06",
+                title: "对外账密泄露监测",
+                description: "对接全球泄露数据库，且收集暗网、钓鱼邮件等渠道泄露账号，构建专业属关联证库，通过彩虹表碰撞检测与Salt值模糊匹配技术，实现员工/客户账号密码的泄露实时预警",
+                icon: <Shield className="w-6 h-6 text-purple-400" />
+              }
+              ].map((service, index) => (
+                <motion.div
+                  key={index}
+                  initial={{ opacity: 0, x: 50, y: 20 }}
+                  whileInView={{ opacity: 1, x: 0, y: 0 }}
+                  viewport={{ once: true, margin: "-100px" }}
+                  whileHover={{
+                    x: 5,
+                    opacity: 1
+                  }}
+                  transition={{ duration: 0.6, delay: index * 0.1, ease: "easeOut" }}
+                  className="cursor-pointer transition-all duration-300"
+                >
+                  <div className="flex items-center gap-3 mb-3 justify-start">
+                    <div className="w-10 h-10 flex items-center justify-center">
+                      {service.icon}
+                    </div>
+                    <h3 className="text-xl font-semibold text-white">{service.title}</h3>
+                  </div>
+                  <p className="text-white/70 text-sm leading-relaxed pl-13">
+                    {service.description}
+                  </p>
+                </motion.div>
+              ))}
+            </div>
+          </div>
+        </section>
+
         {/* 服务优势区域 - 新增板块 */}
-        <section id="advantages" className="container mx-auto px-4 py-20 relative">
+        <section id="advantages" className="container mx-auto px-4 py-20 relative overflow-hidden">
+          {/* 背景效果 - 几何图形风格 */}
+          <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-5 mix-blend-overlay pointer-events-none" />
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(245,158,11,0.1),transparent_70%)]" />
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_bottom_left,rgba(239,68,68,0.1),transparent_70%)]" />
+          <div className="absolute inset-0 bg-[linear-gradient(45deg,rgba(0,0,0,0.15)_25%,transparent_25%,transparent_75%,rgba(0,0,0,0.15)_75%,rgba(0,0,0,0.15))] bg-[size:80px_80px] opacity-20" />
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
@@ -913,12 +1224,12 @@ const Home: React.FC = () => {
           </div>
         </section>
 
-        {/* 合作客户区域 */}
-        <section id="partners" className="container mx-auto px-4 py-20 relative overflow-hidden">
+        {/* 合作伙伴区域 */}
+        <section id="partners" className="container mx-auto px-4 py-20 relative overflow-hidden pb-40">
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[400px] bg-accent/5 rounded-full blur-[100px] pointer-events-none" />
           
           <motion.div
-            initial={{ opacity: 0, y: 20 }}
+            initial={{ opacity: 1, y: 0 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ duration: 0.6 }}
@@ -927,119 +1238,52 @@ const Home: React.FC = () => {
             <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">
               合作伙伴
             </h2>
-          </motion.div>
-
-          <div className="max-w-5xl mx-auto">
-            <div className="grid grid-cols-2 md:grid-cols-3 border border-white/10 bg-white/[0.02] backdrop-blur-sm rounded-3xl overflow-hidden">
-              {[
-                { name: "工信部", logo: "/partners/miit.png", type: "政府机构", scale: 1.5 },
-                { name: "CCDC", logo: "/partners/ccdc.png", type: "网络安全", scale: 1.5 },
-                { name: "BMW", logo: "/partners/bmw.png", type: "汽车制造", scale: 1 },
-                { name: "BYD", logo: "/partners/byd.png", type: "新能源汽车", scale: 1 },
-                { name: "NIO", logo: "/partners/nio.png", type: "智能电动汽车", scale: 1 },
-                { name: "XPeng", logo: "/partners/xpeng.png", type: "未来出行", scale: 1 },
-                { name: "GAC", logo: "/partners/gac.png", type: "汽车集团", scale: 1 },
-                { name: "Seres", logo: "/partners/seres.png", type: "智能汽车", scale: 1 },
-                { name: "Partner", logo: "/partners/misc.png", type: "战略合作", scale: 1.5 },
-              ].map((partner, index) => (
-                <motion.div
-                  key={index}
-                  initial={{ opacity: 0 }}
-                  whileInView={{ opacity: 1 }}
-                  viewport={{ once: true }}
-                  transition={{ duration: 0.5, delay: index * 0.05 }}
-                  className="group relative border-r border-b border-white/5 p-12 flex items-center justify-center hover:bg-white/[0.04] transition-colors duration-500 last:border-b-0 [&:nth-child(3n)]:border-r-0 [&:nth-child(n+7)]:border-b-0"
-                >
-                  <div className="relative w-full h-20 flex items-center justify-center">
-                    {/* Logo - 统一使用白色单色模式，确保在深色背景下的完美可视性和高级感 */}
-                    <img 
-                      src={partner.logo} 
-                      alt={partner.name} 
-                      style={{ transform: `scale(${partner.scale})` }}
-                      className="max-h-full max-w-full object-contain filter brightness-0 invert opacity-40 group-hover:opacity-100 transition-all duration-500 group-hover:drop-shadow-[0_0_15px_rgba(255,255,255,0.4)]"
-                    />
-                  </div>
-                </motion.div>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        {/* 行动召唤区域 */}
-        <section className="container mx-auto px-4 py-20 mb-20">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6 }}
-            className="bg-gradient-to-r from-accent/20 to-accent/10 backdrop-blur-lg border border-white/20 rounded-3xl p-12 md:p-16 text-center"
-          >
-            <h2 className="text-3xl md:text-5xl font-bold text-white mb-6">
-              准备好保护您的数据了吗？
-            </h2>
-            <p className="text-xl text-white/80 mb-10 max-w-3xl mx-auto">
-              立即加入我们，访问超过千万的泄露数据索引，保护您的企业和客户数据安全。
+            <p className="text-white/60 max-w-2xl mx-auto">
+              与行业领先企业和机构建立战略合作关系，共同构建安全生态
             </p>
-            <motion.button
-              whileHover={{ scale: 1.05, boxShadow: "0 10px 25px -5px rgba(109, 40, 217, 0.3)" }}
-              whileTap={{ scale: 0.98 }}
-              className="bg-accent hover:bg-accent/90 text-white font-medium px-10 py-5 rounded-full flex items-center gap-2 text-lg mx-auto"
-              onClick={() => navigate('/login')}
-            >
-              登录并开始使用
-              <ArrowRight className="w-5 h-5" />
-            </motion.button>
           </motion.div>
-        </section>
 
-        {/* 页脚 */}
-        <footer className="bg-black/50 border-t border-white/10 py-12">
-          <div className="container mx-auto px-4">
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-12">
-              <div>
-                <div className="flex items-center gap-2 mb-6">
-                  <Shield className="w-6 h-6 text-accent" />
-                  <span className="text-lg font-bold text-white">DieWei</span>
-                </div>
-                <p className="text-white/60 mb-6">
-                  保护您的数字资产免受数据泄露威胁，提供全面的监测和防护服务。
-                </p>
+          {/* 合作伙伴logo - 统一白模 + 呼吸感交互 */}
+          <div className="relative z-10 max-w-5xl mx-auto">
+            {/* 半透明深色面板背景 */}
+            <div className="bg-white/[0.03] backdrop-blur-md border border-white/10 rounded-2xl p-8">
+              {/* 3x3网格布局 */}
+              <div className="grid grid-cols-3 gap-8">
+                {/* 按图片顺序排列logo */}
+                {[
+                  'miit', 'ccdc', 'bmw',
+                  'byd', 'nio', 'xpeng',
+                  'gac', 'seres', 'misc'
+                ].map((partner, index) => {
+                  // 单独放大指定的logo，misc再额外放大20%
+                  let scaleClass = '';
+                  if (partner === 'misc') {
+                    scaleClass = 'transform scale-168'; // 当前140% * 1.2 = 168%
+                  } else if (['ccdc', 'miit'].includes(partner)) {
+                    scaleClass = 'transform scale-140';
+                  }
+                  return (
+                    <motion.div
+                      key={partner}
+                      initial={{ opacity: 0, scale: 1 }}
+                      whileInView={{ opacity: 1, scale: 1 }}
+                      viewport={{ once: true }}
+                      transition={{ duration: 0.5, delay: index * 0.1 }}
+                      whileHover={{ scale: 1, opacity: 1 }}
+                      className="flex items-center justify-center h-24 bg-transparent hover:bg-white/[0.04] rounded-xl transition-all duration-300"
+                    >
+                      <img 
+                        src={`/partners/${partner}.png`} 
+                        alt={`${partner} logo`} 
+                        className={`w-auto h-auto max-w-[80%] max-h-[80%] object-contain opacity-40 brightness-0 invert transition-all duration-300 hover:opacity-100 hover:drop-shadow-[0_0_10px_rgba(255,255,255,0.5)] ${scaleClass}`}
+                      />
+                    </motion.div>
+                  );
+                })}
               </div>
-              <div>
-                <h3 className="text-white font-semibold mb-4">产品</h3>
-                <ul className="space-y-2">
-                  {["功能特性", "定价方案", "使用案例", "更新日志"].map((item, index) => (
-                    <li key={index}>
-                      <a href="#" className="text-white/60 hover:text-white transition-colors">{item}</a>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-              <div>
-                <h3 className="text-white font-semibold mb-4">解决方案</h3>
-                <ul className="space-y-2">
-                  {["企业安全", "政府机构", "金融服务", "医疗健康"].map((item, index) => (
-                    <li key={index}>
-                      <a href="#" className="text-white/60 hover:text-white transition-colors">{item}</a>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-              <div>
-                <h3 className="text-white font-semibold mb-4">关于我们</h3>
-                <ul className="space-y-2">
-                  {["公司介绍", "团队成员", "联系我们", "隐私政策"].map((item, index) => (
-                    <li key={index}>
-                      <a href="#" className="text-white/60 hover:text-white transition-colors">{item}</a>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            </div>
-            <div className="pt-8 border-t border-white/10 text-center text-white/60 text-sm">
-              <p>© 2026 DieWei. 保留所有权利。</p>
             </div>
           </div>
-        </footer>
+        </section>
       </div>
     </div>
   );
