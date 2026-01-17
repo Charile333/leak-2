@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import React from 'react';
+import { motion } from 'framer-motion';
 import { 
   Globe, 
   MessageSquare, 
@@ -7,16 +7,13 @@ import {
   FileText, 
   Server, 
   Key,
-  Database,
   Shield,
   Zap,
   Activity,
-  Map as MapIcon,
   Search,
   AlertTriangle,
   ArrowRight
 } from 'lucide-react';
-import { HalfCircleBackground } from './HalfCircleBackground';
 
 // 核心服务数据
 const coreServices = [
