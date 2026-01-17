@@ -39,11 +39,19 @@ const FullPageScroll: React.FC<FullPageScrollProps> = ({
   const [activeIndex, setActiveIndex] = useState(0);
   const [isAnimating, setIsAnimating] = useState(false);
   const [scrollDirection, setScrollDirection] = useState<'up' | 'down'>('down');
+  // Removed currentEffect state as we calculate it directly now
 
   // 引用
   const containerRef = useRef<HTMLDivElement>(null);
   const sectionsRef = useRef<HTMLDivElement[]>([]);
   const startYRef = useRef<number>(0);
+  
+  // 切换动画效果
+  // useEffect(() => {
+  //   // 每次切换页面时，交替使用动画效果
+  //   // 偶数页切到奇数页用 stack，奇数页切到偶数页用 flip，或者随机
+  //   // 这里简单地在每次滚动开始前切换
+  // }, [activeIndex]);
 
   // 将子元素转换为数组
   const sections = React.Children.toArray(children);
@@ -97,17 +105,16 @@ const FullPageScroll: React.FC<FullPageScrollProps> = ({
 
     // 执行页面切换动画
     setIsAnimating(true);
-    // 延迟更新 activeIndex，让旧页面先执行退出动画
-    // 注意：这里的 activeIndex 更新时机很重要。
-    // 在 React 中，我们需要先设置 isAnimating 为 true，触发渲染，应用 exit/enter 类名
-    // 然后在动画结束后，更新 activeIndex 并重置 isAnimating
     
-    // 但是，由于我们需要同时渲染两个页面（当前页和下一页），
-    // 我们的逻辑是：
-    // 1. 设置 isAnimating = true
-    // 2. 组件重渲染，getAnimationClass 会根据 activeIndex (当前页) 和 nextIndex (下一页) 返回对应的动画类
-    // 3. 动画播放完毕
-    // 4. 设置 activeIndex = nextIndex, isAnimating = false
+    // 决定本次动画类型：交替使用
+    // 按照用户要求：交错使用
+    // 如果是从 index 0 -> 1，我们使用 stack
+    // 如果是从 index 1 -> 2，我们使用 flip
+    
+    // 我们不再依赖 state，而是直接在 getAnimationClass 中计算
+    // 这里只负责触发动画状态
+    
+    setIsAnimating(true);
     
     setTimeout(() => {
       setActiveIndex(nextIndex);
@@ -198,8 +205,39 @@ const FullPageScroll: React.FC<FullPageScrollProps> = ({
           ? `animate-scale-in duration-${duration}` 
           : `animate-scale-out duration-${duration}`;
         break;
+      case 'slide': // 保持原有 slide 逻辑作为 fallback，或者如果用户没有选择 stack/flip
       default:
-        animationClass = index === activeIndex ? 'active' : '';
+         // 混合模式逻辑
+         // 确定本次交互的目标索引
+         const targetIndex = scrollDirection === 'down' ? activeIndex + 1 : activeIndex - 1;
+         
+         // 决定动画类型：
+         // 进入偶数页 (targetIndex % 2 === 0) -> Flip
+         // 进入奇数页 (targetIndex % 2 !== 0) -> Stack
+         // 修正逻辑以符合用户要求：
+         // 0 -> 1 (奇数): Stack
+         // 1 -> 2 (偶数): Flip
+         const effectType = Math.abs(targetIndex) % 2 === 0 ? 'flip' : 'stack';
+         
+         // 如果是 stack
+         if (effectType === 'stack') {
+            if (scrollDirection === 'down') {
+                if (isCurrent) animationClass = `animate-stack-up-out`; // 当前页向上滑出并缩小
+                if (isNext) animationClass = `animate-stack-up-in`; // 下一页从底部覆盖上来
+            } else {
+                if (isCurrent) animationClass = `animate-stack-down-out`; // 当前页向下滑出并缩小
+                if (isNext) animationClass = `animate-stack-down-in`; // 下一页从顶部覆盖下来
+            }
+         } else { // flip
+            if (scrollDirection === 'down') {
+                if (isCurrent) animationClass = `animate-flip-up-out`; // 当前页向上翻转消失
+                if (isNext) animationClass = `animate-flip-up-in`; // 下一页从底部翻转出现
+            } else {
+                if (isCurrent) animationClass = `animate-flip-down-out`; // 当前页向下翻转消失
+                if (isNext) animationClass = `animate-flip-down-in`; // 下一页从顶部翻转出现
+            }
+         }
+        break;
     }
 
     return animationClass;
@@ -221,7 +259,9 @@ const FullPageScroll: React.FC<FullPageScrollProps> = ({
     opacity: 0,
     visibility: 'hidden',
     transition: `opacity ${animationDuration}ms ease, visibility ${animationDuration}ms ease`,
-    transformOrigin: 'center center'
+    // transformOrigin removed here to let CSS classes control it
+    backfaceVisibility: 'hidden', // Add backface-visibility
+    WebkitBackfaceVisibility: 'hidden'
   };
 
   const sectionActiveStyle: React.CSSProperties = {
@@ -238,101 +278,86 @@ const FullPageScroll: React.FC<FullPageScrollProps> = ({
     >
       {/* CSS 样式通过类名和内联样式结合实现 */}
       <style>{`
-        /* 定义所有动画关键帧 */
-        @keyframes fadeIn {
-          from { opacity: 0; }
-          to { opacity: 1; }
+        /* 3D 容器基础样式 */
+        .full-page-scroll {
+          perspective: 1000px; /* 增强透视感 */
+          transform-style: preserve-3d;
         }
 
-        @keyframes fadeOut {
-          from { opacity: 1; }
-          to { opacity: 0; }
+        /* 
+          Stack 效果 (堆叠) 
+          进入：从底部/顶部滑入，带有轻微缩放和遮挡感
+          退出：缩小变暗，被覆盖
+        */
+        @keyframes stackUpIn {
+          from { opacity: 0; transform: translate3d(0, 100%, 200px); z-index: 10; }
+          to { opacity: 1; transform: translate3d(0, 0, 0); z-index: 10; }
+        }
+        @keyframes stackUpOut {
+          from { opacity: 1; transform: translate3d(0, 0, 0) scale(1); filter: brightness(1); }
+          to { opacity: 0.5; transform: translate3d(0, -20%, -100px) scale(0.9); filter: brightness(0.5); }
+        }
+        @keyframes stackDownIn {
+          from { opacity: 0; transform: translate3d(0, -100%, 200px); z-index: 10; }
+          to { opacity: 1; transform: translate3d(0, 0, 0); z-index: 10; }
+        }
+        @keyframes stackDownOut {
+          from { opacity: 1; transform: translate3d(0, 0, 0) scale(1); filter: brightness(1); }
+          to { opacity: 0.5; transform: translate3d(0, 20%, -100px) scale(0.9); filter: brightness(0.5); }
         }
 
-        @keyframes slideUpIn {
-          from { opacity: 0; transform: translateY(100%); }
-          to { opacity: 1; transform: translateY(0); }
+        /* 
+          Flip 效果 (3D 翻转) 
+          围绕 X 轴翻转
+        */
+        @keyframes flipUpIn {
+          from { opacity: 0; transform: rotateX(-90deg); }
+          to { opacity: 1; transform: rotateX(0); }
+        }
+        @keyframes flipUpOut {
+          from { opacity: 1; transform: rotateX(0); }
+          to { opacity: 0; transform: rotateX(90deg); }
+        }
+        @keyframes flipDownIn {
+          from { opacity: 0; transform: rotateX(90deg); }
+          to { opacity: 1; transform: rotateX(0); }
+        }
+        @keyframes flipDownOut {
+          from { opacity: 1; transform: rotateX(0); }
+          to { opacity: 0; transform: rotateX(-90deg); }
         }
 
-        @keyframes slideDownOut {
-          from { opacity: 1; transform: translateY(0); }
-          to { opacity: 0; transform: translateY(-100%); }
-        }
 
-        @keyframes slideDownIn {
-          from { opacity: 0; transform: translateY(-100%); }
-          to { opacity: 1; transform: translateY(0); }
-        }
+        /* 原有动画关键帧 (fade, slide, scale) 保留用于兼容... */
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes fadeOut { from { opacity: 1; } to { opacity: 0; } }
+        @keyframes slideUpIn { from { opacity: 0; transform: translateY(100%); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes slideDownOut { from { opacity: 1; transform: translateY(0); } to { opacity: 0; transform: translateY(-100%); } }
+        @keyframes slideDownIn { from { opacity: 0; transform: translateY(-100%); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes slideUpOut { from { opacity: 1; transform: translateY(0); } to { opacity: 0; transform: translateY(100%); } }
+        @keyframes scaleIn { from { opacity: 0; transform: scale(0.8); } to { opacity: 1; transform: scale(1); } }
+        @keyframes scaleOut { from { opacity: 1; transform: scale(1); } to { opacity: 0; transform: scale(1.2); } }
 
-        @keyframes slideUpOut {
-          from { opacity: 1; transform: translateY(0); }
-          to { opacity: 0; transform: translateY(100%); }
-        }
+        /* 新增动画类 */
+        .animate-stack-up-in { animation: stackUpIn ${animationDuration}ms cubic-bezier(0.2, 0.8, 0.2, 1) forwards; }
+        .animate-stack-up-out { animation: stackUpOut ${animationDuration}ms cubic-bezier(0.2, 0.8, 0.2, 1) forwards; }
+        .animate-stack-down-in { animation: stackDownIn ${animationDuration}ms cubic-bezier(0.2, 0.8, 0.2, 1) forwards; }
+        .animate-stack-down-out { animation: stackDownOut ${animationDuration}ms cubic-bezier(0.2, 0.8, 0.2, 1) forwards; }
 
-        @keyframes scaleIn {
-          from { opacity: 0; transform: scale(0.8); }
-          to { opacity: 1; transform: scale(1); }
-        }
+        .animate-flip-up-in { animation: flipUpIn ${animationDuration}ms cubic-bezier(0.4, 0.0, 0.2, 1) forwards; transform-origin: top center; }
+        .animate-flip-up-out { animation: flipUpOut ${animationDuration}ms cubic-bezier(0.4, 0.0, 0.2, 1) forwards; transform-origin: bottom center; }
+        .animate-flip-down-in { animation: flipDownIn ${animationDuration}ms cubic-bezier(0.4, 0.0, 0.2, 1) forwards; transform-origin: bottom center; }
+        .animate-flip-down-out { animation: flipDownOut ${animationDuration}ms cubic-bezier(0.4, 0.0, 0.2, 1) forwards; transform-origin: top center; }
 
-        @keyframes scaleOut {
-          from { opacity: 1; transform: scale(1); }
-          to { opacity: 0; transform: scale(1.2); }
-        }
-
-        /* 动画类定义 */
-        .animate-fade-in {
-          opacity: 0;
-          visibility: visible;
-          animation: fadeIn ${animationDuration}ms ease forwards;
-        }
-
-        .animate-fade-out {
-          opacity: 1;
-          visibility: visible;
-          animation: fadeOut ${animationDuration}ms ease forwards;
-        }
-
-        .animate-slide-up-in {
-          opacity: 0;
-          visibility: visible;
-          transform: translateY(100%);
-          animation: slideUpIn ${animationDuration}ms ease forwards;
-        }
-
-        .animate-slide-down-out {
-          opacity: 1;
-          visibility: visible;
-          transform: translateY(0);
-          animation: slideDownOut ${animationDuration}ms ease forwards;
-        }
-
-        .animate-slide-down-in {
-          opacity: 0;
-          visibility: visible;
-          transform: translateY(-100%);
-          animation: slideDownIn ${animationDuration}ms ease forwards;
-        }
-
-        .animate-slide-up-out {
-          opacity: 1;
-          visibility: visible;
-          transform: translateY(0);
-          animation: slideUpOut ${animationDuration}ms ease forwards;
-        }
-
-        .animate-scale-in {
-          opacity: 0;
-          visibility: visible;
-          transform: scale(0.8);
-          animation: scaleIn ${animationDuration}ms ease forwards;
-        }
-
-        .animate-scale-out {
-          opacity: 1;
-          visibility: visible;
-          transform: scale(1);
-          animation: scaleOut ${animationDuration}ms ease forwards;
-        }
+        /* 兼容原有类 */
+        .animate-fade-in { animation: fadeIn ${animationDuration}ms ease forwards; }
+        .animate-fade-out { animation: fadeOut ${animationDuration}ms ease forwards; }
+        .animate-slide-up-in { animation: slideUpIn ${animationDuration}ms ease forwards; }
+        .animate-slide-down-out { animation: slideDownOut ${animationDuration}ms ease forwards; }
+        .animate-slide-down-in { animation: slideDownIn ${animationDuration}ms ease forwards; }
+        .animate-slide-up-out { animation: slideUpOut ${animationDuration}ms ease forwards; }
+        .animate-scale-in { animation: scaleIn ${animationDuration}ms ease forwards; }
+        .animate-scale-out { animation: scaleOut ${animationDuration}ms ease forwards; }
       `}</style>
 
       {sections.map((section, index) => (

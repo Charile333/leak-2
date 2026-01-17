@@ -11,6 +11,7 @@ const originalData = [
     subData: "支持 12 种语言",
     desc: "暗网、代码库、黑产渠道全链路覆盖，无死角捕获威胁情报",
     icon: MapIcon,
+    image: "/card/card-1.png", // Added image path
     color: "from-purple-500 to-indigo-600",
     details: [
       "需覆盖暗网Tor/12P网络、35+主流代码平台、黑产Telegram/Discord社群，钓鱼插件等立体监测面建立包含数据特征指纹、交易模式画像、攻击者身份图谱的多维情报仓库，",
@@ -23,6 +24,7 @@ const originalData = [
     subData: "12 种 AI 模型协同",
     desc: "融合图神经网络与动态本体建模，实现从数据碎片到攻击画像的链式追溯",
     icon: Database,
+    image: "/card/card-2.png", // Added image path
     color: "from-blue-500 to-cyan-600",
     details: [
       "建立3200万节点企业数字资产关系网，实现「0.5%数据碎片→完整业务系统→APT组织画像」的链式追溯；自研NLP框架可解析黑市暗语47类变体（如用「蔬菜包」指代用户信息、「钢板价」隐喻商业秘密交易",
@@ -35,6 +37,7 @@ const originalData = [
     subData: "48 小时闭环处置",
     desc: "线上实时指导 + 线下应急支援，重大事件快速响应，拒绝延迟",
     icon: Zap,
+    image: "/card/card-3.png", // Added image path
     color: "from-orange-500 to-red-600",
     details: [
       "提供月度报告以及年度报告，线上咨询，给予事件闭环支撑",
@@ -51,11 +54,11 @@ const originalData = [
 // 点击一次后：Card 2 在最上面。
 // 倒推数组结构：[Card 2, Card 1, Card 3, Card 2, Card 1]
 const initialCards = [
-  { ...originalData[1], id: 'card-1' }, // Bottom
-  { ...originalData[0], id: 'card-2' },
-  { ...originalData[2], id: 'card-3' },
-  { ...originalData[1], id: 'card-4' },
-  { ...originalData[0], id: 'card-5' }, // Top (First shown)
+  { ...originalData[1], id: 2 }, // Bottom
+  { ...originalData[0], id: 1 },
+  { ...originalData[2], id: 3 },
+  { ...originalData[1], id: 2 },
+  { ...originalData[0], id: 1 }, // Top (First shown)
 ];
 
 export const FlipCardStack: React.FC = () => {
@@ -67,7 +70,7 @@ export const FlipCardStack: React.FC = () => {
       const lastCard = newCards.pop(); // 移除最上面的卡片
       if (lastCard) {
         // 给重新插入到底部的卡片一个新的 ID
-        const newCard = { ...lastCard, id: `card-${Date.now()}` };
+        const newCard = { ...lastCard, id: lastCard.id };
         newCards.unshift(newCard); // 放到最底部
       }
       return newCards;
@@ -78,7 +81,7 @@ export const FlipCardStack: React.FC = () => {
   const topCard = cards[cards.length - 1];
 
   return (
-    <div className="w-full max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-8 md:gap-16 px-4">
+    <div className="w-full max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-8 md:gap-16 px-4 pt-20">
       {/* 左侧：卡片堆叠区域 */}
       <div className="relative h-[550px] w-full md:w-1/2 flex items-center perspective-1000">
         <div 
@@ -115,8 +118,8 @@ export const FlipCardStack: React.FC = () => {
 
               return (
                 <motion.div
-                  key={card.id}
-                  layoutId={card.id} // 使用 layoutId 实现位置交换的平滑过渡
+                  key={`${card.id}-${index}`}
+                  layoutId={`${card.id}-${index}`} // 使用 layoutId 实现位置交换的平滑过渡
                   initial={{ 
                     y: 40,  // GSAP: yPercent: 20
                     opacity: 0,
@@ -144,25 +147,39 @@ export const FlipCardStack: React.FC = () => {
                     layout: { duration: 0.4, ease: "easeInOut" }, // 这里的 easeInOut 对应 GSAP 的 sine.inOut
                     opacity: { duration: 0.3, ease: "easeOut" } // 单独控制透明度动画
                   }}
-                  className={`absolute top-0 left-0 w-full h-full rounded-2xl p-6 flex flex-col justify-between border ${borderStyle} shadow-2xl backdrop-blur-md overflow-hidden`}
+                  className={`absolute top-0 left-0 w-full h-full rounded-2xl ${card.image ? '' : 'p-6 border'} flex flex-col justify-between ${card.image ? '' : borderStyle} shadow-2xl backdrop-blur-md overflow-hidden`}
                   style={{
-                    background: bgGradient,
+                    background: card.image ? 'transparent' : bgGradient,
                     transformOrigin: "bottom left"
                   }}
                 >
-                  {/* 装饰背景 */}
-                  <div className={`absolute top-0 right-0 w-32 h-32 bg-gradient-to-br ${card.color} opacity-20 blur-[40px] rounded-full -mr-10 -mt-10`} />
-                  
-                  <div className="relative z-10 flex flex-col items-center justify-center h-full">
-                    <div className={`w-16 h-16 rounded-xl bg-gradient-to-br ${card.color} flex items-center justify-center mb-6 shadow-lg`}>
-                      <card.icon className="w-8 h-8 text-white" />
-                    </div>
-                    <h3 className="text-2xl font-bold text-white mb-2 text-center">{card.title}</h3>
-                    <div className="h-1 w-12 bg-white/20 rounded-full" />
-                  </div>
-                  
-                  {/* 底部装饰条 */}
-                  <div className={`absolute bottom-0 left-0 w-full h-1 bg-gradient-to-r ${card.color} opacity-50`} />
+                  {card.image ? (
+                    <img 
+                      src={card.image} 
+                      alt={card.title} 
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <>
+                      {/* 装饰背景 */}
+                      <div className={`absolute top-0 right-0 w-32 h-32 bg-gradient-to-br ${card.color} opacity-20 blur-[40px] rounded-full -mr-10 -mt-10`} />
+                      
+                      <div className="relative z-10 flex flex-col items-center justify-center h-full">
+                        <div className="absolute top-6 left-0 w-full flex justify-center">
+                          <h3 className="text-xl font-bold text-white mb-2 text-center tracking-wider">{card.title}</h3>
+                        </div>
+                        
+                        <div className={`w-full flex items-center justify-center mb-6 relative group`}>
+                           <span className="text-[10rem] font-black text-white/90 font-mono tracking-tighter leading-none" style={{ textShadow: '0 4px 30px rgba(0,0,0,0.5)' }}>
+                              0{card.id}
+                            </span>
+                        </div>
+                      </div>
+                      
+                      {/* 底部装饰条 */}
+                      <div className={`absolute bottom-0 left-0 w-full h-1 bg-gradient-to-r ${card.color} opacity-50`} />
+                    </>
+                  )}
                 </motion.div>
               );
             })}
@@ -179,7 +196,7 @@ export const FlipCardStack: React.FC = () => {
       <div className="w-full md:w-1/2 h-[500px] flex flex-col justify-center">
         <AnimatePresence mode="wait">
           <motion.div
-            key={topCard.id.split('-')[0] + topCard.title} // Use title as key to trigger animation on change
+            key={`${topCard.id}-${topCard.title}`} // Use title as key to trigger animation on change
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: -20 }}

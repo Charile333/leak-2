@@ -163,6 +163,7 @@ export const CoreServicesSection: React.FC = () => (
 );
 
 import { FlipCardStack } from './FlipCardStack';
+import { FlipCardOriginal } from './FlipCardOriginal';
 
 export const TechAdvantagesSection: React.FC = () => {
   return (
@@ -196,6 +197,23 @@ export const FlipCardDemoSection: React.FC = () => (
     <div className="absolute inset-0 bg-gradient-to-t from-purple-900/20 to-transparent pointer-events-none" />
     <div className="container mx-auto px-4 flex flex-col items-start">
       <FlipCardStack />
+    </div>
+  </section>
+);
+
+export const FlipCardReplicaSection: React.FC = () => (
+  <section className="h-full flex flex-col items-center justify-center bg-black relative overflow-hidden">
+    <motion.div
+      initial={{ opacity: 0 }}
+      whileInView={{ opacity: 1 }}
+      viewport={{ once: true }}
+      className="text-center mb-16"
+    >
+      <h2 className="text-3xl md:text-5xl font-bold mb-4 text-white">核心技术壁垒</h2>
+      <div className="w-20 h-1 bg-accent mx-auto rounded-full" />
+    </motion.div>
+    <div className="container mx-auto px-4 flex flex-col items-center">
+      <FlipCardOriginal />
     </div>
   </section>
 );

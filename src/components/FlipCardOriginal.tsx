@@ -1,14 +1,24 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 
-// Original images from the demo
+// Original images from the demo (now local)
+const baseData = [
+  { id: '1', src: "/card/card-1.png", title: "全源情报捕获" },
+  { id: '2', src: "/card/card-2.png", title: "智能风险决策" },
+  { id: '3', src: "/card/card-3.png", title: "闭环处理支撑" },
+];
+
+// Construct a 5-card array for stacking effect, cycling through baseData
+// Order bottom to top: 2, 3, 1, 2, 3? No, we want Top to be 1.
+// Stack: [..., 3, 2, 1] (Top)
+// Let's use: 2, 1, 3, 2, 1 (Top)
 const originalImages = [
-  { id: 'img-1', src: "https://assets.codepen.io/16327/portrait-number-1.png" },
-  { id: 'img-2', src: "https://assets.codepen.io/16327/portrait-number-2.png" },
-  { id: 'img-3', src: "https://assets.codepen.io/16327/portrait-number-3.png" },
-  { id: 'img-4', src: "https://assets.codepen.io/16327/portrait-number-4.png" },
-  { id: 'img-5', src: "https://assets.codepen.io/16327/portrait-number-5.png" }
-].reverse();
+  { ...baseData[1], id: 'img-2-bottom' },
+  { ...baseData[0], id: 'img-1-bottom' },
+  { ...baseData[2], id: 'img-3-middle' },
+  { ...baseData[1], id: 'img-2-top' },
+  { ...baseData[0], id: 'img-1-top' },
+];
 
 export const FlipCardOriginal: React.FC = () => {
   const [cards, setCards] = useState(originalImages);
@@ -19,6 +29,10 @@ export const FlipCardOriginal: React.FC = () => {
       const lastCard = newCards.pop();
       if (lastCard) {
         // Generate new ID to trigger enter animation
+        // We need to maintain the cycling logic of content.
+        // If we popped 1, next is 2. The popped 1 should go to bottom.
+        // But simply moving to bottom works because the array is cyclic.
+        
         const newCard = { ...lastCard, id: `img-${Date.now()}` };
         newCards.unshift(newCard);
       }
@@ -26,13 +40,16 @@ export const FlipCardOriginal: React.FC = () => {
     });
   };
 
+  // 获取当前最上面的卡片（数组最后一个）
+  const topCard = cards[cards.length - 1];
+
   return (
-    <div className="relative w-full h-[500px] flex items-center justify-center perspective-100">
+    <div className="relative w-full h-[500px] flex items-center justify-between perspective-100 max-w-6xl mx-auto px-4">
+      {/* 左侧：卡片区域 */}
       <div 
         className="relative w-[300px] h-[200px] cursor-pointer" 
         onClick={moveCard}
         style={{
-            // Matches .slider top: 30vh logic visually within the section
             transform: 'translateX(0%)' 
         }}
       >
@@ -104,6 +121,25 @@ export const FlipCardOriginal: React.FC = () => {
         <div className="absolute -bottom-60 left-1/2 -translate-x-1/2 text-white/50 text-sm animate-pulse">
             Click to Flip
         </div>
+      </div>
+
+      {/* 右侧：标题区域 */}
+      <div className="flex-1 flex items-center justify-end pl-20">
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={topCard.title} // Use title to trigger animation
+            initial={{ opacity: 0, x: 50 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -50 }}
+            transition={{ duration: 0.4, ease: "easeOut" }}
+            className="text-right"
+          >
+            <h2 className="text-5xl md:text-7xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-white via-white to-white/50 leading-tight">
+              {topCard.title}
+            </h2>
+            <div className="w-24 h-2 bg-accent mt-6 ml-auto rounded-full" />
+          </motion.div>
+        </AnimatePresence>
       </div>
     </div>
   );

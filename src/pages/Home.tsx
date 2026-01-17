@@ -19,155 +19,62 @@ import CoreServiceMatrix from '../components/CoreServiceMatrix';
 import { 
   ServiceProcessSection, 
   PartnersSection,
-  FlipCardDemoSection
+  FlipCardDemoSection,
+  FlipCardReplicaSection
 } from '../components/LandingSections';
 import { leakRadarApi } from '../api/leakRadar';
 
-// 统计数据显示组件
-const StatsDisplay: React.FC = () => {
+// 综合数据仪表盘组件
+const DataDashboard: React.FC = () => {
   const [stats, setStats] = useState<any>({
-    leaks: {
-      total: 0,
-      today: 0,
-      this_week: 0,
-      this_month: 0
-    },
-    raw_lines: {
-      total: 0
-    }
+    leaks: { total: 0, today: 0, this_week: 0, this_month: 0 },
+    raw_lines: { total: 0 }
   });
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    const fetchStats = async () => {
-      try {
-        const data = await leakRadarApi.getStats();
-        setStats(data);
-      } catch (error) {
-        console.error('获取统计数据失败:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchStats();
-  }, []);
-
-  const formatNumber = (num: number) => {
-    return num.toLocaleString();
-  };
-
-  if (loading) {
-    return (
-      <div className="flex justify-center items-center py-12">
-        <div className="w-12 h-12 border-4 border-white/20 border-t-accent rounded-full animate-spin"></div>
-      </div>
-    );
-  }
-
-  return (
-    <motion.div
-      whileHover={{ boxShadow: "0 20px 40px -10px rgba(109, 40, 217, 0.3)" }}
-      className="bg-white/10 backdrop-blur-xl border border-white/20 rounded-xl p-6 max-w-2xl mx-auto hover:shadow-xl transition-all duration-300 scale-90"
-    >
-      <div className="flex flex-col items-center gap-6">
-        {/* 上方：总泄露记录（放大显示） */}
-        <div className="w-full text-center p-2 border-b border-white/10 pb-6">
-          <p className="text-white/60 text-base mb-2">总泄露记录</p>
-          <p className="text-5xl md:text-7xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-white via-white to-white/70">
-            {formatNumber(stats.leaks.total)}
-          </p>
-        </div>
-        
-        {/* 下方：其他三个数据（横向排列） */}
-        <div className="flex flex-row justify-between w-full gap-4">
-          <div className="flex-1 bg-white/5 rounded-lg p-3 border border-white/10 flex flex-col items-center">
-            <p className="text-white/50 text-[10px] mb-1">今日新增</p>
-            <p className="text-xl font-bold text-accent">
-              +{formatNumber(stats.leaks.today)}
-            </p>
-          </div>
-          
-          <div className="flex-1 bg-white/5 rounded-lg p-3 border border-white/10 flex flex-col items-center">
-            <p className="text-white/50 text-[10px] mb-1">本周新增</p>
-            <p className="text-xl font-bold text-white">
-              +{formatNumber(stats.leaks.this_week)}
-            </p>
-          </div>
-          
-          <div className="flex-1 bg-white/5 rounded-lg p-3 border border-white/10 flex flex-col items-center">
-            <p className="text-white/50 text-[10px] mb-1">本月新增</p>
-            <p className="text-xl font-bold text-white">
-              +{formatNumber(stats.leaks.this_month)}
-            </p>
-          </div>
-        </div>
-      </div>
-    </motion.div>
-  );
-};
-
-// 图表显示组件
-const ChartDisplay: React.FC = () => {
   const [chartData, setChartData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const fetchChartData = async () => {
+    const fetchData = async () => {
       try {
         const data = await leakRadarApi.getStats();
-        // 转换数据格式以适应图表
+        setStats(data);
+
+        // 处理图表数据
         if (data.leaks && data.leaks.per_week) {
-          // 获取 Raw Lines 数据（如果存在）
           const rawLinesData = data.raw_lines?.per_week || [];
-          
-          // 转换数据格式以适应图表
           const formattedData = data.leaks.per_week.map((week: any) => {
-            // 查找对应的 Raw Lines 数据
             const rawLineItem = rawLinesData.find((r: any) => r.week === week.week);
-            const rawLineCount = rawLineItem ? rawLineItem.count : 0;
-            
             return {
               date: week.week,
               total: week.count,
-              // 这里我们使用 leaks.count 作为主要数据
-              'url:user:pass': week.count, 
-              // 使用真实的 raw_lines 数据
-              'raw_lines': rawLineCount
+              'url:user:pass': week.count,
+              'raw_lines': rawLineItem ? rawLineItem.count : 0
             };
           });
           setChartData(formattedData);
         } else {
-          // 生成模拟数据
-          const mockData = generateMockChartData();
-          setChartData(mockData);
+          setChartData(generateMockChartData());
         }
       } catch (error) {
-        console.error('获取图表数据失败:', error);
-        // 生成模拟数据
-        const mockData = generateMockChartData();
-        setChartData(mockData);
+        console.error('获取数据失败:', error);
+        setChartData(generateMockChartData());
       } finally {
         setLoading(false);
       }
     };
 
-    fetchChartData();
+    fetchData();
   }, []);
 
-  // 生成模拟数据
+  // ... (保留辅助函数 generateMockChartData, formatYAxis, formatNumber)
   const generateMockChartData = () => {
     const data = [];
     const startDate = new Date('2025-04-14');
-    let count = 1000000000; // 1 billion
-    
+    let count = 1000000000;
     for (let i = 0; i < 40; i++) {
       const date = new Date(startDate);
       date.setDate(startDate.getDate() + i * 7);
-      
-      // 指数增长
       count *= 1.15;
-      
       data.push({
         date: date.toISOString().split('T')[0],
         total: count,
@@ -175,28 +82,28 @@ const ChartDisplay: React.FC = () => {
         'raw_lines': count * 1.2
       });
     }
-    
     return data;
   };
 
-  // 自定义Y轴标签格式化
+  const formatNumber = (num: number) => num.toLocaleString();
+  
   const formatYAxis = (value: number) => {
-    if (value >= 1000000000) {
-      return `${(value / 1000000000).toFixed(1)} B`;
-    }
+    if (value >= 1000000000) return `${(value / 1000000000).toFixed(1)} B`;
+    if (value >= 1000000) return `${(value / 1000000).toFixed(1)} M`;
     return `${value.toLocaleString()}`;
   };
 
-  // 自定义Tooltip
   const CustomTooltip = ({ active, payload }: any) => {
     if (active && payload && payload.length) {
       return (
-        <div className="bg-white/10 backdrop-blur-xl border border-white/20 rounded-lg p-4 text-white">
-          <p className="mb-2 font-medium">{payload[0].payload.date}</p>
+        <div className="bg-black/90 border border-accent/30 rounded-lg p-4 text-white shadow-[0_0_20px_rgba(139,92,246,0.2)]">
+          <p className="mb-2 font-mono text-accent">{payload[0].payload.date}</p>
           {payload.map((entry: any, index: number) => (
-            <p key={index} className="text-sm" style={{ color: entry.color }}>
-              {entry.name}: {formatYAxis(entry.value)}
-            </p>
+            <div key={index} className="flex items-center gap-2 text-sm font-mono my-1">
+              <div className="w-2 h-2 rounded-full" style={{ backgroundColor: entry.color }} />
+              <span className="text-gray-400">{entry.name}:</span>
+              <span className="text-white">{formatYAxis(entry.value)}</span>
+            </div>
           ))}
         </div>
       );
@@ -206,99 +113,131 @@ const ChartDisplay: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center py-12">
-        <div className="w-12 h-12 border-4 border-white/20 border-t-accent rounded-full animate-spin"></div>
+      <div className="flex justify-center items-center h-[500px]">
+        <div className="w-12 h-12 border-4 border-accent/20 border-t-accent rounded-full animate-spin"></div>
       </div>
     );
   }
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.6, delay: 0.2 }}
-      className="bg-white/10 backdrop-blur-xl border border-white/20 rounded-2xl p-6 max-w-5xl mx-auto mt-12"
-    >
-      <h3 className="text-lg font-semibold text-white mb-6 text-left">
-        Weekly database growth (last 12 months)
-      </h3>
-      <div className="h-80">
-        <ResponsiveContainer width="100%" height="100%">
-          <AreaChart
-            data={chartData}
-            margin={{ top: 10, right: 30, left: 0, bottom: 0 }}
-          >
-            <defs>
-              <linearGradient id="colorTotal" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.8}/>
-                <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0}/>
-              </linearGradient>
-              <linearGradient id="colorUrlUserPass" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.8}/>
-                <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
-              </linearGradient>
-              <linearGradient id="colorRawLines" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#10b981" stopOpacity={0.8}/>
-                <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
-              </linearGradient>
-            </defs>
-            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255, 255, 255, 0.1)" />
-            <XAxis 
-              dataKey="date" 
-              stroke="rgba(255, 255, 255, 0.6)" 
-              tick={{ fontSize: 12 }}
-            />
-            <YAxis 
-              stroke="rgba(255, 255, 255, 0.6)" 
-              tick={{ fontSize: 12 }}
-              tickFormatter={formatYAxis}
-            />
-            <Tooltip content={<CustomTooltip />} />
-            <Area 
-              type="monotone" 
-              dataKey="raw_lines" 
-              stroke="#10b981" 
-              fillOpacity={1} 
-              fill="url(#colorRawLines)" 
-              strokeWidth={2}
-            />
-            <Area 
-              type="monotone" 
-              dataKey="url:user:pass" 
-              stroke="#3b82f6" 
-              fillOpacity={1} 
-              fill="url(#colorUrlUserPass)" 
-              strokeWidth={2}
-            />
-            <Area 
-              type="monotone" 
-              dataKey="total" 
-              stroke="#8b5cf6" 
-              fillOpacity={1} 
-              fill="url(#colorTotal)" 
-              strokeWidth={2}
-            />
-          </AreaChart>
-        </ResponsiveContainer>
-      </div>
-      
-      {/* 图例 */}
-      <div className="flex justify-center gap-8 mt-4">
-        {[
-          { name: 'Total', color: '#8b5cf6' },
-          { name: 'url:user:pass', color: '#3b82f6' },
-          { name: 'Raw lines', color: '#10b981' }
-        ].map((item, index) => (
-          <div key={index} className="flex items-center gap-2 text-sm text-white/80">
-            <div 
-              className="w-3 h-3 rounded-full" 
-              style={{ backgroundColor: item.color }}
-            ></div>
-            <span>{item.name}</span>
+    <div className="w-full max-w-6xl mx-auto">
+      {/* 仪表盘主容器 */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        
+        {/* 左侧：核心指标卡片 */}
+        <motion.div 
+          initial={{ opacity: 0, x: -20 }}
+          whileInView={{ opacity: 1, x: 0 }}
+          viewport={{ once: true }}
+          className="lg:col-span-1 flex flex-col gap-4"
+        >
+          {/* 总数卡片 - 赛博风格 */}
+          <div className="flex-1 bg-black/40 backdrop-blur-xl border border-accent/30 rounded-2xl p-8 flex flex-col justify-center items-center relative overflow-hidden group hover:border-accent/60 transition-all duration-500">
+            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-accent to-transparent opacity-50" />
+            <div className="absolute -right-10 -top-10 w-32 h-32 bg-accent/20 blur-[60px] rounded-full group-hover:bg-accent/30 transition-all duration-500" />
+            
+            <h3 className="text-gray-400 text-sm uppercase tracking-[0.2em] mb-4">Total Indexed Leaks</h3>
+            <div className="relative w-full text-center">
+              <p className="text-4xl lg:text-5xl xl:text-6xl font-bold font-mono text-transparent bg-clip-text bg-gradient-to-b from-white to-white/60 tracking-tighter break-all">
+                {formatNumber(stats.leaks.total)}
+              </p>
+              {/* 故障效果装饰 */}
+              <div className="absolute top-0 left-0 w-full h-full opacity-0 group-hover:opacity-20 animate-pulse bg-accent blur-xl" />
+            </div>
+            <div className="mt-6 flex items-center gap-2 text-accent text-xs font-mono bg-accent/10 px-3 py-1 rounded-full border border-accent/20">
+              <div className="w-2 h-2 bg-accent rounded-full animate-pulse" />
+              SYSTEM ACTIVE
+            </div>
           </div>
-        ))}
+
+          {/* 小指标卡片网格 */}
+          <div className="grid grid-cols-1 gap-4">
+            {[
+              { label: "Today", value: stats.leaks.today, color: "text-emerald-400", border: "border-emerald-500/30" },
+              { label: "This Week", value: stats.leaks.this_week, color: "text-blue-400", border: "border-blue-500/30" },
+              { label: "This Month", value: stats.leaks.this_month, color: "text-purple-400", border: "border-purple-500/30" }
+            ].map((item, idx) => (
+              <div key={idx} className={`bg-black/40 backdrop-blur-md border ${item.border} rounded-xl p-4 flex items-center justify-between hover:bg-white/5 transition-colors`}>
+                <span className="text-gray-400 text-xs uppercase tracking-wider">{item.label}</span>
+                <span className={`text-xl font-mono font-bold ${item.color}`}>+{formatNumber(item.value)}</span>
+              </div>
+            ))}
+          </div>
+        </motion.div>
+
+        {/* 右侧：趋势图表 */}
+        <motion.div 
+          initial={{ opacity: 0, x: 20 }}
+          whileInView={{ opacity: 1, x: 0 }}
+          viewport={{ once: true }}
+          transition={{ delay: 0.2 }}
+          className="lg:col-span-2 bg-black/40 backdrop-blur-xl border border-white/10 rounded-2xl p-6 relative overflow-hidden"
+        >
+          {/* 装饰性网格背景 */}
+          <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.03)_1px,transparent_1px)] bg-[size:20px_20px] pointer-events-none" />
+          
+          <div className="flex justify-between items-center mb-8 relative z-10">
+            <h3 className="text-white text-lg font-semibold flex items-center gap-2">
+              <span className="w-1 h-6 bg-accent rounded-full" />
+              Database Growth Analysis
+            </h3>
+            <div className="flex gap-4">
+               {[
+                { name: 'Total', color: '#8b5cf6' },
+                { name: 'Verified', color: '#3b82f6' },
+                { name: 'Raw', color: '#10b981' }
+              ].map((item, i) => (
+                <div key={i} className="flex items-center gap-2 text-xs text-gray-400">
+                  <div className="w-2 h-2 rounded-sm" style={{ backgroundColor: item.color }} />
+                  {item.name}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="h-[350px] w-full relative z-10">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="gradTotal" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.3}/>
+                    <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0}/>
+                  </linearGradient>
+                  <linearGradient id="gradVerified" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3}/>
+                    <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
+                  </linearGradient>
+                  <linearGradient id="gradRaw" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/>
+                    <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255, 255, 255, 0.05)" vertical={false} />
+                <XAxis 
+                  dataKey="date" 
+                  stroke="rgba(255, 255, 255, 0.3)" 
+                  tick={{ fontSize: 10, fontFamily: 'monospace' }} 
+                  tickLine={false}
+                  axisLine={false}
+                  dy={10}
+                />
+                <YAxis 
+                  stroke="rgba(255, 255, 255, 0.3)" 
+                  tick={{ fontSize: 10, fontFamily: 'monospace' }} 
+                  tickFormatter={formatYAxis}
+                  tickLine={false}
+                  axisLine={false}
+                />
+                <Tooltip content={<CustomTooltip />} cursor={{ stroke: 'rgba(255,255,255,0.2)', strokeWidth: 1 }} />
+                <Area type="monotone" dataKey="raw_lines" stroke="#10b981" strokeWidth={2} fill="url(#gradRaw)" />
+                <Area type="monotone" dataKey="url:user:pass" stroke="#3b82f6" strokeWidth={2} fill="url(#gradVerified)" />
+                <Area type="monotone" dataKey="total" stroke="#8b5cf6" strokeWidth={3} fill="url(#gradTotal)" />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        </motion.div>
       </div>
-    </motion.div>
+    </div>
   );
 };
 
@@ -356,7 +295,7 @@ const Home: React.FC = () => {
       </div>
 
       {/* 全屏滚动区域 */}
-      <FullPageScroll config={{ animationType: 'fade', animationDuration: 800 }}>
+      <FullPageScroll config={{ animationType: 'slide', animationDuration: 1000 }}>
         {/* 第一屏：英雄区域 */}
         <div className="h-full flex items-center justify-center relative overflow-hidden">
           <LiquidGradientBackground />
@@ -412,8 +351,10 @@ const Home: React.FC = () => {
           </div>
         </div>
 
-        {/* 核心功能壁垒展示 */}
-        <FlipCardDemoSection />
+        {/* 核心功能壁垒展示 - 已移除 */}
+        
+        {/* 1:1 复刻板块 */}
+        <FlipCardReplicaSection />
 
         {/* 第五屏：服务流程 */}
         <div className="h-full relative z-10 overflow-hidden bg-black">
@@ -438,8 +379,7 @@ const Home: React.FC = () => {
                 已经索引的 <span className="text-accent">泄露总数</span>
               </h2>
               
-              <StatsDisplay />
-              <ChartDisplay />
+              <DataDashboard />
             </motion.div>
           </section>
         </div>
