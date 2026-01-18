@@ -9,14 +9,72 @@ const baseData = [
 ];
 
 // Construct a 5-card array for stacking effect, cycling through baseData
-// Order bottom to top: 2, 3, 1, 2, 3? No, we want Top to be 1.
-// Stack: [..., 3, 2, 1] (Top)
-// Let's use: 2, 1, 3, 2, 1 (Top)
+// We want the visible stack order (Top -> Bottom) to be: 1, 2, 3, 1, 2
+// In DOM/React array, the last element is rendered on top.
+// So array should be: [Bottom...Top]
+// Array: [2, 1, 3, 2, 1]
+// Index 4 (Top): 1
+// Index 3: 2
+// Index 2: 3
+// Index 1: 1
+// Index 0 (Bottom): 2
+
+// Let's re-verify the request: "1-2-3 cycle"
+// If Top is 1. Next click -> 1 goes away, 2 becomes Top.
+// Next click -> 2 goes away, 3 becomes Top.
+// Next click -> 3 goes away, 1 becomes Top.
+
+// Current array logic:
+// const originalImages = [
+//   { ...baseData[1], id: 'img-2-bottom' }, // 2
+//   { ...baseData[0], id: 'img-1-bottom' }, // 1
+//   { ...baseData[2], id: 'img-3-middle' }, // 3
+//   { ...baseData[1], id: 'img-2-top' },    // 2
+//   { ...baseData[0], id: 'img-1-top' },    // 1 (Top)
+// ];
+
+// When we pop 1 (Top):
+// Array becomes [2, 1, 3, 2] -> Top is 2. Correct.
+// We unshift 1 to bottom: [1, 2, 1, 3, 2].
+// Next pop 2 (Top):
+// Array becomes [1, 2, 1, 3] -> Top is 3. Correct.
+// We unshift 2 to bottom: [2, 1, 2, 1, 3].
+// Next pop 3 (Top):
+// Array becomes [2, 1, 2, 1] -> Top is 1. Correct.
+
+// The issue described by user: "1-2-1-2-3"
+// Let's trace the current code:
+// Base: 1, 2, 3
+// Init Array: [2, 1, 3, 2, 1] (Top is 1)
+// Click 1 -> Pop 1. Rem: [2, 1, 3, 2]. Top is 2. Unshift 1. New: [1, 2, 1, 3, 2]. Correct so far (1->2).
+// Click 2 -> Pop 2. Rem: [1, 2, 1, 3]. Top is 3. Unshift 2. New: [2, 1, 2, 1, 3]. Correct so far (2->3).
+// Click 3 -> Pop 3. Rem: [2, 1, 2, 1]. Top is 1. Unshift 3. New: [3, 2, 1, 2, 1]. Correct so far (3->1).
+// Click 4 -> Pop 1. Rem: [3, 2, 1, 2]. Top is 2. Unshift 1. New: [1, 3, 2, 1, 2]. Correct (1->2).
+
+// Wait, why did the user see 1-2-1-2-3?
+// Maybe the baseData indices were confusing.
+// baseData[0] is 1. baseData[1] is 2. baseData[2] is 3.
+
+// Let's just reset the array to be strictly compliant with the visual stack 1(Top), 2, 3, 1, 2(Bottom).
+// Array (Bottom -> Top): [2, 1, 3, 2, 1]
+// This matches my manual trace.
+
+// However, let's look at the initialization in code:
+// const originalImages = [
+//   { ...baseData[1], id: 'img-2-bottom' },
+//   { ...baseData[0], id: 'img-1-bottom' },
+//   { ...baseData[2], id: 'img-3-middle' },
+//   { ...baseData[1], id: 'img-2-top' },
+//   { ...baseData[0], id: 'img-1-top' },
+// ];
+
+// If the user says it's wrong, maybe I should just strictly ensure the order.
+// I will re-enforce the initialization to be absolutely sure.
 const originalImages = [
-  { ...baseData[1], id: 'img-2-bottom' },
-  { ...baseData[0], id: 'img-1-bottom' },
-  { ...baseData[2], id: 'img-3-middle' },
-  { ...baseData[1], id: 'img-2-top' },
+  { ...baseData[1], id: 'img-2-bh' },
+  { ...baseData[0], id: 'img-1-bh' },
+  { ...baseData[2], id: 'img-3-bh' },
+  { ...baseData[1], id: 'img-2-bh-2' },
   { ...baseData[0], id: 'img-1-top' },
 ];
 
@@ -25,15 +83,57 @@ export const FlipCardOriginal: React.FC = () => {
 
   const moveCard = () => {
     setCards((currentCards) => {
+      // Logic for 1-2-3 cyclic rotation
+      // Remove Top (index 4)
+      // Add New Bottom (index 0)
+      // The New Bottom must be calculated based on the REMOVED Top card to maintain sequence.
+      // Sequence: 1 -> 2 -> 3 -> 1...
+      // If removed Top is 1 (index 0 in baseData), New Bottom must be 3 (index 2 in baseData) so that when it eventually rises, it follows 2.
+      // Wait, let's trace stack:
+      // [B, ..., T]
+      // [2, 1, 3, 2, 1] (Top 1)
+      // Pop 1. Stack: [2, 1, 3, 2].
+      // We want the stack to look like: [3, 2, 1, 3, 2] (Top 2)
+      // So we need to add 3 to bottom.
+      // Formula: NewBottom = (RemovedTop.index + 2) % 3.
+      // (0 + 2) % 3 = 2 (Card 3). Correct.
+
+      // Let's try Pop 2 (index 1).
+      // Stack: [3, 2, 1, 3, 2] (Top 2)
+      // Pop 2. Stack: [3, 2, 1, 3].
+      // We want stack: [1, 3, 2, 1, 3] (Top 3)
+      // So we need to add 1 to bottom.
+      // Formula: (1 + 2) % 3 = 0 (Card 1). Correct.
+
       const newCards = [...currentCards];
       const lastCard = newCards.pop();
+      
       if (lastCard) {
-        // Generate new ID to trigger enter animation
-        // We need to maintain the cycling logic of content.
-        // If we popped 1, next is 2. The popped 1 should go to bottom.
-        // But simply moving to bottom works because the array is cyclic.
+        // Find which baseData item this was
+        const lastIndex = baseData.findIndex(item => item.title === lastCard.title);
         
-        const newCard = { ...lastCard, id: `img-${Date.now()}` };
+        // Calculate next item to add to bottom
+        // Logic: The item we add to bottom will be visible after 4 more clicks.
+        // It's actually easier to think: The card we just removed (1) will appear again after 2 and 3.
+        // So we are cycling 3 items in a 5-slot buffer.
+        // Actually, simpler logic: Just rotate the baseData index.
+        // If we just removed 1, we should add... let's see.
+        // If we add 1 to bottom: [1, 2, 1, 3, 2] -> Top 2.
+        // Next pop 2. Add 2. [2, 1, 2, 1, 3] -> Top 3.
+        // Next pop 3. Add 3. [3, 2, 1, 2, 1] -> Top 1.
+        // This simple rotation works! Why did I think it failed?
+        // Ah, because I was reusing the object spread `...lastCard`.
+        // If `lastCard` had some stale state or id, maybe?
+        // No, let's stick to the formula that definitely works:
+        // New Bottom should be: (RemovedIndex + 2) % 3
+        
+        const nextBottomIndex = (lastIndex + 2) % 3;
+        const newBaseItem = baseData[nextBottomIndex];
+        
+        const newCard = { 
+            ...newBaseItem, 
+            id: `img-${Date.now()}` 
+        };
         newCards.unshift(newCard);
       }
       return newCards;

@@ -271,56 +271,90 @@ export const ServiceProcessSection: React.FC = () => (
   </section>
 );
 
-export const PartnersSection: React.FC = () => (
-  <section className="h-full flex items-center justify-center container mx-auto px-4 text-center border-t border-white/5">
-    <div className="w-full max-w-6xl mx-auto">
-      <h2 className="text-2xl font-bold text-white/40 mb-16">深受行业领袖信赖</h2>
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-6 place-items-center">
-        {[
-          'bmw.png',
-          'byd.png',
-          'ccdc.png',
-          'gac.png',
-          'gjdw.png',
-          'miit.png',
-          'nio.png',
-          'seres.png',
-          'xpeng.png',
-          'more' // Marker for the "More" button
-        ].map((item, i) => {
-          // Check if this item is one of the logos to be enlarged
-          const isEnlarged = ['ccdc.png', 'gjdw.png', 'miit.png'].includes(item);
-          const isSlightlyEnlarged = ['byd.png'].includes(item);
-          
-          return (
-            <motion.div 
-              key={i}
-              whileHover={{ scale: 1.05 }}
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              transition={{ delay: i * 0.05 }}
-              className="w-full aspect-video flex items-center justify-center bg-white rounded-xl p-6 hover:shadow-[0_0_30px_rgba(255,255,255,0.4)] transition-all duration-300"
-            >
-              {item === 'more' ? (
-                <div className="text-gray-800 font-bold text-xl flex items-center gap-2">
-                  <span>更多</span>
-                  <div className="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center">
-                    <ArrowRight className="w-4 h-4" />
-                  </div>
-                </div>
-              ) : (
-                <img 
-                  src={`/partners/${item}`} 
-                  alt={`Partner ${i + 1}`} 
-                  className={`max-w-full max-h-full object-contain ${isEnlarged ? 'scale-[1.8]' : isSlightlyEnlarged ? 'scale-125' : ''}`}
+import { ParticleLogo } from './ParticleLogo';
+
+export const PartnersSection: React.FC = () => {
+  const allLogos = [
+    'miit.png', 'ccdc.png', 'bmw.png', 'byd.png', 'gac.png',
+    'gwm.png', 'changan.png', 'nio.png', 'seres.png', 'xpeng.png'
+  ];
+  
+  // 状态：当前选中的 Logo
+  const [activeLogo, setActiveLogo] = React.useState<string | null>(null);
+
+  return (
+    <section className="min-h-screen flex flex-col items-center justify-center container mx-auto px-4 py-20 border-t border-white/5 relative overflow-hidden">
+      {/* 背景光晕 */}
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-accent/5 rounded-full blur-[120px] pointer-events-none" />
+      
+      <div className="w-full max-w-7xl mx-auto relative z-10">
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          className="text-center mb-16"
+        >
+          <h2 className="text-3xl md:text-5xl font-bold mb-4">深受行业领袖信赖</h2>
+          <p className="text-white/60">保护核心资产，共筑数字安全防线</p>
+        </motion.div>
+
+        <div className="relative w-full min-h-[600px] flex flex-col items-center justify-center">
+          {/* 粒子特效 - 底层全覆盖 */}
+          <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none">
+            <div className="absolute inset-0 bg-gradient-to-b from-transparent via-accent/5 to-transparent rounded-full blur-3xl opacity-30" />
+            <div className="w-full h-full opacity-60">
+                <ParticleLogo 
+                    className="w-full h-full" 
+                    activeLogo={activeLogo} 
                 />
-              )}
-            </motion.div>
-          );
-        })}
+            </div>
+          </div>
+
+          {/* 统一 Logo 组 - 居中悬浮 */}
+          <div className="w-full px-4 relative" style={{ zIndex: 9999 }}>
+            <div className="pointer-events-auto w-full max-w-6xl mx-auto">
+                <LogoGrid logos={allLogos} activeLogo={activeLogo} setActiveLogo={setActiveLogo} />
+            </div>
+          </div>
+        </div>
       </div>
+    </section>
+  );
+};
+
+// 将 LogoGrid 提取到组件外部以避免不必要的重渲染
+const LogoGrid = ({ logos, activeLogo, setActiveLogo }: { logos: string[], activeLogo: string | null, setActiveLogo: (logo: string) => void }) => (
+    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-x-12 gap-y-24 w-full">
+      {logos.map((item, i) => {
+        const isEnlarged = ['ccdc.png', 'miit.png'].includes(item);
+        const isSlightlyEnlarged = ['byd.png'].includes(item);
+        const isMediumEnlarged = ['changan.png'].includes(item);
+        const logoPath = `/partners/patyicle/${item}`;
+        
+        return (
+          <motion.div 
+            key={i}
+            whileHover={{ scale: 1.1 }}
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            transition={{ delay: i * 0.05 }}
+            className={`w-full aspect-[3/2] flex items-center justify-center transition-all duration-300 cursor-pointer p-4`}
+            onClick={() => setActiveLogo(logoPath)}
+          >
+            <img 
+              src={`/partners/${item}`} 
+              alt={`Partner ${i + 1}`} 
+              className={`max-w-full max-h-full object-contain filter brightness-0 invert transition-all duration-300 ${
+                activeLogo === logoPath ? 'opacity-100 scale-110 drop-shadow-[0_0_8px_rgba(255,255,255,0.8)]' : 'opacity-80 hover:opacity-100'
+              } ${
+                isEnlarged ? 'scale-[1.5]' : 
+                isMediumEnlarged ? 'scale-125' : 
+                isSlightlyEnlarged ? 'scale-110' : ''
+              }`}
+            />
+          </motion.div>
+        );
+      })}
     </div>
-  </section>
 );
 
 const LandingSections: React.FC = () => (

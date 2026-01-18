@@ -36,6 +36,15 @@ const DataDashboard: React.FC = () => {
     const fetchData = async () => {
       try {
         const data = await leakRadarApi.getStats();
+        
+        // 计算包含raw_lines的总数
+        if (data.leaks && data.raw_lines) {
+          data.leaks.total = data.leaks.total + data.raw_lines.total;
+          data.leaks.today = data.leaks.today + data.raw_lines.today;
+          data.leaks.this_week = data.leaks.this_week + data.raw_lines.this_week;
+          data.leaks.this_month = data.leaks.this_month + data.raw_lines.this_month;
+        }
+        
         setStats(data);
 
         // 处理图表数据
@@ -45,18 +54,19 @@ const DataDashboard: React.FC = () => {
             const rawLineItem = rawLinesData.find((r: any) => r.week === week.week);
             return {
               date: week.week,
-              total: week.count,
+              total: week.count + (rawLineItem ? rawLineItem.count : 0),
               'url:user:pass': week.count,
               'raw_lines': rawLineItem ? rawLineItem.count : 0
             };
           });
           setChartData(formattedData);
         } else {
-          setChartData(generateMockChartData());
+          setChartData([]);
         }
       } catch (error) {
         console.error('获取数据失败:', error);
-        setChartData(generateMockChartData());
+        // API连接失败时不生成模拟数据，确保只展示真实数据或错误状态
+        setChartData([]); 
       } finally {
         setLoading(false);
       }
@@ -343,8 +353,7 @@ const Home: React.FC = () => {
         <CoreServiceMatrix />
 
         {/* 第三屏：合作案例 (原在页脚上方，现移至第二屏后) */}
-        <div className="h-full relative z-10 flex items-center justify-center bg-cover bg-center" style={{ backgroundImage: "url('/background/bg.png')" }}>
-          <div className="absolute inset-0 bg-black/50"></div>
+        <div className="h-full relative z-10 flex items-center justify-center bg-black">
           <div className="relative z-10 w-full">
             <PartnersSection />
           </div>
