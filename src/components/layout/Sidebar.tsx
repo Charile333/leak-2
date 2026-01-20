@@ -73,7 +73,8 @@ const Sidebar: React.FC<SidebarProps> = ({ isPinned, setIsPinned }) => {
       name: '检索',
       icon: Search,
       items: [
-        { name: '情报检索中心', path: '/dashboard' },
+        { name: '账密情报检索中心', path: '/dashboard' },
+        { name: '邮件/用户名检索中心', path: '/email-username-search' },
         { name: '暗网及黑产泄露情报监测', path: '/darkweb' },
         { name: '敏感代码泄露情报', path: '/code-leak' },
         { name: '敏感文件泄露情报', path: '/file-leak' },
@@ -85,6 +86,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isPinned, setIsPinned }) => {
       icon: Bot,
       items: [
         { name: '互联网舆情监测', path: '/opinion' },
+        { name: '互联网舆情AI分析', path: '/opinion-ai' },
       ]
     },
     {
