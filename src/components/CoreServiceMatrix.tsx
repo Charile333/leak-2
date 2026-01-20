@@ -43,8 +43,8 @@ const services = [
   },
   {
     icon: Server,
-    title: "API 安全网关",
-    description: "集成式 API 防护，阻断恶意爬虫与数据窃取攻击。",
+    title: "代码泄露监测",
+    description: "12 大代码库（GitHub/GitLab 等）全覆盖，21 种编程语言敏感信息识别。",
     position: "right-bottom"
   }
 ];
