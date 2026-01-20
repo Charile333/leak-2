@@ -1,0 +1,282 @@
+import React, { useState, useEffect } from 'react';
+import { motion } from 'framer-motion';
+import { ArrowRight, HelpCircle } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+
+import { useAuth } from '../context/AuthContext';
+import ParticleWaves from '../components/ParticleWaves';
+
+const Login: React.FC = () => {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [rememberMe, setRememberMe] = useState(false);
+  const [emailError, setEmailError] = useState('');
+  const [passwordError, setPasswordError] = useState('');
+  const { loginWithCredentials } = useAuth();
+  const navigate = useNavigate();
+
+  // 从localStorage加载记住的邮箱
+  useEffect(() => {
+    const savedEmail = localStorage.getItem('rememberedEmail');
+    if (savedEmail) {
+      setEmail(savedEmail);
+      setRememberMe(true);
+    }
+  }, []);
+
+  // 邮箱格式验证
+  const validateEmail = (email: string): boolean => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
+  };
+
+  // 表单验证
+  const validateForm = (): boolean => {
+    let isValid = true;
+    
+    // 重置错误信息
+    setEmailError('');
+    setPasswordError('');
+    setError('');
+    
+    // 邮箱验证
+    if (!email.trim()) {
+      setEmailError('请输入邮箱');
+      isValid = false;
+    } else if (!validateEmail(email)) {
+      setEmailError('请输入有效的邮箱格式');
+      isValid = false;
+    }
+    
+    // 密码验证
+    if (!password.trim()) {
+      setPasswordError('请输入密码');
+      isValid = false;
+    }
+    
+    return isValid;
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    setIsLoading(true);
+    setError('');
+    setSuccess('');
+
+    try {
+      // 验证表单
+      if (!validateForm()) {
+        setIsLoading(false);
+        return;
+      }
+      
+      const trimmedEmail = email.trim();
+      
+      // 保存记住的邮箱
+      if (rememberMe) {
+        localStorage.setItem('rememberedEmail', trimmedEmail);
+      } else {
+        localStorage.removeItem('rememberedEmail');
+      }
+      
+      const result = await loginWithCredentials(trimmedEmail, password);
+      if (!result.success) {
+        setError(result.message || '登录失败');
+      } else {
+        // 登录成功，手动重定向到仪表板
+        console.log('Login successful, navigating to /dashboard');
+        navigate('/dashboard');
+      }
+    } catch (err: any) {
+      setError(err.message || '登录失败，请检查您的输入或网络连接');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden">
+      {/* 粒子波背景 */}
+      <ParticleWaves />
+      
+      {/* 返回按钮 */}
+      <motion.div
+        initial={{ opacity: 0, x: -20 }}
+        animate={{ opacity: 1, x: 0 }}
+        transition={{ duration: 0.5 }}
+        className="absolute top-8 left-8 md:top-16 md:left-16 z-20"
+      >
+        <button
+          onClick={() => window.history.back()}
+          className="flex items-center gap-2 bg-white/[0.05] backdrop-blur-md border border-white/10 rounded-full px-6 py-3 text-sm font-medium text-white hover:bg-white/[0.1] hover:border-white/20 transition-all duration-300 shadow-lg hover:shadow-xl hover:shadow-purple-500/10"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+          </svg>
+          返回
+        </button>
+      </motion.div>
+      
+      <div className="flex flex-col items-center justify-center w-full max-w-lg relative z-10">
+        {/* Logo */}
+        <img 
+          src="/diewei-w.png" 
+          alt="Product Logo" 
+          className="h-64 w-64 object-contain" 
+          style={{ position: 'relative', zIndex: 1000 }} 
+        />
+
+        {/* Login Form */}
+        <motion.div
+          className="glass-card p-8 border border-white/10 rounded-2xl shadow-xl mx-auto w-full max-w-md mt-[-2rem]"
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ delay: 0.5, duration: 0.5 }}
+        >
+          <form onSubmit={handleSubmit} className="space-y-6">
+            {/* Email Input */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <label htmlFor="email" className="block text-sm font-medium text-gray-300">
+                  邮箱
+                </label>
+                {emailError && (
+                  <motion.div 
+                    className="flex items-center text-xs text-red-400"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                  >
+                    <HelpCircle className="w-3 h-3 mr-1" />
+                    {emailError}
+                  </motion.div>
+                )}
+              </div>
+              <div className="relative">
+                <motion.input
+                  type="email"
+                  id="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="请输入邮箱地址"
+                  className={`w-full px-4 py-3 bg-white/5 border rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 transition-all ${emailError ? 'border-red-500 focus:ring-red-500' : 'border-white/10 focus:ring-accent'}`}
+                  disabled={isLoading}
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.6, duration: 0.4 }}
+                />
+              </div>
+            </div>
+            
+            {/* Password Input */}
+            <div className="space-y-2 mt-4">
+              <div className="flex items-center justify-between">
+                <label htmlFor="password" className="block text-sm font-medium text-gray-300">
+                  密码
+                </label>
+                {passwordError && (
+                  <motion.div 
+                    className="flex items-center text-xs text-red-400"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                  >
+                    <HelpCircle className="w-3 h-3 mr-1" />
+                    {passwordError}
+                  </motion.div>
+                )}
+              </div>
+              <div className="relative">
+                <motion.input
+                  type="password"
+                  id="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="请输入密码"
+                  className={`w-full px-4 py-3 bg-white/5 border rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 transition-all ${passwordError ? 'border-red-500 focus:ring-red-500' : 'border-white/10 focus:ring-accent'}`}
+                  disabled={isLoading}
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.7, duration: 0.4 }}
+                />
+              </div>
+            </div>
+
+            {/* Remember Me */}
+            <div className="flex items-center text-sm mt-2">
+              <motion.div 
+                className="flex items-center"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.8, duration: 0.4 }}
+              >
+                <input
+                  type="checkbox"
+                  id="rememberMe"
+                  checked={rememberMe}
+                  onChange={(e) => setRememberMe(e.target.checked)}
+                  className="w-4 h-4 text-accent bg-white/5 border-white/10 rounded focus:ring-accent"
+                  disabled={isLoading}
+                />
+                <label htmlFor="rememberMe" className="ml-2 text-sm text-gray-400">
+                  记住我
+                </label>
+              </motion.div>
+            </div>
+
+            {/* Global Error Message */}
+            {error && (
+              <motion.div
+                initial={{ opacity: 0, height: 0, y: -10 }}
+                animate={{ opacity: 1, height: 'auto', y: 0 }}
+                exit={{ opacity: 0, height: 0, y: -10 }}
+                className="p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400 text-sm flex items-center gap-2"
+              >
+                <HelpCircle className="w-4 h-4 flex-shrink-0" />
+                <span>{error}</span>
+              </motion.div>
+            )}
+            
+            {/* Global Success Message */}
+            {success && (
+              <motion.div
+                initial={{ opacity: 0, height: 0, y: -10 }}
+                animate={{ opacity: 1, height: 'auto', y: 0 }}
+                exit={{ opacity: 0, height: 0, y: -10 }}
+                className="p-3 bg-green-500/10 border border-green-500/20 rounded-lg text-green-400 text-sm flex items-center gap-2"
+              >
+                <HelpCircle className="w-4 h-4 flex-shrink-0" />
+                <span>{success}</span>
+              </motion.div>
+            )}
+
+            {/* Login Button */}
+            <motion.button
+              whileHover={{ scale: 1.02, boxShadow: "0 10px 25px -5px rgba(109, 40, 217, 0.3)" }}
+              whileTap={{ scale: 0.98 }}
+              type="submit"
+              disabled={isLoading}
+              className="w-full bg-gradient-to-r from-accent to-accent/80 hover:from-accent/90 hover:to-accent/70 text-white font-medium py-3 px-4 rounded-xl flex items-center justify-center gap-2 transition-all disabled:opacity-70 disabled:cursor-not-allowed disabled:scale-100"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.9, duration: 0.4 }}
+            >
+              {isLoading ? (
+                <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              ) : (
+                <>
+                  登录
+                  <ArrowRight className="w-4 h-4" />
+                </>
+              )}
+            </motion.button>
+          </form>
+        </motion.div>
+      </div>
+    </div>
+  );
+};
+
+export default Login;

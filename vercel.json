@@ -1,0 +1,25 @@
+{
+  "rewrites": [
+    {
+      "source": "/api/auth/login",
+      "destination": "/api/auth/login.js"
+    },
+    {
+      "source": "/api/auth/whitelist",
+      "destination": "/api/auth/whitelist.js"
+    },
+    {
+      "source": "/api/(.*)",
+      "destination": "/api/[...path].js"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ],
+  "functions": {
+    "api/**/*.js": {
+      "runtime": "@vercel/node@5.5.16"
+    }
+  }
+}
