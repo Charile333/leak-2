@@ -243,9 +243,8 @@ const Sidebar: React.FC<SidebarProps> = ({ isPinned, setIsPinned }) => {
                 </div>
               </React.Fragment>
             );
-          })}
-
-
+          })
+        }
 
           {/* Asset Monitoring Module - Always visible after search group */}
           <div className="py-2">
