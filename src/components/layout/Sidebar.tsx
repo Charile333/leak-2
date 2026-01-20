@@ -8,7 +8,6 @@ import {
   Pin,
   LogOut,
   User,
-  LayoutGrid,
   Bot,
   Database
 } from 'lucide-react';

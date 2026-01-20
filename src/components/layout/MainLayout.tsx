@@ -3,7 +3,6 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useLocation } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import Header from './Header';
-import logo from '../../assets/紫色2.png';
 
 interface MainLayoutProps {
   children: React.ReactNode;
