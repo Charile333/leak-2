@@ -1,19 +1,15 @@
 import { useState } from 'react';
 import { 
-  MoreVertical, 
   Bell,
-  ShieldCheck,
   History,
-  Trash,
-  Edit2,
   Globe,
 } from 'lucide-react';
-import { cn } from '../lib/utils';
 
 const DomainMonitor = () => {
-  const [notificationMethods] = useState([
-    { id: 498, type: 'Telegram', value: '8464921285:AAEu4W...D2vab8z-wmESRw.OJYPKwew7cq1Y', secondValue: '-5032536833', createdAt: '3 days ago' }
-  ]);
+  // 通知方式配置（预留功能）
+  // const [notificationMethods] = useState([
+  //   { id: 498, type: 'Telegram', value: '8464921285:AAEu4W...D2vab8z-wmESRw.OJYPKwew7cq1Y', secondValue: '-5032536833', createdAt: '3 days ago' }
+  // ]);
 
   const [monitoredTargets, setMonitoredTargets] = useState([
     { 
@@ -42,11 +38,12 @@ const DomainMonitor = () => {
     }
   ]);
 
-  const toggleTargetStatus = (id: number) => {
-    setMonitoredTargets(prev => prev.map(target => 
-      target.id === id ? { ...target, active: !target.active } : target
-    ));
-  };
+  // 切换监控目标状态（预留功能）
+  // const toggleTargetStatus = (id: number) => {
+  //   setMonitoredTargets(prev => prev.map(target => 
+  //     target.id === id ? { ...target, active: !target.active } : target
+  //   ));
+  // };
 
   return (
     <div className="max-w-[1600px] mx-auto space-y-8 animate-in fade-in duration-700">
@@ -57,6 +54,8 @@ const DomainMonitor = () => {
           设置您希望接收告警的时间和方式，并选择我们将为您监控泄露的目标。一旦检测到新的泄露，我们将立即通知您。
         </p>
       </div>
+
+
 
       {/* Notification Methods Card */}
       <div className="glass-card border-white/5 bg-[#16161a] overflow-hidden rounded-2xl shadow-2xl">
@@ -81,39 +80,22 @@ const DomainMonitor = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-white/5">
-              {notificationMethods.map((method) => (
-                <tr key={method.id} className="text-sm hover:bg-white/[0.02] transition-colors group">
-                  <td className="px-6 py-4 text-gray-500 font-mono">{method.id}</td>
-                  <td className="px-6 py-4">
-                    <span className="bg-indigo-500/20 text-indigo-300 px-3 py-1 rounded-full text-xs font-bold border border-indigo-500/30">
-                      {method.type}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 text-gray-400 font-mono text-xs">{method.value}</td>
-                  <td className="px-6 py-4 text-gray-500 font-mono">{method.secondValue}</td>
-                  <td className="px-6 py-4 text-gray-500 text-xs">{method.createdAt}</td>
-                  <td className="px-6 py-4">
-                    <div className="flex justify-center gap-3 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-                      <button 
-                        className="p-2 rounded-lg text-gray-500 hover:bg-white/10 hover:text-white transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-white/20 focus:ring-offset-2 focus:ring-offset-gray-900"
-                        aria-label="编辑通知方式"
-                      >
-                        <Edit2 className="w-4 h-4" />
-                      </button>
-                      <button 
-                        className="p-2 rounded-lg text-rose-500/50 hover:bg-rose-500/10 hover:text-rose-500 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-rose-500/30 focus:ring-offset-2 focus:ring-offset-gray-900"
-                        aria-label="删除通知方式"
-                      >
-                        <Trash className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
+              <tr className="text-sm hover:bg-white/[0.02] transition-colors group">
+                <td className="px-6 py-4 text-gray-500 font-mono">---</td>
+                <td className="px-6 py-4">
+                  <span className="bg-gray-500/20 text-gray-300 px-3 py-1 rounded-full text-xs font-bold border border-gray-500/30">
+                    ---
+                  </span>
+                </td>
+                <td className="px-6 py-4 text-gray-400 font-mono text-xs">---</td>
+                <td className="px-6 py-4 text-gray-500 font-mono">---</td>
+                <td className="px-6 py-4 text-gray-500 text-xs">---</td>
+                <td className="px-6 py-4"></td>
+              </tr>
             </tbody>
           </table>
           <div className="p-4 bg-black/20 flex justify-between items-center text-[10px] text-gray-500 font-bold uppercase tracking-widest">
-            <span>显示 1-1 项，共 1 项</span>
+            <span>显示 0-0 项，共 0 项</span>
             <div className="flex gap-4">
               <button className="hover:text-white disabled:opacity-30" disabled>&lt;</button>
               <button className="hover:text-white disabled:opacity-30" disabled>&gt;</button>
@@ -129,7 +111,7 @@ const DomainMonitor = () => {
             <div className="p-2 bg-emerald-500/10 rounded-lg">
               <Globe className="w-5 h-5 text-emerald-400" />
             </div>
-            <h3 className="font-bold text-white uppercase tracking-wider text-sm">监控目标 (Monitored Targets 1/100)</h3>
+            <h3 className="font-bold text-white uppercase tracking-wider text-sm">监控目标 (Monitored Targets 0/100)</h3>
           </div>
         </div>
         <div className="overflow-x-auto">
@@ -150,67 +132,35 @@ const DomainMonitor = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-white/5">
-              {monitoredTargets.map((target) => (
-                <tr key={target.id} className="text-sm hover:bg-white/[0.02] transition-colors group">
-                  <td className="px-6 py-4 text-gray-500 font-mono">{target.id}</td>
-                  <td className="px-6 py-4">
-                    <button
-                      onClick={() => toggleTargetStatus(target.id)}
-                      className={cn(
-                        "w-10 h-5 rounded-full relative transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:ring-offset-gray-900",
-                        target.active ? "bg-indigo-600 hover:bg-indigo-700" : "bg-gray-700 hover:bg-gray-600"
-                      )}
-                      aria-label={target.active ? "禁用监控" : "启用监控"}
-                    >
-                      <div className={cn(
-                        "absolute top-1 w-3 h-3 rounded-full bg-white transition-all duration-300 shadow-md",
-                        target.active ? "right-1" : "left-1"
-                      )} />
-                    </button>
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className="bg-[#4f46e5]/20 text-[#a855f7] px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border border-[#4f46e5]/30">
-                      {target.type}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className="bg-gray-500/20 text-gray-400 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-widest border border-white/5">
-                      {target.category}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 text-gray-300 font-medium">{target.value}</td>
-                  <td className="px-6 py-4">
-                    <div className="flex flex-col">
-                      <span className="text-gray-400 text-xs">{target.method}</span>
-                      <span className="text-[9px] text-gray-600 font-mono truncate max-w-[120px]">8464921285...7cq1Y</span>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 text-gray-400">{target.autoUnlock}</td>
-                  <td className="px-6 py-4 text-gray-400 font-mono">{target.maxPts}</td>
-                  <td className="px-6 py-4 text-gray-500 text-xs">{target.lastSearch}</td>
-                  <td className="px-6 py-4 text-gray-500 text-xs">{target.createdAt}</td>
-                  <td className="px-6 py-4">
-                    <div className="flex justify-center gap-3">
-                      <button 
-                        className="p-2 rounded-lg text-gray-500 hover:bg-white/10 hover:text-white transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-white/20 focus:ring-offset-2 focus:ring-offset-gray-900"
-                        aria-label="查看监控详情"
-                      >
-                        <ShieldCheck className="w-4 h-4" />
-                      </button>
-                      <button 
-                        className="p-2 rounded-lg text-rose-500/50 hover:bg-rose-500/10 hover:text-rose-500 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-rose-500/30 focus:ring-offset-2 focus:ring-offset-gray-900"
-                        aria-label="删除监控目标"
-                      >
-                        <Trash className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
+              <tr className="text-sm hover:bg-white/[0.02] transition-colors group">
+                <td className="px-6 py-4 text-gray-500 font-mono">---</td>
+                <td className="px-6 py-4">
+                  <div className="w-10 h-5 rounded-full bg-gray-700 relative">
+                    <div className="absolute top-1 left-1 w-3 h-3 rounded-full bg-white/50" />
+                  </div>
+                </td>
+                <td className="px-6 py-4">
+                  <span className="bg-gray-500/20 text-gray-400 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border border-gray-500/30">
+                    ---
+                  </span>
+                </td>
+                <td className="px-6 py-4">
+                  <span className="bg-gray-500/20 text-gray-400 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-widest border border-white/5">
+                    ---
+                  </span>
+                </td>
+                <td className="px-6 py-4 text-gray-300 font-medium">---</td>
+                <td className="px-6 py-4">---</td>
+                <td className="px-6 py-4 text-gray-400">---</td>
+                <td className="px-6 py-4 text-gray-400 font-mono">---</td>
+                <td className="px-6 py-4 text-gray-500 text-xs">---</td>
+                <td className="px-6 py-4 text-gray-500 text-xs">---</td>
+                <td className="px-6 py-4"></td>
+              </tr>
             </tbody>
           </table>
           <div className="p-4 bg-black/20 flex justify-between items-center text-[10px] text-gray-500 font-bold uppercase tracking-widest">
-            <span>显示 1-1 项，共 1 项</span>
+            <span>显示 0-0 项，共 0 项</span>
             <div className="flex gap-4">
               <button className="hover:text-white disabled:opacity-30" disabled>&lt;</button>
               <button className="hover:text-white disabled:opacity-30" disabled>&gt;</button>
@@ -244,33 +194,24 @@ const DomainMonitor = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-white/5">
-              {monitoringRuns.map((run) => (
-                <tr key={run.runId} className="text-sm hover:bg-white/[0.02] transition-colors">
-                  <td className="px-6 py-4 text-gray-500 font-mono">{run.runId}</td>
-                  <td className="px-6 py-4 text-gray-400 font-mono text-xs">{run.sentAt}</td>
-                  <td className="px-6 py-4 text-gray-500 font-mono">{run.notifId}</td>
-                  <td className="px-6 py-4 text-gray-500 uppercase text-[10px] font-bold">{run.type}</td>
-                  <td className="px-6 py-4 text-gray-300 font-medium">{run.asset}</td>
-                  <td className="px-6 py-4 text-gray-400 font-mono">{run.new}</td>
-                  <td className="px-6 py-4">
-                    <span className="bg-emerald-500/20 text-emerald-400 px-4 py-0.5 rounded-full text-[10px] font-black border border-emerald-500/30">
-                      {run.status}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 text-right">
-                    <button 
-                      className="p-2 rounded-lg text-gray-600 hover:bg-white/10 hover:text-white transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-white/20 focus:ring-offset-2 focus:ring-offset-gray-900"
-                      aria-label="查看更多操作"
-                    >
-                      <MoreVertical className="w-4 h-4" />
-                    </button>
-                  </td>
-                </tr>
-              ))}
+              <tr className="text-sm hover:bg-white/[0.02] transition-colors">
+                <td className="px-6 py-4 text-gray-500 font-mono">---</td>
+                <td className="px-6 py-4 text-gray-400 font-mono text-xs">---</td>
+                <td className="px-6 py-4 text-gray-500 font-mono">---</td>
+                <td className="px-6 py-4 text-gray-500 uppercase text-[10px] font-bold">---</td>
+                <td className="px-6 py-4 text-gray-300 font-medium">---</td>
+                <td className="px-6 py-4 text-gray-400 font-mono">---</td>
+                <td className="px-6 py-4">
+                  <span className="bg-gray-500/20 text-gray-400 px-4 py-0.5 rounded-full text-[10px] font-black border border-gray-500/30">
+                    ---
+                  </span>
+                </td>
+                <td className="px-6 py-4 text-right"></td>
+              </tr>
             </tbody>
           </table>
           <div className="p-4 bg-black/20 flex justify-between items-center text-[10px] text-gray-500 font-bold uppercase tracking-widest">
-            <span>显示 1-1 项，共 1 项</span>
+            <span>显示 0-0 项，共 0 项</span>
             <div className="flex gap-4">
               <button className="hover:text-white disabled:opacity-30" disabled>&lt;</button>
               <button className="hover:text-white disabled:opacity-30" disabled>&gt;</button>

@@ -10,6 +10,7 @@ import LoginVerify from '../pages/LoginVerify';
 import Activity from '../pages/Activity';
 import OpinionAnalysis from '../pages/OpinionAnalysis';
 import EmailUsernameSearch from '../pages/EmailUsernameSearch';
+import IocSearch from '../pages/IocSearch';
 import { useAuth } from '../context/AuthContext';
 
 // 私有路由组件 - 只有登录后才能访问
@@ -147,6 +148,25 @@ const AnimatedRoutes = () => {
           }
         />
         <Route
+          path="/opinion"
+          element={
+            <PrivateRoute>
+              <MainLayout>
+                <motion.div
+                  initial="initial"
+                  animate="in"
+                  exit="out"
+                  variants={pageVariants}
+                  transition={pageTransition}
+                  className="w-full h-full"
+                >
+                  <div className="p-8 text-center text-gray-500">互联网舆情监测模块正在开发中...</div>
+                </motion.div>
+              </MainLayout>
+            </PrivateRoute>
+          }
+        />
+        <Route
           path="/alerts"
           element={
             <PrivateRoute>
@@ -197,7 +217,7 @@ const AnimatedRoutes = () => {
                   transition={pageTransition}
                   className="w-full h-full"
                 >
-                  <Dashboard />
+                  <IocSearch />
                 </motion.div>
               </MainLayout>
             </PrivateRoute>
@@ -223,7 +243,7 @@ const AnimatedRoutes = () => {
           }
         />
         <Route
-          path="/opinion"
+          path="/opinion-ai"
           element={
             <PrivateRoute>
               <MainLayout>

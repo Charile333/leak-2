@@ -74,6 +74,7 @@ export interface LeakRadarSearchResult {
   page?: number;
   page_size?: number;
   error?: string;
+  blacklisted_value?: string | null;
 }
 
 export interface LeakRadarDomainSummary {
@@ -140,6 +141,9 @@ class LeakRadarAPI {
     if (apiKey) {
       headers['Authorization'] = `Bearer ${apiKey}`;
       headers['X-API-Key'] = apiKey;
+      console.log(`[LeakRadar API] Using API Key: ${apiKey.substring(0, 20)}...${apiKey.substring(apiKey.length - 10)}`);
+    } else {
+      console.warn('[LeakRadar API] No API Key found!');
     }
 
     if (options.headers) {
@@ -156,7 +160,11 @@ class LeakRadarAPI {
       const url = `${BASE_URL}${API_PREFIX}${formattedEndpoint}`;
       
       console.log(`[LeakRadar API] Sending request: ${url}`);
-      console.log(`[LeakRadar API] Using API Key: ${apiKey ? 'Yes' : 'No'}`);
+      console.log(`[LeakRadar API] Request Method: ${options.method || 'GET'}`);
+      console.log(`[LeakRadar API] Request Headers:`, JSON.stringify(headers, null, 2));
+      if (options.body) {
+        console.log(`[LeakRadar API] Request Body:`, options.body);
+      }
       
       const response = await fetch(url, {
         ...options,
@@ -168,32 +176,19 @@ class LeakRadarAPI {
 
       // 获取原始响应文本，用于调试和错误处理
       const responseText = await response.text();
-      console.log(`[LeakRadar API] Response Text (first 100 chars):`, responseText.substring(0, 100));
+      console.log(`[LeakRadar API] Response Text:`, responseText);
       
       // 检查响应是否为HTML（通常是错误或重定向）
       if (responseText.startsWith('<!DOCTYPE') || responseText.startsWith('<html')) {
         throw new Error(`API返回HTML而非JSON：${response.status} ${response.statusText}`);
       }
 
-      if (!response.ok) {
-        let errorMsg = `请求失败 (${response.status})`;
-        try {
-          const errorData = JSON.parse(responseText);
-          console.error(`[LeakRadar API] Error Detail for ${endpoint}:`, errorData);
-          // 将错误详情转为字符串，方便在 Error 对象中查看
-          errorMsg = `${errorMsg}: ${typeof errorData === 'object' ? JSON.stringify(errorData) : String(errorData)}`;
-        } catch (e) {
-          console.error(`[LeakRadar API] Raw Error Text for ${endpoint}:`, responseText);
-          errorMsg = `${errorMsg}: ${responseText}`;
-        }
-        throw new Error(errorMsg);
-      }
-
-      // 尝试解析JSON响应
+      // 尝试解析JSON响应，无论响应状态码如何
+      let responseData;
       try {
-        return JSON.parse(responseText) as T;
+        responseData = JSON.parse(responseText);
       } catch (jsonError) {
-        // 处理unknown类型的错误
+        // 处理JSON解析失败
         const errorMsg = jsonError instanceof Error 
           ? jsonError.message 
           : typeof jsonError === 'string' 
@@ -201,6 +196,40 @@ class LeakRadarAPI {
             : '未知错误';
         throw new Error(`JSON解析失败：${errorMsg}。响应内容：${responseText}`);
       }
+
+      if (!response.ok) {
+        // 处理非2xx响应
+        let errorMsg = `请求失败 (${response.status})`;
+        if (typeof responseData === 'object' && responseData !== null) {
+          // 如果是401错误，不要打印error，改为warn，避免控制台报错干扰
+          if (response.status === 401) {
+             console.warn(`[LeakRadar API] Authentication failed for ${endpoint}:`, responseData);
+          } else {
+             console.error(`[LeakRadar API] Error Detail for ${endpoint}:`, responseData);
+          }
+          // 使用响应中的错误信息，如果有的话
+          if (responseData.detail) {
+            errorMsg = `${errorMsg}: ${responseData.detail}`;
+          } else if (responseData.message) {
+            errorMsg = `${errorMsg}: ${responseData.message}`;
+          } else {
+            errorMsg = `${errorMsg}: ${JSON.stringify(responseData)}`;
+          }
+        } else {
+          errorMsg = `${errorMsg}: ${responseText}`;
+        }
+        throw new Error(errorMsg);
+      }
+
+      // 确保响应数据包含必要字段
+      if (typeof responseData === 'object' && responseData !== null) {
+        // 为搜索结果添加默认字段，确保兼容性
+        if (endpoint === '/search/email' && !responseData.blacklisted_value) {
+          responseData.blacklisted_value = null;
+        }
+      }
+
+      return responseData as T;
     } catch (error: any) {
       // 提取错误信息
       let msg = 'Unknown Error';
@@ -216,6 +245,12 @@ class LeakRadarAPI {
         }
       }
       
+      // 处理401认证错误 - 抛出错误，不再使用模拟数据
+      if (msg.includes('401') || msg.includes('Authentication is required')) {
+        console.warn('[LeakRadar API] Authentication failed. Please check your API key.');
+        throw new Error('API认证失败 (401)。请检查您的API密钥是否配置正确。');
+      }
+
       console.error(`[LeakRadar API] Request to ${endpoint} error:`, msg);
       
       // 更友好的错误信息处理
@@ -230,6 +265,140 @@ class LeakRadarAPI {
       
       throw new Error(msg);
     }
+  }
+
+  private async getMockResponse<T>(endpoint: string, options: RequestInit): Promise<T> {
+    console.log(`[LeakRadar API] Generating mock response for ${endpoint}`);
+    await new Promise(resolve => setTimeout(resolve, 800)); // Simulate network delay
+
+    // Handle /search/email
+    if (endpoint.includes('/search/email')) {
+      const body = options.body ? JSON.parse(options.body as string) : {};
+      const email = body.email || 'mock@example.com';
+      const isEmailInput = email.includes('@');
+      
+      // 生成确定的伪随机数，让同一个搜索词每次返回相同结果
+      const seed = email.split('').reduce((acc: number, char: string) => acc + char.charCodeAt(0), 0);
+      const count = (seed % 20) + 5; // 5-25 results
+
+      return {
+        success: true,
+        items: Array.from({ length: count }).map((_, i) => {
+          const sites = ['linkedin.com', 'adobe.com', 'canva.com', 'dropbox.com', 'yahoo.com', 'myspace.com', 'twitter.com', 'vk.com'];
+          const site = sites[(seed + i) % sites.length];
+          return {
+            id: `mock-${seed}-${i}`,
+            url: `https://${site}`,
+            username: isEmailInput ? email.split('@')[0] : email,
+            email: isEmailInput ? email : `${email}@${site}`,
+            is_email: isEmailInput,
+            password_plaintext: `Pass${(seed + i).toString(16)}word!`, // Ensure password exists
+            password_hash: '5f4dcc3b5aa765d61d8327deb882cf99',
+            hash_type: 'MD5',
+            website: site,
+            source: `Collection #${(i % 5) + 1}`,
+            leaked_at: new Date(Date.now() - ((seed * i * 10000000) % 100000000000)).toISOString(),
+            fields: ['email', 'password', 'username', 'website']
+          };
+        }),
+        total: count,
+        page: 1,
+        page_size: 100,
+        blacklisted_value: null
+      } as unknown as T;
+    }
+
+    // Handle /profile
+    if (endpoint === '/profile') {
+      return {
+        success: true,
+        user: {
+          username: 'Demo User',
+          email: 'demo@example.com',
+          plan: 'Enterprise',
+          expires_at: '2099-12-31',
+          quota: {
+            total: 10000,
+            used: 123,
+            remaining: 9877,
+            reset_at: '2099-12-31'
+          }
+        }
+      } as unknown as T;
+    }
+    
+    // Handle /stats
+    if (endpoint === '/stats') {
+        return {
+            leaks: { 
+                total: 12345678, 
+                today: 1234, 
+                per_week: [
+                    { week: '2023-W01', count: 100 }, 
+                    { week: '2023-W02', count: 200 }
+                ], 
+                this_week: 5000, 
+                this_month: 20000 
+            },
+            raw_lines: { 
+                total: 98765432, 
+                today: 5678, 
+                per_week: [], 
+                this_week: 10000, 
+                this_month: 40000 
+            }
+        } as unknown as T;
+    }
+
+    // Handle /search/domain/*
+    if (endpoint.includes('/search/domain')) {
+        return {
+            success: true,
+            items: Array.from({ length: 10 }).map((_, i) => ({
+                id: `mock-domain-${i}`,
+                email: `user${i}@example.com`,
+                username: `user${i}`,
+                password_plaintext: 'password123',
+                source: 'Mock Breach',
+                leaked_at: new Date().toISOString()
+            })),
+            total: 100,
+            employees_compromised: 42,
+            third_parties_compromised: 15,
+            customers_compromised: 120,
+            employee_passwords: {
+                total_pass: 42,
+                too_weak: { qty: 10, perc: 23 },
+                weak: { qty: 10, perc: 23 },
+                medium: { qty: 10, perc: 23 },
+                strong: { qty: 12, perc: 29 }
+            },
+            third_parties_passwords: {
+                total_pass: 15,
+                too_weak: { qty: 5, perc: 33 },
+                weak: { qty: 5, perc: 33 },
+                medium: { qty: 5, perc: 33 },
+                strong: { qty: 0, perc: 0 }
+            },
+            customer_passwords: {
+                total_pass: 120,
+                too_weak: { qty: 30, perc: 25 },
+                weak: { qty: 30, perc: 25 },
+                medium: { qty: 30, perc: 25 },
+                strong: { qty: 30, perc: 25 }
+            },
+            blacklisted_value: null
+        } as unknown as T;
+    }
+
+    // Default mock response
+    return {
+      success: true,
+      items: [],
+      total: 0,
+      error: 'Mock data for this endpoint is not implemented',
+      blacklisted_value: null
+    } as unknown as T;
   }
 
   /**
@@ -313,24 +482,66 @@ class LeakRadarAPI {
       return this.searchDomainCategory(query, 'employees', safeLimit, offset);
     }
 
-    // Default to advanced search if available, or fallback to email search (as it might be a partial email)
-    return this.request<LeakRadarSearchResult>(`/search/advanced`, {
-      method: 'POST',
-      body: JSON.stringify({ query, page: Math.floor(offset / safeLimit) + 1, page_size: safeLimit })
-    });
+    // Default to email search for username or other queries
+    // As per user feedback, /search/email handles both email and username lookups
+    return this.searchByEmail(query, safeLimit, offset);
   }
 
   /**
-   * Search for leaks by email
+   * Search for leaks by email or username
+   * @param email Email or username to search
+   * @param limit Results per page (1-100)
+   * @param offset Offset for pagination
+   * @param search Optional free-text filter
+   * @param isEmail Optional filter: true=email only, false=username only, null=both
    */
-  async searchByEmail(email: string, limit = 100, offset = 0): Promise<LeakRadarSearchResult> {
-    // 限制单次请求最多1000条（根据API实际限制调整）
-    const safeLimit = Math.min(limit, 1000);
+  async searchByEmail(
+    email: string, 
+    limit = 100, 
+    offset = 0,
+    search?: string,
+    isEmail?: boolean | null
+  ): Promise<LeakRadarSearchResult> {
+    // 限制单次请求最多100条（根据官方API限制）
+    const safeLimit = Math.min(limit, 100);
     const page = Math.floor(offset / safeLimit) + 1;
-    return this.request<LeakRadarSearchResult>(`/search/email`, {
-      method: 'POST',
-      body: JSON.stringify({ email, page, page_size: safeLimit })
-    });
+    
+    // 构建请求体 - 注意：根据官方文档，search/email接口需要请求体中的email字段
+    const requestBody: any = {
+      email,
+      page,
+      page_size: safeLimit
+    };
+    
+    // 添加可选参数
+    if (search !== undefined) {
+      requestBody.search = search;
+    }
+    
+    if (isEmail !== undefined && isEmail !== null) {
+      requestBody.is_email = isEmail;
+    }
+    
+    try {
+      return await this.request<LeakRadarSearchResult>(`/search/email`, {
+        method: 'POST',
+        body: JSON.stringify(requestBody)
+      });
+    } catch (error: any) {
+      console.error(`[LeakRadar API] Search by email failed:`, error.message);
+      
+      // 返回模拟数据作为降级方案
+      return {
+        success: false,
+        items: [],
+        total: 0,
+        page,
+        page_size: safeLimit,
+        error: error.message,
+        // 添加空的blacklisted_value字段以保持兼容性
+        blacklisted_value: null
+      };
+    }
   }
 
   /**
@@ -533,13 +744,15 @@ class LeakRadarAPI {
   }
 
   /**
-   * Export domain search results as CSV (Deprecated: use request + download instead)
+   * Unlock email search results
+   * POST /search/email/unlock
+   * @param email The email or username that was searched
    */
-  async exportDomainCSV(domain: string, category: 'employees' | 'customers' | 'third_parties' = 'employees'): Promise<Blob> {
-    const res = await this.requestDomainCSV(domain, category);
-    // Give it a small delay for backend to prepare
-    await new Promise(r => setTimeout(r, 2000));
-    return this.downloadExport(res.export_id);
+  async unlockEmailSearch(email: string): Promise<{ success: boolean; message?: string }> {
+    return this.request<{ success: boolean; message?: string }>(`/search/email/unlock?max=10`, {
+      method: 'POST',
+      body: JSON.stringify({ email })
+    });
   }
 }
 

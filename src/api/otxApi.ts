@@ -58,5 +58,15 @@ export const otxApi = {
       }
     });
     return response.data;
+  },
+
+  // 3.1 增量事件同步
+  getEvents: async (since?: string, limit: number = 100) => {
+    const params: any = { limit };
+    if (since) {
+      params.since = since;
+    }
+    const response = await otxAxios.get('/pulses/events', { params });
+    return response.data;
   }
 };

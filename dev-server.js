@@ -288,8 +288,11 @@ async function handleApiRequest(req, res) {
       // 转换回字符串
       targetUrl = urlObj.toString();
       
+      // 智能判断 Key 类型并设置头部
+      // 强制使用 Bearer Token 方式，因为用户确认 Key 是有效的 JWT
       headers['Authorization'] = `Bearer ${LEAKRADAR_API_KEY}`;
-      headers['X-API-Key'] = LEAKRADAR_API_KEY;
+      // 移除 X-API-Key，避免干扰
+      delete headers['X-API-Key'];
     }
     
     console.log(`[Dev Server] -> ${targetUrl}`);
@@ -308,10 +311,18 @@ async function handleApiRequest(req, res) {
       options.headers['Content-Length'] = Buffer.byteLength(body);
     }
     
+    console.log(`[Dev Server] Request URL: ${targetUrl}`);
+    console.log(`[Dev Server] Request Method: ${req.method}`);
+    console.log(`[Dev Server] Request Headers:`, JSON.stringify(headers, null, 2));
+    if (body) {
+      console.log(`[Dev Server] Request Body:`, body);
+    }
+    
     const protocol = upstreamUrl.startsWith('https') ? https : http;
     
-    protocol.request(targetUrl, options, (upstreamRes) => {
+    const upstreamReq = protocol.request(targetUrl, options, (upstreamRes) => {
       console.log(`[Dev Server] <- ${upstreamRes.statusCode} ${targetUrl}`);
+      console.log(`[Dev Server] Upstream Headers:`, JSON.stringify(upstreamRes.headers, null, 2));
       
       // 设置响应头
       for (const [key, value] of Object.entries(upstreamRes.headers)) {
@@ -325,19 +336,49 @@ async function handleApiRequest(req, res) {
       // 设置响应状态码
       res.writeHead(upstreamRes.statusCode || 200);
       
-      // 转发响应数据
-      upstreamRes.pipe(res);
-    })
-    .on('error', (error) => {
+      // 收集响应数据以便调试
+      let upstreamBody = '';
+      upstreamRes.on('data', (chunk) => {
+        upstreamBody += chunk;
+        // 安全地写入响应
+        if (!res.writableEnded && !res.destroyed) {
+          try {
+            res.write(chunk);
+          } catch (writeError) {
+            console.error('[Dev Server Error] Error writing to response:', writeError.message);
+          }
+        }
+      });
+      
+      upstreamRes.on('end', () => {
+        console.log(`[Dev Server] Upstream Response Body:`, upstreamBody.substring(0, 500) + (upstreamBody.length > 500 ? '...' : ''));
+        if (!res.writableEnded && !res.destroyed) {
+          res.end();
+        }
+      });
+
+      upstreamRes.on('error', (err) => {
+        console.error('[Dev Server Error] Upstream response error:', err.message);
+        if (!res.writableEnded && !res.destroyed) {
+          res.end();
+        }
+      });
+    });
+    
+    upstreamReq.on('error', (error) => {
       console.error(`[Dev Server Error] ${req.method} ${url}:`, error.message);
+      console.error(`[Dev Server Error] Stack:`, error.stack);
+      console.error(`[Dev Server Error] Target URL:`, targetUrl);
       res.writeHead(500, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({
         error: 'Proxy Error',
         message: '无法连接到上游服务器',
-        details: error.message
+        details: error.message,
+        targetUrl: targetUrl
       }));
-    })
-    .end(body);
+    });
+    
+    upstreamReq.end(body);
     
   } catch (error) {
     console.error(`[Dev Server Error] ${req.method} ${req.url}:`, error.message);

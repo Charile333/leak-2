@@ -392,6 +392,8 @@ class GradientBackground {
 
     this.mesh = new THREE.Mesh(geometry, material);
     this.mesh.position.z = 0;
+    // Disable frustum culling to prevent computeBoundingSphere NaN errors
+    this.mesh.frustumCulled = false;
     this.sceneManager.scene.add(this.mesh);
   }
 
@@ -535,7 +537,12 @@ class App {
     const height = Math.abs(
       this.camera.position.z * Math.tan(fovInRadians / 2) * 2
     );
-    return { width: height * this.camera.aspect, height };
+    const width = height * this.camera.aspect;
+    // Ensure we don't return NaN or Infinity
+    return { 
+      width: Number.isFinite(width) ? width : 100, 
+      height: Number.isFinite(height) ? height : 100 
+    };
   }
 
   update(delta: number) {

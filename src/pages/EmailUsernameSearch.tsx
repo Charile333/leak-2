@@ -19,7 +19,6 @@ import {
 import { cn } from '../lib/utils';
 import type { LeakedCredential, DomainSearchSummary } from '../services/dataService';
 import { leakRadarApi } from '../api/leakRadar';
-import { otxApi } from '../api/otxApi';
 
 const AnimatedNumber = ({ value }: { value: string }) => {
   const numericValue = parseInt(value.replace(/,/g, '')) || 0;
@@ -122,15 +121,7 @@ const StrengthBar = ({ strength }: { strength: any }) => {
 };
 
 const EmailUsernameSearch = () => {
-  const location = useLocation();
-  const isDnsPage = location.pathname === '/dns';
-  
   const [searchQuery, setSearchQuery] = useState('');
-  // DNS数据集相关状态
-  const [activeSearchType, setActiveSearchType] = useState<'ip' | 'domain' | 'url' | 'cve'>('ip');
-  const [otxResults, setOtxResults] = useState<any>(null);
-  const [otxLoading, setOtxLoading] = useState(false);
-  const [otxError, setOtxError] = useState<string>('');
   const [isSearching, setIsSearching] = useState(false);
   const [showResults, setShowResults] = useState(false);
   const [activeTab, setActiveTab] = useState('报告');
@@ -141,9 +132,11 @@ const EmailUsernameSearch = () => {
   const [showPasswords, setShowPasswords] = useState<Record<string, boolean>>({});
   const [totalLeaks, setTotalLeaks] = useState<string>('---,---,---,---');
   const [currentPage, setCurrentPage] = useState(0);
-  const [pageSize] = useState(10);
+  const [pageSize] = useState(20);
   // 保存各个分类的数据，避免替换原始完整数据
   const [categoryCredentials, setCategoryCredentials] = useState<Record<string, LeakedCredential[]>>({});
+  // 错误状态
+  const [error, setError] = useState<string | null>(null);
   
   // 防止搜索时页面跳动：只在用户提交搜索时才处理结果显示/隐藏
   useEffect(() => {
@@ -212,108 +205,6 @@ const EmailUsernameSearch = () => {
     }
   }, [activeTab, showResults, searchQuery]);
   
-  // OTX API 查询函数
-  const handleOtxSearch = async (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-    if (!searchQuery.trim() || otxLoading) return;
-    
-    setOtxLoading(true);
-    setOtxError('');
-    // 不清除otxResults，避免在搜索过程中页面跳动
-    
-    try {
-      let result;
-      
-      // 为所有类型的查询添加多section数据获取
-      switch (activeSearchType) {
-        case 'ip': {
-          // 检测是IPv4还是IPv6
-          const isIpv6 = searchQuery.includes(':');
-          // 并行获取多个section的数据
-          const [ipGeneral, ipPassiveDns, ipMalware, ipUrlList] = await Promise.all([
-            otxApi.getIpInfo(searchQuery, 'general', isIpv6),
-            otxApi.getIpInfo(searchQuery, 'passive_dns', isIpv6),
-            otxApi.getIpInfo(searchQuery, 'malware', isIpv6),
-            otxApi.getIpInfo(searchQuery, 'url_list', isIpv6)
-          ]);
-          
-          // 合并IP查询数据
-          result = {
-            ...ipGeneral,
-            passive_dns: ipPassiveDns?.passive_dns || [],
-            malware: ipMalware?.malware || [],
-            url_list: ipUrlList?.url_list || [],
-            // 确保地理位置和信誉评分字段正确
-            country: ipGeneral?.country_name || ipGeneral?.country || 'N/A',
-            city: ipGeneral?.city || 'N/A',
-            reputation: ipGeneral?.reputation || (ipGeneral?.pulse_info?.count > 0 ? '恶意' : '中立')
-          };
-          break;
-        }
-        
-        case 'domain': {
-          // 并行获取多个section的数据
-          const [generalData, passiveDnsData, whoisData, malwareData] = await Promise.all([
-            otxApi.getDomainInfo(searchQuery, 'general'),
-            otxApi.getDomainInfo(searchQuery, 'passive_dns'),
-            otxApi.getDomainInfo(searchQuery, 'whois'),
-            otxApi.getDomainInfo(searchQuery, 'malware')
-          ]);
-          
-          // 合并域名查询数据
-          result = {
-            ...generalData,
-            passive_dns: passiveDnsData?.passive_dns || [],
-            whois: whoisData || {}, // 直接使用whoisData，不假设它有whois属性
-            malware: malwareData?.malware || []
-          };
-          break;
-        }
-        
-        case 'url': {
-          // 并行获取URL的多个section数据
-          const [urlGeneral, urlUrlList] = await Promise.all([
-            otxApi.getUrlInfo(searchQuery, 'general'),
-            otxApi.getUrlInfo(searchQuery, 'url_list')
-          ]);
-          
-          // 合并URL查询数据
-          result = {
-            ...urlGeneral,
-            url_list: urlUrlList?.url_list || []
-          };
-          break;
-        }
-        
-        case 'cve': {
-          // 并行获取CVE的多个section数据
-          const [cveGeneral, cveTopPulses] = await Promise.all([
-            otxApi.getCveInfo(searchQuery, 'general'),
-            otxApi.getCveInfo(searchQuery, 'top_n_pulses')
-          ]);
-          
-          // 合并CVE查询数据
-          result = {
-            ...cveGeneral,
-            top_n_pulses: cveTopPulses?.top_n_pulses || []
-          };
-          break;
-        }
-        
-        default:
-          throw new Error('未知的搜索类型');
-      }
-      
-      setOtxResults(result);
-      setShowResults(true);
-    } catch (error: any) {
-      console.error('OTX API 查询错误:', error);
-      setOtxError(error.message || '查询失败，请重试');
-    } finally {
-      setOtxLoading(false);
-    }
-  };
-  
   // Fetch global stats
   React.useEffect(() => {
     const fetchStats = async () => {
@@ -369,6 +260,9 @@ const EmailUsernameSearch = () => {
     // 立即更新currentPage，实现流畅的分页切换
     setCurrentPage(page);
     setIsSearching(true);
+    
+    // 清除之前的错误
+    setError(null);
 
     if (page === 0) {
       // 当进行新的搜索时，只清除当前分类的缓存，保留其他分类的数据
@@ -391,26 +285,68 @@ const EmailUsernameSearch = () => {
     }
     
     try {
-      // 预留邮件/用户名搜索接口 - 后续会实现
-      // 总是先进行完整的邮件/用户名搜索，更新results状态
+      // 使用邮件/用户名搜索接口
       if (page === 0) {
-        // 预留邮件/用户名搜索主接口 - 后续替换为实际API调用
-        // const data = await dataService.searchEmailUsername(searchQuery, pageSize, page * pageSize);
-        // setResults(data);
+        // 自动解锁逻辑 - 仅在初始搜索时触发
+        try {
+          await leakRadarApi.unlockEmailSearch(searchQuery);
+          console.log('[EmailSearch] Auto-unlock triggered for:', searchQuery);
+        } catch (unlockErr) {
+          // 解锁失败不应阻断搜索流程，记录警告即可
+          console.warn('[EmailSearch] Auto-unlock failed:', unlockErr);
+        }
+
+        // 使用leakRadarApi.searchByEmail方法进行邮件/用户名搜索
+        const emailResults = await leakRadarApi.searchByEmail(searchQuery, pageSize, page * pageSize);
         
-        // 临时使用模拟数据，避免API调用失败
-        setResults({
-          summary: {
-            domain: searchQuery,
-            total: 0,
-            employees: { count: 0, strength: { strong: 0, medium: 0, weak: 0, very_weak: 0 } },
-            third_parties: { count: 0, strength: { strong: 0, medium: 0, weak: 0, very_weak: 0 } },
-            customers: { count: 0, strength: { strong: 0, medium: 0, weak: 0, very_weak: 0 } },
-            urls_count: 0,
-            subdomains_count: 0
-          },
-          credentials: []
+        // 转换搜索结果为预期格式
+        const summary: DomainSearchSummary = {
+          domain: searchQuery,
+          total: emailResults.total || 0,
+          employees: { count: emailResults.total || 0, strength: { strong: 0, medium: 0, weak: 0, very_weak: 0 } },
+          third_parties: { count: 0, strength: { strong: 0, medium: 0, weak: 0, very_weak: 0 } },
+          customers: { count: 0, strength: { strong: 0, medium: 0, weak: 0, very_weak: 0 } },
+          urls_count: 0,
+          subdomains_count: 0
+        };
+        
+        // 转换搜索结果为LeakedCredential格式
+        const credentials: LeakedCredential[] = emailResults.items.map((item: any) => {
+          // Map strength number to string
+          let strength: LeakedCredential['strength'] = 'Medium';
+          const s = item.password_strength;
+          if (s >= 8) strength = 'Strong';
+          else if (s >= 5) strength = 'Medium';
+          else if (s >= 3) strength = 'Weak';
+          else strength = 'Very Weak';
+          
+          // 官方API使用is_email字段来标识是否为邮箱
+          // 增强判断逻辑：如果is_email字段不存在，则通过email字段内容判断
+          const isEmail = item.is_email === true || (item.is_email === undefined && item.email && item.email.includes('@'));
+          const credentialValue = item.email || item.username || item.user || item.account || '';
+          
+          return {
+            id: item.id || `leak-${Math.random()}`,
+            email: isEmail ? credentialValue : '',
+            username: isEmail ? (item.username || 'N/A') : credentialValue,
+            password_plaintext: item.password_plaintext || item.password || '********',
+            password_hash: item.password_hash || '',
+            hash_type: item.hash_type || 'Unknown',
+            website: item.website || item.url || item.domain || item.url_domain || item.url_host || item.source_domain || 'N/A',
+              source: item.source || item.breach_name || item.database_name || 'Leak Database',
+              leaked_at: item.leaked_at || item.added_at || item.date || item.breach_date || new Date().toISOString(),
+              type: isEmail ? 'Email' : 'Username',
+              strength,
+              ip_address: item.ip_address,
+            first_name: item.first_name,
+            last_name: item.last_name,
+            phone: item.phone,
+            city: item.city,
+            country: item.country
+          };
         });
+        
+        setResults({ summary, credentials });
       }
 
       // 然后根据当前活动标签页获取对应分类的数据
@@ -422,11 +358,48 @@ const EmailUsernameSearch = () => {
       else if (activeTab === '子域名') category = 'subdomains';
 
       if (category) {
-        // 预留邮件/用户名分类搜索接口 - 后续替换为实际API调用
-        // const newCredentials = await dataService.searchEmailUsernameCategory(searchQuery, category, pageSize, page * pageSize);
-        
-        // 临时使用空数组，避免API调用失败
-        const newCredentials: LeakedCredential[] = [];
+        // 对于邮件/用户名搜索，暂时只支持客户分类，其他分类返回空数组
+        let newCredentials: LeakedCredential[] = [];
+        if (category === 'customers') {
+          // 获取分类数据
+          const emailResults = await leakRadarApi.searchByEmail(searchQuery, pageSize, page * pageSize);
+          
+          // 转换搜索结果为LeakedCredential格式
+          newCredentials = emailResults.items.map((item: any) => {
+            // Map strength number to string
+            let strength: LeakedCredential['strength'] = 'Medium';
+            const s = item.password_strength;
+            if (s >= 8) strength = 'Strong';
+            else if (s >= 5) strength = 'Medium';
+            else if (s >= 3) strength = 'Weak';
+            else strength = 'Very Weak';
+            
+            // 官方API使用is_email字段来标识是否为邮箱
+            // 增强判断逻辑：如果is_email字段不存在，则通过email字段内容判断
+            const isEmail = item.is_email === true || (item.is_email === undefined && item.email && item.email.includes('@'));
+            const credentialValue = item.email || item.username || item.user || item.account || '';
+            
+            return {
+              id: item.id || `leak-${Math.random()}`,
+              email: isEmail ? credentialValue : '',
+              username: isEmail ? (item.username || 'N/A') : credentialValue,
+              password_plaintext: item.password_plaintext || item.password || '********',
+              password_hash: item.password_hash || '',
+              hash_type: item.hash_type || 'Unknown',
+              website: item.website || item.url || item.domain || item.url_domain || item.url_host || item.source_domain || 'N/A',
+              source: item.source || item.breach_name || item.database_name || 'Leak Database',
+              leaked_at: item.leaked_at || item.added_at || item.date || item.breach_date || new Date().toISOString(),
+              type: isEmail ? 'Email' : 'Username',
+              strength,
+              ip_address: item.ip_address,
+              first_name: item.first_name,
+              last_name: item.last_name,
+              phone: item.phone,
+              city: item.city,
+              country: item.country
+            };
+          });
+        }
         
         // 保存当前分类的数据，根据页码决定是替换还是合并
         setCategoryCredentials(prev => ({
@@ -436,12 +409,12 @@ const EmailUsernameSearch = () => {
       }
 
       setIsSearching(false);
-    // 只有在初始搜索时（通过表单提交，e有值）且当前标签页不是URLs或子域名时，才默认显示报告子标签
-    // 避免点击URLs或子域名标签页时自动切换回报告页面，同时避免分页时切换标签页
-    if (e && page === 0 && activeTab !== 'URLs' && activeTab !== '子域名') {
-      setActiveTab('报告');
-    }
-    setShowResults(true);
+      
+      // 只有在初始搜索时（通过表单提交，e有值）且当前标签页不是URLs或子域名时，才默认显示报告子标签
+      if (e && page === 0 && activeTab !== 'URLs' && activeTab !== '子域名') {
+        setActiveTab('报告');
+      }
+      setShowResults(true);
       
       if (page === 0) {
         setTimeout(() => {
@@ -454,16 +427,17 @@ const EmailUsernameSearch = () => {
           }
         }, 100);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Search failed:', error);
       setIsSearching(false);
+      
+      // 设置错误信息，显示给用户
+      setError(error.message || '搜索失败，请稍后重试');
+      
+      // 显示结果区域，以便用户看到错误信息
+      setShowResults(true);
     }
   };
-
-  // 分页功能暂时未实现，预留接口
-  // const handlePageChange = (newPage: number) => {
-  //   handleSearch(undefined, 'default', newPage);
-  // };
 
   const filteredCredentials = useMemo(() => {
     let list: LeakedCredential[] = [];
@@ -587,12 +561,6 @@ const EmailUsernameSearch = () => {
 
   return (
     <div className="min-h-[calc(100vh-4rem)] flex flex-col animate-in fade-in duration-700">
-      {/* 功能完善中横幅 */}
-      {isDnsPage && (
-        <div className="w-full bg-yellow-500/20 border-b border-yellow-500/40 p-4 text-center">
-          <p className="text-yellow-400 font-bold text-lg">功能完善中</p>
-        </div>
-      )}
       
       {/* 核心展示区 */}
       <div className="relative pt-10 pb-16">
@@ -628,76 +596,10 @@ const EmailUsernameSearch = () => {
               </p>
 
               <form 
-                onSubmit={(e) => isDnsPage ? handleOtxSearch(e) : handleSearch(e)} 
+                onSubmit={(e) => handleSearch(e)} 
                 className="w-full max-w-3xl relative group"
               >
-                {/* DNS数据集页面的搜索表单 */}
-                {isDnsPage ? (
-                  <div>
-                    {/* 搜索类型选项卡 */}
-                    <div className="flex gap-2 mb-4 justify-center bg-[#1a1a2e] p-1.5 rounded-full">
-                      {
-                        [
-                          { type: 'ip', label: 'IP', placeholder: '输入IP地址' },
-                          { type: 'domain', label: '域名', placeholder: '输入域名' },
-                          { type: 'url', label: 'URL', placeholder: '输入URL' },
-                          { type: 'cve', label: 'CVE', placeholder: '输入CVE编号' }
-                        ].map(({ type, label }) => (
-                          <button
-                            key={type}
-                            type="button"
-                            onClick={() => {
-                              setActiveSearchType(type as any);
-                            }}
-                            className={cn(
-                              "px-6 py-3 rounded-full text-sm font-bold transition-all duration-300",
-                              activeSearchType === type
-                                ? "bg-accent/50 text-white/70 shadow-lg"
-                                : "text-gray-500 hover:bg-white/10"
-                            )}
-                          >
-                            {label}
-                          </button>
-                        ))
-                      }
-                    </div>
-                    
-                    {/* 搜索框 */}
-                    <div className="relative flex items-center bg-white/[0.03] backdrop-blur-3xl border border-white/10 rounded-[28px] overflow-hidden p-2 shadow-2xl focus-within:border-accent/50 focus-within:shadow-[0_0_50px_rgba(168,85,247,0.15)] transition-all duration-500">
-                      <input
-                        type="text"
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        placeholder={
-                          activeSearchType === 'ip' ? "输入IP地址" :
-                          activeSearchType === 'domain' ? "输入域名" :
-                          activeSearchType === 'url' ? "输入URL" :
-                          "输入CVE编号"
-                        }
-                        className="flex-1 bg-transparent border-none text-white placeholder:text-gray-500 focus:ring-0 px-8 py-5 text-xl font-medium"
-                      />
-                      <button
-                        type="submit"
-                        disabled={otxLoading}
-                        className="bg-accent hover:bg-accent/80 disabled:opacity-50 text-white px-12 py-5 rounded-[22px] font-black transition-all text-xl shadow-xl hover:scale-[1.02] active:scale-[0.98] flex items-center gap-3 purple-glow"
-                      >
-                        {otxLoading ? (
-                          <Loader2 size={20} className="animate-spin" />
-                        ) : (
-                          <Search size={20} />
-                        )}
-                      </button>
-                    </div>
-                    
-                    {/* 错误信息 */}
-                    {otxError && (
-                      <div className="mt-4 text-center text-red-400 text-sm">
-                        {otxError}
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  /* 原始搜索表单 */
+                  {/* 原始搜索表单 */}
                   <div className="relative flex items-center bg-white/[0.03] backdrop-blur-3xl border border-white/10 rounded-[28px] overflow-hidden p-2 shadow-2xl focus-within:border-accent/50 focus-within:shadow-[0_0_50px_rgba(168,85,247,0.15)] transition-all duration-500">
                     <input
                       type="text"
@@ -721,7 +623,6 @@ const EmailUsernameSearch = () => {
                       )}
                     </button>
                   </div>
-                )}
               </form>
             </div>
           </div>
@@ -730,541 +631,190 @@ const EmailUsernameSearch = () => {
 
       {/* 搜索结果区域 */}
       <div id="search-results" className="scroll-mt-24 min-h-[600px]">
-        {/* DNS数据集页面结果 */}
-        {isDnsPage && showResults && otxResults && (
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 w-full">
-            <div className="bg-[#1a1a20] border border-white/5 rounded-xl overflow-hidden shadow-2xl">
-              <div className="p-8">
-                <h2 className="text-2xl font-black text-white mb-6">
-                  {activeSearchType === 'ip' ? 'IP查询结果' :
-                   activeSearchType === 'domain' ? '域名查询结果' :
-                   activeSearchType === 'url' ? 'URL检测结果' :
-                   'CVE漏洞情报'}
-                </h2>
-                
-                {/* IP查询结果优化展示 */}
-                {(activeSearchType === 'ip' || activeSearchType === 'domain' || activeSearchType === 'url' || activeSearchType === 'cve') && (
-                  <div className="space-y-6">
-                    {/* 概览信息 */}
-                    <div className="bg-[#25252e] rounded-lg p-6">
-                      <h3 className="text-lg font-bold text-white mb-4">概览信息</h3>
-                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                        {activeSearchType === 'ip' && (
-                          <>
-                            <div>
-                              <p className="text-xs text-gray-500 uppercase tracking-widest mb-1">IP地址</p>
-                              <p className="text-sm font-bold text-white">{otxResults.indicator || 'N/A'}</p>
-                            </div>
-                            <div>
-                              <p className="text-xs text-gray-500 uppercase tracking-widest mb-1">ASN归属</p>
-                              <p className="text-sm font-bold text-white">{otxResults.asn || 'N/A'}</p>
-                            </div>
-                            <div>
-                              <p className="text-xs text-gray-500 uppercase tracking-widest mb-1">地理位置</p>
-                              <p className="text-sm font-bold text-white">{`${otxResults.country || 'N/A'} ${otxResults.city || ''}`}</p>
-                            </div>
-                            <div>
-                              <p className="text-xs text-gray-500 uppercase tracking-widest mb-1">信誉评分</p>
-                              <p className="text-sm font-bold text-white">{otxResults.reputation || (otxResults.pulse_info?.count > 0 ? '恶意' : '中立')}</p>
-                            </div>
-                          </>
-                        )}
-                        
-                        {activeSearchType === 'domain' && (
-                          <>
-                            <div>
-                              <p className="text-xs text-gray-500 uppercase tracking-widest mb-1">域名</p>
-                              <p className="text-sm font-bold text-white">{otxResults.indicator || 'N/A'}</p>
-                            </div>
-                            <div>
-                              <p className="text-xs text-gray-500 uppercase tracking-widest mb-1">威胁情报数量</p>
-                              <p className="text-sm font-bold text-white">{otxResults.pulse_info?.count || 0}</p>
-                            </div>
-                            <div>
-                              <p className="text-xs text-gray-500 uppercase tracking-widest mb-1">信誉评分</p>
-                              <p className="text-sm font-bold text-white">{otxResults.reputation || (otxResults.pulse_info?.count > 0 ? '恶意' : '中立')}</p>
-                            </div>
-                            <div>
-                              <p className="text-xs text-gray-500 uppercase tracking-widest mb-1">注册状态</p>
-                              <p className="text-sm font-bold text-white">{otxResults.whois?.registrar ? '已注册' : '未知'}</p>
-                            </div>
-                          </>
-                        )}
-                        
-                        {activeSearchType === 'url' && (
-                          <>
-                            <div>
-                              <p className="text-xs text-gray-500 uppercase tracking-widest mb-1">URL</p>
-                              <p className="text-sm font-bold text-white break-all">{otxResults.indicator || 'N/A'}</p>
-                            </div>
-                            <div>
-                              <p className="text-xs text-gray-500 uppercase tracking-widest mb-1">域名</p>
-                              <p className="text-sm font-bold text-white">{otxResults.domain || 'N/A'}</p>
-                            </div>
-                            <div>
-                              <p className="text-xs text-gray-500 uppercase tracking-widest mb-1">IP地址</p>
-                              <p className="text-sm font-bold text-white">{otxResults.ip || 'N/A'}</p>
-                            </div>
-                            <div>
-                              <p className="text-xs text-gray-500 uppercase tracking-widest mb-1">信誉评分</p>
-                              <p className="text-sm font-bold text-white">{otxResults.reputation || (otxResults.pulse_info?.count > 0 ? '恶意' : '中立')}</p>
-                            </div>
-                          </>
-                        )}
-                        
-                        {activeSearchType === 'cve' && (
-                          <>
-                            <div>
-                              <p className="text-xs text-gray-500 uppercase tracking-widest mb-1">CVE编号</p>
-                              <p className="text-sm font-bold text-white">{otxResults.indicator || 'N/A'}</p>
-                            </div>
-                            <div>
-                              <p className="text-xs text-gray-500 uppercase tracking-widest mb-1">CVSS评分</p>
-                              <p className="text-sm font-bold text-white">{otxResults.base_score || 'N/A'}</p>
-                            </div>
-                            <div>
-                              <p className="text-xs text-gray-500 uppercase tracking-widest mb-1">发布日期</p>
-                              <p className="text-sm font-bold text-white">{otxResults.published || 'N/A'}</p>
-                            </div>
-                            <div>
-                              <p className="text-xs text-gray-500 uppercase tracking-widest mb-1">威胁等级</p>
-                              <p className="text-sm font-bold text-white">{otxResults.pulse_info?.count > 0 ? '高' : '中'}</p>
-                            </div>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                    
-                    {/* DNS反查（被动DNS） - IP和域名查询都可能有 */}
-                    {(activeSearchType === 'ip' || activeSearchType === 'domain') && otxResults.passive_dns && otxResults.passive_dns.length > 0 && (
-                      <div className="bg-[#25252e] rounded-lg p-6">
-                        <h3 className="text-lg font-bold text-white mb-4">被动DNS记录</h3>
-                        <div className="overflow-x-auto">
-                          <table className="w-full text-left">
-                            <thead>
-                              <tr className="border-b border-white/10">
-                                <th className="pb-3 text-xs font-bold text-gray-500 uppercase tracking-wider">域名</th>
-                                <th className="pb-3 text-xs font-bold text-gray-500 uppercase tracking-wider">类型</th>
-                                <th className="pb-3 text-xs font-bold text-gray-500 uppercase tracking-wider">首次出现</th>
-                                <th className="pb-3 text-xs font-bold text-gray-500 uppercase tracking-wider">最后出现</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {otxResults.passive_dns.map((record: any, index: number) => (
-                                <tr key={index} className="border-b border-white/5 hover:bg-white/5">
-                                  <td className="py-3 text-sm text-white">{record.hostname}</td>
-                                  <td className="py-3 text-sm text-white">{record.type}</td>
-                                  <td className="py-3 text-sm text-white">{record.first}</td>
-                                  <td className="py-3 text-sm text-white">{record.last}</td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                      </div>
-                    )}
-                    
-                    {/* 恶意样本 - IP和域名查询都可能有 */}
-                    {(activeSearchType === 'ip' || activeSearchType === 'domain') && otxResults.malware && otxResults.malware.length > 0 && (
-                      <div className="bg-[#25252e] rounded-lg p-6">
-                        <h3 className="text-lg font-bold text-white mb-4">关联恶意样本</h3>
-                        <div className="overflow-x-auto">
-                          <table className="w-full text-left">
-                            <thead>
-                              <tr className="border-b border-white/10">
-                                <th className="pb-3 text-xs font-bold text-gray-500 uppercase tracking-wider">家族</th>
-                                <th className="pb-3 text-xs font-bold text-gray-500 uppercase tracking-wider">名称</th>
-                                <th className="pb-3 text-xs font-bold text-gray-500 uppercase tracking-wider">MD5</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {otxResults.malware.map((record: any, index: number) => (
-                                <tr key={index} className="border-b border-white/5 hover:bg-white/5">
-                                  <td className="py-3 text-sm text-white">{record.family}</td>
-                                  <td className="py-3 text-sm text-white">{record.name}</td>
-                                  <td className="py-3 text-sm text-white">{record.md5}</td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                      </div>
-                    )}
-                    
-                    {/* URL列表 - IP和URL查询都可能有 */}
-                    {(activeSearchType === 'ip' || activeSearchType === 'url') && otxResults.url_list && otxResults.url_list.length > 0 && (
-                      <div className="bg-[#25252e] rounded-lg p-6">
-                        <h3 className="text-lg font-bold text-white mb-4">关联URL列表</h3>
-                        <div className="overflow-x-auto">
-                          <table className="w-full text-left">
-                            <thead>
-                              <tr className="border-b border-white/10">
-                                <th className="pb-3 text-xs font-bold text-gray-500 uppercase tracking-wider">URL</th>
-                                <th className="pb-3 text-xs font-bold text-gray-500 uppercase tracking-wider">域名</th>
-                                <th className="pb-3 text-xs font-bold text-gray-500 uppercase tracking-wider">路径</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {otxResults.url_list.map((record: any, index: number) => (
-                                <tr key={index} className="border-b border-white/5 hover:bg-white/5">
-                                  <td className="py-3 text-sm text-white break-all">{record.url}</td>
-                                  <td className="py-3 text-sm text-white">{record.domain}</td>
-                                  <td className="py-3 text-sm text-white">{record.path}</td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                      </div>
-                    )}
-                    
-                    {/* WHOIS信息 - 域名查询特有 */}
-                    {activeSearchType === 'domain' && otxResults.whois && (
-                      <div className="bg-[#25252e] rounded-lg p-6">
-                        <h3 className="text-lg font-bold text-white mb-4">WHOIS信息</h3>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                          <div>
-                            <p className="text-xs text-gray-500 uppercase tracking-widest mb-1">注册商</p>
-                            <p className="text-sm font-bold text-white">{otxResults.whois.registrar || 'N/A'}</p>
-                          </div>
-                          <div>
-                            <p className="text-xs text-gray-500 uppercase tracking-widest mb-1">注册日期</p>
-                            <p className="text-sm font-bold text-white">{otxResults.whois.creation_date || 'N/A'}</p>
-                          </div>
-                          <div>
-                            <p className="text-xs text-gray-500 uppercase tracking-widest mb-1">到期日期</p>
-                            <p className="text-sm font-bold text-white">{otxResults.whois.expiration_date || 'N/A'}</p>
-                          </div>
-                          <div>
-                            <p className="text-xs text-gray-500 uppercase tracking-widest mb-1">更新日期</p>
-                            <p className="text-sm font-bold text-white">{otxResults.whois.updated_date || 'N/A'}</p>
-                          </div>
-                          <div className="md:col-span-2">
-                            <p className="text-xs text-gray-500 uppercase tracking-widest mb-1">名称服务器</p>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mt-2">
-                              {(otxResults.whois.name_servers || []).map((ns: string, index: number) => (
-                                <p key={index} className="text-sm font-bold text-white bg-white/5 p-2 rounded">{ns}</p>
-                              ))}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                    
-                    {/* CVE详情 - CVE查询特有 */}
-                    {activeSearchType === 'cve' && otxResults.description && (
-                      <div className="bg-[#25252e] rounded-lg p-6">
-                        <h3 className="text-lg font-bold text-white mb-4">漏洞描述</h3>
-                        <div className="prose prose-invert max-w-none">
-                          <p className="text-sm text-gray-300 whitespace-pre-wrap">{otxResults.description}</p>
-                        </div>
-                      </div>
-                    )}
-                    
-                    {/* 相关威胁情报 - CVE查询特有 */}
-                    {activeSearchType === 'cve' && otxResults.top_n_pulses && otxResults.top_n_pulses.length > 0 && (
-                      <div className="bg-[#25252e] rounded-lg p-6">
-                        <h3 className="text-lg font-bold text-white mb-4">相关威胁情报</h3>
-                        <div className="space-y-4">
-                          {otxResults.top_n_pulses.map((pulse: any, index: number) => (
-                            <div key={index} className="bg-white/5 p-4 rounded-lg">
-                              <h4 className="text-sm font-bold text-white">{pulse.name}</h4>
-                              <p className="text-xs text-gray-400 mt-1">{pulse.description.substring(0, 150)}...</p>
-                              <p className="text-xs text-gray-500 mt-2">{pulse.author_name} • {new Date(pulse.modified).toLocaleDateString()}</p>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
-        
         {/* 原始搜索结果 */}
-        {!isDnsPage && showResults && results && (
+        {showResults && (
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 w-full">
-            {/* 页签导航 */}
-            <div className="flex overflow-x-auto pb-4 mb-10 gap-2 w-full scrollbar-hide">
-              {tabs.map((tab) => (
-                <button
-                  key={tab.name}
-                  onClick={() => setActiveTab(tab.name)}
-                  className={cn(
-                    "flex items-center gap-3 px-6 py-3 rounded-2xl font-bold transition-all whitespace-nowrap",
-                    activeTab === tab.name
-                      ? "bg-accent text-white shadow-lg"
-                      : "bg-white/5 text-gray-500 hover:bg-white/10 hover:text-gray-300"
-                  )}
-                >
-                  <tab.icon className="w-5 h-5" />
-                  <span>{tab.name}</span>
-                  {tab.count > 0 && (
-                    <span className="px-3 py-1 bg-white/10 rounded-full text-xs font-bold">
-                      {tab.count}
-                    </span>
-                  )}
-                </button>
-              ))}
-            </div>
-
-            <AnimatePresence mode="wait">
-              <motion.div 
-                key={activeTab}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -10 }}
-                transition={{ duration: 0.3 }}
-              >
-                {/* 结果内容区域 */}
-                {activeTab === '报告' && results ? (
-                  <div className="space-y-8">
-                    {/* 详细卡片 */}
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                      <DetailCard 
-                        title="员工" 
-                        icon={User} 
-                        data={results.summary.employees} 
-                        colorClass="text-purple-400"
-                        onClick={() => setActiveTab('员工')}
-                      />
-                      <DetailCard 
-                        title="第三方" 
-                        icon={Briefcase} 
-                        data={results.summary.third_parties} 
-                        colorClass="text-blue-400"
-                        onClick={() => setActiveTab('第三方')}
-                      />
-                      <DetailCard 
-                        title="客户" 
-                        icon={Users} 
-                        data={results.summary.customers} 
-                        colorClass="text-emerald-400"
-                        onClick={() => setActiveTab('客户')}
-                      />
-                    </div>
-                    
-                    {/* 筛选区域 */}
-                    <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                      <div className="flex items-center gap-4">
-                        <button
-                          onClick={() => setIsFilterOpen(!isFilterOpen)}
-                          className="flex items-center gap-2 px-4 py-2 rounded-full bg-white/5 text-gray-400 hover:bg-white/10 transition-colors"
-                        >
-                          <span className="text-sm font-bold">筛选</span>
-                          <ChevronDown className={`w-4 h-4 transition-transform duration-300 ${isFilterOpen ? 'rotate-180' : ''}`} />
-                        </button>
+            {/* 错误提示 */}
+            {error && (
+              <div className="mb-8 bg-red-500/10 border border-red-500/30 rounded-2xl p-6">
+                <div className="flex items-center gap-4">
+                  <div className="bg-red-500/20 p-3 rounded-full">
+                    <Search className="w-6 h-6 text-red-400" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-bold text-red-400 mb-2">搜索失败</h3>
+                    <p className="text-gray-400">{error}</p>
+                    <button 
+                      onClick={() => setError(null)} 
+                      className="mt-4 text-sm font-bold text-red-400 hover:text-red-300 transition-colors"
+                    >
+                      关闭
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+            
+            {/* 正常搜索结果 */}
+            {!error && results && (
+              <>
+                <AnimatePresence mode="wait">
+                  <motion.div 
+                    key="results-list"
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    transition={{ duration: 0.3 }}
+                  >
+                    <div className="space-y-6">
+                      {/* 筛选区域 */}
+                      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                        <div className="flex items-center gap-4">
+                          <button
+                            onClick={() => setIsFilterOpen(!isFilterOpen)}
+                            className="flex items-center gap-2 px-4 py-2 rounded-full bg-white/5 text-gray-400 hover:bg-white/10 transition-colors"
+                          >
+                            <span className="text-sm font-bold">筛选</span>
+                            <ChevronDown className={`w-4 h-4 transition-transform duration-300 ${isFilterOpen ? 'rotate-180' : ''}`} />
+                          </button>
+                        </div>
+                        
+                        <div className="relative w-full md:w-64">
+                          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 w-4 h-4" />
+                          <input
+                            type="text"
+                            placeholder="搜索结果..."
+                            className="w-full pl-10 pr-4 py-2 rounded-full bg-white/5 text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-accent/50"
+                            value={innerSearchQuery}
+                            onChange={(e) => setInnerSearchQuery(e.target.value)}
+                          />
+                        </div>
                       </div>
                       
-                      <div className="relative w-full md:w-64">
-                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 w-4 h-4" />
-                        <input
-                          type="text"
-                          placeholder="搜索结果..."
-                          className="w-full pl-10 pr-4 py-2 rounded-full bg-white/5 text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-accent/50"
-                          value={innerSearchQuery}
-                          onChange={(e) => setInnerSearchQuery(e.target.value)}
-                        />
-                      </div>
-                    </div>
-                    
-                    {/* 筛选选项 */}
-                    <AnimatePresence>
-                      {isFilterOpen && (
-                        <motion.div
-                          initial={{ opacity: 0, height: 0 }}
-                          animate={{ opacity: 1, height: 'auto' }}
-                          exit={{ opacity: 0, height: 0 }}
-                          transition={{ duration: 0.3 }}
-                          className="overflow-hidden"
-                        >
-                          <div className="bg-white/5 rounded-2xl p-6">
-                            <h3 className="text-lg font-bold text-white mb-4">筛选选项</h3>
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                              <div>
-                                <p className="text-sm font-bold text-gray-400 mb-3">类型</p>
-                                <div className="flex flex-col gap-2">
-                                  {[
-                                    { label: '全部', value: 'All' },
-                                    { label: '邮箱', value: 'Email' },
-                                    { label: '用户名', value: 'Username' }
-                                  ].map(({ label, value }) => (
-                                    <button
-                                      key={value}
-                                      onClick={() => setFilterType(value as any)}
-                                      className={cn(
-                                        "flex items-center gap-2 px-4 py-2 rounded-full text-sm font-bold transition-colors",
-                                        filterType === value
-                                          ? "bg-accent text-white"
-                                          : "bg-white/5 text-gray-400 hover:bg-white/10"
-                                      )}
-                                    >
-                                      <span>{label}</span>
-                                    </button>
-                                  ))}
+                      {/* 筛选选项 */}
+                      <AnimatePresence>
+                        {isFilterOpen && (
+                          <motion.div
+                            initial={{ opacity: 0, height: 0 }}
+                            animate={{ opacity: 1, height: 'auto' }}
+                            exit={{ opacity: 0, height: 0 }}
+                            transition={{ duration: 0.3 }}
+                            className="overflow-hidden"
+                          >
+                            <div className="bg-white/5 rounded-2xl p-6">
+                              <h3 className="text-lg font-bold text-white mb-4">筛选选项</h3>
+                              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                <div>
+                                  <p className="text-sm font-bold text-gray-400 mb-3">类型</p>
+                                  <div className="flex flex-col gap-2">
+                                    {[
+                                      { label: '全部', value: 'All' },
+                                      { label: '邮箱', value: 'Email' },
+                                      { label: '用户名', value: 'Username' }
+                                    ].map(({ label, value }) => (
+                                      <button
+                                        key={value}
+                                        onClick={() => setFilterType(value as any)}
+                                        className={cn(
+                                          "flex items-center gap-2 px-4 py-2 rounded-full text-sm font-bold transition-colors",
+                                          filterType === value
+                                            ? "bg-accent text-white"
+                                            : "bg-white/5 text-gray-400 hover:bg-white/10"
+                                        )}
+                                      >
+                                        <span>{label}</span>
+                                      </button>
+                                    ))}
+                                  </div>
                                 </div>
                               </div>
                             </div>
-                          </div>
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
-                  </div>
-                ) : (
-                  <div className="space-y-6">
-                    {/* 筛选区域 */}
-                    <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                      <div className="flex items-center gap-4">
-                        <button
-                          onClick={() => setIsFilterOpen(!isFilterOpen)}
-                          className="flex items-center gap-2 px-4 py-2 rounded-full bg-white/5 text-gray-400 hover:bg-white/10 transition-colors"
-                        >
-                          <span className="text-sm font-bold">筛选</span>
-                          <ChevronDown className={`w-4 h-4 transition-transform duration-300 ${isFilterOpen ? 'rotate-180' : ''}`} />
-                        </button>
-                      </div>
-                      
-                      <div className="relative w-full md:w-64">
-                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 w-4 h-4" />
-                        <input
-                          type="text"
-                          placeholder="搜索结果..."
-                          className="w-full pl-10 pr-4 py-2 rounded-full bg-white/5 text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-accent/50"
-                          value={innerSearchQuery}
-                          onChange={(e) => setInnerSearchQuery(e.target.value)}
-                        />
-                      </div>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
                     </div>
                     
-                    {/* 筛选选项 */}
-                    <AnimatePresence>
-                      {isFilterOpen && (
-                        <motion.div
-                          initial={{ opacity: 0, height: 0 }}
-                          animate={{ opacity: 1, height: 'auto' }}
-                          exit={{ opacity: 0, height: 0 }}
-                          transition={{ duration: 0.3 }}
-                          className="overflow-hidden"
-                        >
-                          <div className="bg-white/5 rounded-2xl p-6">
-                            <h3 className="text-lg font-bold text-white mb-4">筛选选项</h3>
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                              <div>
-                                <p className="text-sm font-bold text-gray-400 mb-3">类型</p>
-                                <div className="flex flex-col gap-2">
-                                  {[
-                                    { label: '全部', value: 'All' },
-                                    { label: '邮箱', value: 'Email' },
-                                    { label: '用户名', value: 'Username' }
-                                  ].map(({ label, value }) => (
-                                    <button
-                                      key={value}
-                                      onClick={() => setFilterType(value as any)}
-                                      className={cn(
-                                        "flex items-center gap-2 px-4 py-2 rounded-full text-sm font-bold transition-colors",
-                                        filterType === value
-                                          ? "bg-accent text-white"
-                                          : "bg-white/5 text-gray-400 hover:bg-white/10"
-                                      )}
-                                    >
-                                      <span>{label}</span>
-                                    </button>
-                                  ))}
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
-                  </div>
-                )}
-                
-                {/* 结果表格 */}
-                <div className="bg-[#1a1a20] border border-white/5 rounded-xl overflow-hidden shadow-2xl">
-                  <div className="p-6">
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-left">
-                        <thead>
-                          <tr className="border-b border-white/10">
-                            <th className="pb-5 text-xs font-bold text-gray-500 uppercase tracking-wider">#</th>
+                    {/* 结果表格 */}
+                    <div className="bg-[#1a1a20] border border-white/5 rounded-xl overflow-hidden shadow-2xl mt-6">
+                      <div className="p-6">
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-left">
+                            <thead>
+                              <tr className="border-b border-white/10">
+                                <th className="pb-5 text-xs font-bold text-gray-500 uppercase tracking-wider">URL</th>
+                            <th className="pb-5 text-xs font-bold text-gray-500 uppercase tracking-wider">类型</th>
                             <th className="pb-5 text-xs font-bold text-gray-500 uppercase tracking-wider">邮箱/用户名</th>
                             <th className="pb-5 text-xs font-bold text-gray-500 uppercase tracking-wider">密码</th>
-                            {activeTab === 'URLs' && <th className="pb-5 text-xs font-bold text-gray-500 uppercase tracking-wider">泄露次数</th>}
-                            {activeTab === '子域名' && <th className="pb-5 text-xs font-bold text-gray-500 uppercase tracking-wider">子域名</th>}
                             <th className="pb-5 text-xs font-bold text-gray-500 uppercase tracking-wider">泄露日期</th>
                           </tr>
                         </thead>
                         <tbody>
                           {filteredCredentials.map((cred, index) => (
                             <tr key={`${cred.id || index}-${cred.website}-${cred.email}`} className="border-b border-white/5 hover:bg-white/5">
-                              <td className="py-4 text-sm text-white">{index + 1 + currentPage * pageSize}</td>
+                              <td className="py-4 text-sm text-white font-mono break-all max-w-[200px]">{cred.website || 'N/A'}</td>
+                              <td className="py-4">
+                                <span className={cn(
+                                  "px-2 py-1 rounded text-xs font-bold border",
+                                  cred.type === 'Email' ? "bg-purple-500/10 text-purple-400 border-purple-500/20" :
+                                  cred.type === 'Username' ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" :
+                                  "bg-gray-500/10 text-gray-400 border-gray-500/20"
+                                )}>
+                                  {cred.type || 'Unknown'}
+                                </span>
+                              </td>
                               <td className="py-4">
                                 <div className="flex items-center gap-2">
-                                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-accent to-accent/70 flex items-center justify-center">
+                                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-accent to-accent/70 flex items-center justify-center flex-shrink-0">
                                     <UserCheck className="w-4 h-4 text-white" />
                                   </div>
                                   <div>
-                                    <p className="text-sm font-bold text-white">{cred.email}</p>
-                                    <p className="text-xs text-gray-500">{cred.website || 'N/A'}</p>
+                                    <p className="text-sm font-bold text-white">{cred.email || cred.username}</p>
+                                    {cred.email && cred.username && cred.username !== cred.email && cred.username !== 'N/A' && (
+                                      <p className="text-xs text-gray-500">{cred.username}</p>
+                                    )}
                                   </div>
                                 </div>
                               </td>
                               <td className="py-4">
-                                <div className="flex items-center gap-2">
-                                  {showPasswords[cred.id || index] ? (
-                                    <>
+                                    <div className="flex items-center gap-2">
                                       <span className="text-sm font-mono text-red-400">{cred.password_plaintext}</span>
-                                      <button onClick={() => togglePassword(cred.id || index)} className="text-gray-500 hover:text-gray-300 transition-colors">
-                                        <EyeOff className="w-4 h-4" />
-                                      </button>
-                                    </>
-                                  ) : (
-                                    <>
-                                      <span className="text-sm font-mono text-gray-600">••••••••</span>
-                                      <button onClick={() => togglePassword(cred.id || index)} className="text-gray-500 hover:text-gray-300 transition-colors">
-                                        <Eye className="w-4 h-4" />
-                                      </button>
-                                    </>
-                                  )}
-                                  <span className={cn(
-                                    "px-2 py-0.5 rounded text-[10px] font-bold",
-                                    cred.strength === 'Strong' ? "bg-emerald-500/20 text-emerald-400"
-                                    : cred.strength === 'Medium' ? "bg-blue-500/20 text-blue-400"
-                                    : cred.strength === 'Weak' ? "bg-orange-500/20 text-orange-400"
-                                    : "bg-red-500/20 text-red-400"
-                                  )}>
-                                    {cred.strength}
-                                  </span>
-                                </div>
-                              </td>
-                              {activeTab === 'URLs' && <td className="py-4 text-sm text-white">{cred.count || 0}</td>}
-                              {activeTab === '子域名' && <td className="py-4 text-sm text-white">{cred.website || 'N/A'}</td>}
-                              <td className="py-4 text-sm text-gray-400">{formatDate(cred.leaked_at)}</td>
-                            </tr>
-                          ))}
-                          {filteredCredentials.length === 0 && (
-                            <tr>
-                              <td colSpan={activeTab === 'URLs' || activeTab === '子域名' ? 5 : 4} className="py-12 text-center">
-                                <div className="flex flex-col items-center gap-4">
-                                  <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center">
-                                    <Search className="w-8 h-8 text-gray-500" />
-                                  </div>
-                                  <p className="text-lg font-bold text-gray-500">暂无数据</p>
-                                  <p className="text-sm text-gray-600 max-w-md">未找到与搜索条件匹配的结果。请尝试调整筛选条件或使用其他搜索词。</p>
-                                </div>
-                              </td>
-                            </tr>
-                          )}
-                        </tbody>
-                      </table>
+                                      <span className={cn(
+                                        "px-2 py-0.5 rounded text-[10px] font-bold",
+                                        cred.strength === 'Strong' ? "bg-emerald-500/20 text-emerald-400"
+                                        : cred.strength === 'Medium' ? "bg-blue-500/20 text-blue-400"
+                                        : cred.strength === 'Weak' ? "bg-orange-500/20 text-orange-400"
+                                        : "bg-red-500/20 text-red-400"
+                                      )}>
+                                        {cred.strength}
+                                      </span>
+                                    </div>
+                                  </td>
+                                  <td className="py-4 text-sm text-gray-400">{formatDate(cred.leaked_at)}</td>
+                                </tr>
+                              ))}
+                              {filteredCredentials.length === 0 && (
+                                 <tr>
+                                   <td colSpan={5} className="py-12 text-center">
+                                     <div className="flex flex-col items-center gap-4">
+                                      <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center">
+                                        <Search className="w-8 h-8 text-gray-500" />
+                                      </div>
+                                      <p className="text-lg font-bold text-gray-500">暂无数据</p>
+                                      <p className="text-sm text-gray-600 max-w-md">未找到与搜索条件匹配的结果。请尝试调整筛选条件或使用其他搜索词。</p>
+                                    </div>
+                                  </td>
+                                </tr>
+                              )}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                </div>
-              </motion.div>
-            </AnimatePresence>
+                  </motion.div>
+                </AnimatePresence>
+              </>
+            )}
+
           </div>
         )}
       </div>
