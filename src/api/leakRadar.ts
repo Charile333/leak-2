@@ -637,9 +637,6 @@ class LeakRadarAPI {
     const domain = this.sanitizeDomain(domainInput);
     const endpoint = `/search/domain/${domain}/report`;
     
-    // 添加调试日志，输出完整URL
-    const formattedEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
-    
     // 尝试使用request方法发送请求，获取更详细的错误信息
     try {
       return this.requestBlob(endpoint, {
