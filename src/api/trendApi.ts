@@ -41,7 +41,6 @@ export const trendApi = {
       const response = await trendAxios.get<TrendArticle[]>('/api/trends', { params });
       return response.data;
     } catch (error: any) {
-      console.error('[Trend API] Failed to fetch trends:', error);
       // 如果后端数据库还未生成，可能会报错，返回空数组兜底
       return [];
     }
@@ -55,7 +54,6 @@ export const trendApi = {
       });
       return response.data;
     } catch (error: any) {
-      console.error('[Trend API] Failed to fetch analysis:', error);
       return [];
     }
   },
@@ -68,7 +66,6 @@ export const trendApi = {
       await trendAxios.get('/api/trends', { params: { limit: 1 } });
       return true;
     } catch (error) {
-      console.warn('[Trend API] Health check failed:', error);
       return false;
     }
   }

@@ -141,9 +141,6 @@ class LeakRadarAPI {
     if (apiKey) {
       headers['Authorization'] = `Bearer ${apiKey}`;
       headers['X-API-Key'] = apiKey;
-      // console.log(`[LeakRadar API] Using API Key: ${apiKey.substring(0, 20)}...${apiKey.substring(apiKey.length - 10)}`);
-    } else {
-      console.warn('[LeakRadar API] No API Key found!');
     }
 
     if (options.headers) {
@@ -159,24 +156,14 @@ class LeakRadarAPI {
       const formattedEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
       const url = `${BASE_URL}${API_PREFIX}${formattedEndpoint}`;
       
-      // console.log(`[LeakRadar API] Sending request: ${url}`);
-      // console.log(`[LeakRadar API] Request Method: ${options.method || 'GET'}`);
-      // console.log(`[LeakRadar API] Request Headers:`, JSON.stringify(headers, null, 2));
-      if (options.body) {
-        // console.log(`[LeakRadar API] Request Body:`, options.body);
-      }
-      
       const response = await fetch(url, {
         ...options,
         headers,
         credentials: 'same-origin', // 仅在同域请求中包含凭证，解决CORS问题
       });
 
-      console.log(`[LeakRadar API] Received response: ${response.status} for ${url}`);
-
       // 获取原始响应文本，用于调试和错误处理
       const responseText = await response.text();
-      console.log(`[LeakRadar API] Response Text:`, responseText);
       
       // 检查响应是否为HTML（通常是错误或重定向）
       if (responseText.startsWith('<!DOCTYPE') || responseText.startsWith('<html')) {
@@ -194,19 +181,13 @@ class LeakRadarAPI {
           : typeof jsonError === 'string' 
             ? jsonError 
             : '未知错误';
-        throw new Error(`JSON解析失败：${errorMsg}。响应内容：${responseText}`);
+        throw new Error(`JSON解析失败：${errorMsg}`);
       }
 
       if (!response.ok) {
         // 处理非2xx响应
         let errorMsg = `请求失败 (${response.status})`;
         if (typeof responseData === 'object' && responseData !== null) {
-          // 如果是401错误，不要打印error，改为warn，避免控制台报错干扰
-          if (response.status === 401) {
-             console.warn(`[LeakRadar API] Authentication failed for ${endpoint}:`, responseData);
-          } else {
-             console.error(`[LeakRadar API] Error Detail for ${endpoint}:`, responseData);
-          }
           // 使用响应中的错误信息，如果有的话
           if (responseData.detail) {
             errorMsg = `${errorMsg}: ${responseData.detail}`;
@@ -247,12 +228,9 @@ class LeakRadarAPI {
       
       // 处理401认证错误 - 抛出错误，不再使用模拟数据
       if (msg.includes('401') || msg.includes('Authentication is required')) {
-        console.warn('[LeakRadar API] Authentication failed. Please check your API key.');
         throw new Error('API认证失败 (401)。请检查您的API密钥是否配置正确。');
       }
 
-      console.error(`[LeakRadar API] Request to ${endpoint} error:`, msg);
-      
       // 更友好的错误信息处理
       if (msg.includes('Failed to fetch') || msg.includes('NetworkError')) {
         throw new Error('无法连接到服务器，请检查网络连接或服务器状态');
@@ -459,7 +437,6 @@ class LeakRadarAPI {
 
       return response.blob();
     } catch (error: any) {
-      console.error(`[LeakRadar API] Blob Request to ${endpoint} error:`, error.message);
       throw error;
     }
   }
@@ -529,8 +506,6 @@ class LeakRadarAPI {
         body: JSON.stringify(requestBody)
       });
     } catch (error: any) {
-      console.error(`[LeakRadar API] Search by email failed:`, error.message);
-      
       // 返回模拟数据作为降级方案
       return {
         success: false,
@@ -589,7 +564,6 @@ class LeakRadarAPI {
       ? `/search/domain/${sanitized}`
       : `/search/domain/${sanitized}/${category}`;
     
-    console.log(`[Debug] Frontend CSV Export requesting path: ${path}`);
     // 限制单次请求最多1000条（根据API实际限制调整）
     return this.request<LeakRadarSearchResult>(`${path}?page=1&page_size=1000`);
   }
@@ -665,8 +639,6 @@ class LeakRadarAPI {
     
     // 添加调试日志，输出完整URL
     const formattedEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
-    const fullUrl = `${BASE_URL}${API_PREFIX}${formattedEndpoint}`;
-    console.log(`[Debug] 生成PDF请求URL: ${fullUrl}`);
     
     // 尝试使用request方法发送请求，获取更详细的错误信息
     try {
@@ -684,14 +656,6 @@ class LeakRadarAPI {
         }),
       });
     } catch (error: any) {
-      console.error(`[Debug] PDF生成失败详情:`, error);
-      console.error(`[Debug] 请求URL: ${fullUrl}`);
-      console.error(`[Debug] 请求参数:`, JSON.stringify({
-        format: 'pdf',
-        language: options?.language || 'zh-CN',
-        logo_url: options?.logoUrl,
-        custom_title: options?.title
-      }));
       throw error;
     }
   }
