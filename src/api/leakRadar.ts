@@ -267,139 +267,140 @@ class LeakRadarAPI {
     }
   }
 
-  private async getMockResponse<T>(endpoint: string, options: RequestInit): Promise<T> {
-    console.log(`[LeakRadar API] Generating mock response for ${endpoint}`);
-    await new Promise(resolve => setTimeout(resolve, 800)); // Simulate network delay
+  // Mock response method is now commented out as it's no longer used
+  // private async getMockResponse<T>(endpoint: string, options: RequestInit): Promise<T> {
+  //   console.log(`[LeakRadar API] Generating mock response for ${endpoint}`);
+  //   await new Promise(resolve => setTimeout(resolve, 800)); // Simulate network delay
 
-    // Handle /search/email
-    if (endpoint.includes('/search/email')) {
-      const body = options.body ? JSON.parse(options.body as string) : {};
-      const email = body.email || 'mock@example.com';
-      const isEmailInput = email.includes('@');
-      
-      // 生成确定的伪随机数，让同一个搜索词每次返回相同结果
-      const seed = email.split('').reduce((acc: number, char: string) => acc + char.charCodeAt(0), 0);
-      const count = (seed % 20) + 5; // 5-25 results
+  //   // Handle /search/email
+  //   if (endpoint.includes('/search/email')) {
+  //     const body = options.body ? JSON.parse(options.body as string) : {};
+  //     const email = body.email || 'mock@example.com';
+  //     const isEmailInput = email.includes('@');
+  //     
+  //     // 生成确定的伪随机数，让同一个搜索词每次返回相同结果
+  //     const seed = email.split('').reduce((acc: number, char: string) => acc + char.charCodeAt(0), 0);
+  //     const count = (seed % 20) + 5; // 5-25 results
 
-      return {
-        success: true,
-        items: Array.from({ length: count }).map((_, i) => {
-          const sites = ['linkedin.com', 'adobe.com', 'canva.com', 'dropbox.com', 'yahoo.com', 'myspace.com', 'twitter.com', 'vk.com'];
-          const site = sites[(seed + i) % sites.length];
-          return {
-            id: `mock-${seed}-${i}`,
-            url: `https://${site}`,
-            username: isEmailInput ? email.split('@')[0] : email,
-            email: isEmailInput ? email : `${email}@${site}`,
-            is_email: isEmailInput,
-            password_plaintext: `Pass${(seed + i).toString(16)}word!`, // Ensure password exists
-            password_hash: '5f4dcc3b5aa765d61d8327deb882cf99',
-            hash_type: 'MD5',
-            website: site,
-            source: `Collection #${(i % 5) + 1}`,
-            leaked_at: new Date(Date.now() - ((seed * i * 10000000) % 100000000000)).toISOString(),
-            fields: ['email', 'password', 'username', 'website']
-          };
-        }),
-        total: count,
-        page: 1,
-        page_size: 100,
-        blacklisted_value: null
-      } as unknown as T;
-    }
+  //     return {
+  //       success: true,
+  //       items: Array.from({ length: count }).map((_, i) => {
+  //         const sites = ['linkedin.com', 'adobe.com', 'canva.com', 'dropbox.com', 'yahoo.com', 'myspace.com', 'twitter.com', 'vk.com'];
+  //         const site = sites[(seed + i) % sites.length];
+  //         return {
+  //           id: `mock-${seed}-${i}`,
+  //           url: `https://${site}`,
+  //           username: isEmailInput ? email.split('@')[0] : email,
+  //           email: isEmailInput ? email : `${email}@${site}`,
+  //           is_email: isEmailInput,
+  //           password_plaintext: `Pass${(seed + i).toString(16)}word!`, // Ensure password exists
+  //           password_hash: '5f4dcc3b5aa765d61d8327deb882cf99',
+  //           hash_type: 'MD5',
+  //           website: site,
+  //           source: `Collection #${(i % 5) + 1}`,
+  //           leaked_at: new Date(Date.now() - ((seed * i * 10000000) % 100000000000)).toISOString(),
+  //           fields: ['email', 'password', 'username', 'website']
+  //         };
+  //       }),
+  //       total: count,
+  //       page: 1,
+  //       page_size: 100,
+  //       blacklisted_value: null
+  //     } as unknown as T;
+  //   }
 
-    // Handle /profile
-    if (endpoint === '/profile') {
-      return {
-        success: true,
-        user: {
-          username: 'Demo User',
-          email: 'demo@example.com',
-          plan: 'Enterprise',
-          expires_at: '2099-12-31',
-          quota: {
-            total: 10000,
-            used: 123,
-            remaining: 9877,
-            reset_at: '2099-12-31'
-          }
-        }
-      } as unknown as T;
-    }
-    
-    // Handle /stats
-    if (endpoint === '/stats') {
-        return {
-            leaks: { 
-                total: 12345678, 
-                today: 1234, 
-                per_week: [
-                    { week: '2023-W01', count: 100 }, 
-                    { week: '2023-W02', count: 200 }
-                ], 
-                this_week: 5000, 
-                this_month: 20000 
-            },
-            raw_lines: { 
-                total: 98765432, 
-                today: 5678, 
-                per_week: [], 
-                this_week: 10000, 
-                this_month: 40000 
-            }
-        } as unknown as T;
-    }
+  //   // Handle /profile
+  //   if (endpoint === '/profile') {
+  //     return {
+  //       success: true,
+  //       user: {
+  //         username: 'Demo User',
+  //         email: 'demo@example.com',
+  //         plan: 'Enterprise',
+  //         expires_at: '2099-12-31',
+  //         quota: {
+  //           total: 10000,
+  //           used: 123,
+  //           remaining: 9877,
+  //           reset_at: '2099-12-31'
+  //         }
+  //       }
+  //     } as unknown as T;
+  //   }
+  //   
+  //   // Handle /stats
+  //   if (endpoint === '/stats') {
+  //       return {
+  //           leaks: { 
+  //               total: 12345678, 
+  //               today: 1234, 
+  //               per_week: [
+  //                   { week: '2023-W01', count: 100 }, 
+  //                   { week: '2023-W02', count: 200 }
+  //               ], 
+  //               this_week: 5000, 
+  //               this_month: 20000 
+  //           },
+  //           raw_lines: { 
+  //               total: 98765432, 
+  //               today: 5678, 
+  //               per_week: [], 
+  //               this_week: 10000, 
+  //               this_month: 40000 
+  //           }
+  //       } as unknown as T;
+  //   }
 
-    // Handle /search/domain/*
-    if (endpoint.includes('/search/domain')) {
-        return {
-            success: true,
-            items: Array.from({ length: 10 }).map((_, i) => ({
-                id: `mock-domain-${i}`,
-                email: `user${i}@example.com`,
-                username: `user${i}`,
-                password_plaintext: 'password123',
-                source: 'Mock Breach',
-                leaked_at: new Date().toISOString()
-            })),
-            total: 100,
-            employees_compromised: 42,
-            third_parties_compromised: 15,
-            customers_compromised: 120,
-            employee_passwords: {
-                total_pass: 42,
-                too_weak: { qty: 10, perc: 23 },
-                weak: { qty: 10, perc: 23 },
-                medium: { qty: 10, perc: 23 },
-                strong: { qty: 12, perc: 29 }
-            },
-            third_parties_passwords: {
-                total_pass: 15,
-                too_weak: { qty: 5, perc: 33 },
-                weak: { qty: 5, perc: 33 },
-                medium: { qty: 5, perc: 33 },
-                strong: { qty: 0, perc: 0 }
-            },
-            customer_passwords: {
-                total_pass: 120,
-                too_weak: { qty: 30, perc: 25 },
-                weak: { qty: 30, perc: 25 },
-                medium: { qty: 30, perc: 25 },
-                strong: { qty: 30, perc: 25 }
-            },
-            blacklisted_value: null
-        } as unknown as T;
-    }
+  //   // Handle /search/domain/*
+  //   if (endpoint.includes('/search/domain')) {
+  //       return {
+  //           success: true,
+  //           items: Array.from({ length: 10 }).map((_, i) => ({
+  //               id: `mock-domain-${i}`,
+  //               email: `user${i}@example.com`,
+  //               username: `user${i}`,
+  //               password_plaintext: 'password123',
+  //               source: 'Mock Breach',
+  //               leaked_at: new Date().toISOString()
+  //           })),
+  //           total: 100,
+  //           employees_compromised: 42,
+  //           third_parties_compromised: 15,
+  //           customers_compromised: 120,
+  //           employee_passwords: {
+  //               total_pass: 42,
+  //               too_weak: { qty: 10, perc: 23 },
+  //               weak: { qty: 10, perc: 23 },
+  //               medium: { qty: 10, perc: 23 },
+  //               strong: { qty: 12, perc: 29 }
+  //           },
+  //           third_parties_passwords: {
+  //               total_pass: 15,
+  //               too_weak: { qty: 5, perc: 33 },
+  //               weak: { qty: 5, perc: 33 },
+  //               medium: { qty: 5, perc: 33 },
+  //               strong: { qty: 0, perc: 0 }
+  //           },
+  //           customer_passwords: {
+  //               total_pass: 120,
+  //               too_weak: { qty: 30, perc: 25 },
+  //               weak: { qty: 30, perc: 25 },
+  //               medium: { qty: 30, perc: 25 },
+  //               strong: { qty: 30, perc: 25 }
+  //           },
+  //           blacklisted_value: null
+  //       } as unknown as T;
+  //   }
 
-    // Default mock response
-    return {
-      success: true,
-      items: [],
-      total: 0,
-      error: 'Mock data for this endpoint is not implemented',
-      blacklisted_value: null
-    } as unknown as T;
-  }
+  //   // Default mock response
+  //   return {
+  //     success: true,
+  //     items: [],
+  //     total: 0,
+  //     error: 'Mock data for this endpoint is not implemented',
+  //     blacklisted_value: null
+  //   } as unknown as T;
+  // }
 
   /**
    * Get user profile and quota information
