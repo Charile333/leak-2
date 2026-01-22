@@ -5,7 +5,8 @@ import {
   MessageSquare, 
   Activity,
   RefreshCw,
-  ExternalLink
+  ExternalLink,
+  Construction
 } from 'lucide-react';
 import { trendApi, type TrendArticle, type AnalysisResult } from '../api/trendApi';
 
@@ -70,6 +71,25 @@ const OpinionAnalysis = () => {
           >
             <RefreshCw size={20} className={loading ? 'animate-spin' : ''} />
           </button>
+        </div>
+      </div>
+
+      {/* 功能开发中横幅 */}
+      <div className="max-w-7xl mx-auto mb-6">
+        <div className="bg-gradient-to-r from-yellow-500/10 to-orange-500/10 border border-yellow-500/20 rounded-xl p-4 flex items-center gap-4 backdrop-blur-sm relative overflow-hidden">
+          <div className="absolute inset-0 bg-yellow-500/5 pattern-diagonal-lines opacity-20" />
+          <div className="p-2 bg-yellow-500/20 rounded-lg z-10">
+            <Construction className="w-6 h-6 text-yellow-500" />
+          </div>
+          <div className="z-10">
+            <h3 className="text-yellow-500 font-semibold mb-1 flex items-center gap-2">
+              功能开发中
+              <span className="px-2 py-0.5 bg-yellow-500/20 text-yellow-300 text-[10px] rounded-full border border-yellow-500/20">BETA</span>
+            </h3>
+            <p className="text-yellow-200/70 text-sm">
+              互联网舆情监测与AI分析模块正在持续迭代升级，部分功能可能受限，当前数据仅供演示参考。
+            </p>
+          </div>
         </div>
       </div>
 
