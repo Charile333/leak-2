@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { 
   Bell,
   History,
@@ -11,32 +10,33 @@ const DomainMonitor = () => {
   //   { id: 498, type: 'Telegram', value: '8464921285:AAEu4W...D2vab8z-wmESRw.OJYPKwew7cq1Y', secondValue: '-5032536833', createdAt: '3 days ago' }
   // ]);
 
-  const [monitoredTargets, setMonitoredTargets] = useState([
-    { 
-      id: 3461, 
-      active: true, 
-      type: 'Domain', 
-      category: 'All', 
-      value: 'Domain.com', 
-      method: 'Telegram',
-      autoUnlock: 'Yes',
-      maxPts: 500,
-      lastSearch: '5 hours ago',
-      createdAt: '3 days ago'
-    }
-  ]);
+  // 以下状态变量暂时注释，因为当前版本未使用
+  // const [monitoredTargets, setMonitoredTargets] = useState([
+  //   { 
+  //     id: 3461, 
+  //     active: true, 
+  //     type: 'Domain', 
+  //     category: 'All', 
+  //     value: 'Domain.com', 
+  //     method: 'Telegram',
+  //     autoUnlock: 'Yes',
+  //     maxPts: 500,
+  //     lastSearch: '5 hours ago',
+  //     createdAt: '3 days ago'
+  //   }
+  // ]);
 
-  const [monitoringRuns] = useState([
-    { 
-      runId: 25267, 
-      sentAt: '2025/12/23 15:23:00', 
-      notifId: 3461, 
-      type: 'domain', 
-      asset: 'Domain.com', 
-      new: 38, 
-      status: 'OK' 
-    }
-  ]);
+  // const [monitoringRuns] = useState([
+  //   { 
+  //     runId: 25267, 
+  //     sentAt: '2025/12/23 15:23:00', 
+  //     notifId: 3461, 
+  //     type: 'domain', 
+  //     asset: 'Domain.com', 
+  //     new: 38, 
+  //     status: 'OK' 
+  //   }
+  // ]);
 
   // 切换监控目标状态（预留功能）
   // const toggleTargetStatus = (id: number) => {

@@ -1,123 +1,17 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { useLocation } from 'react-router-dom';
-import { motion, AnimatePresence, useSpring, useTransform } from 'framer-motion';
-import { 
-  Search, 
-  User,
-  Users,
-  Briefcase,
-  LayoutGrid,
-  Globe,
-  Link as LinkIcon,
+import {
+  Search,
   Loader2,
-  ChevronRight,
   ChevronDown,
-  UserCheck,
-  Eye,
-  EyeOff
+  UserCheck
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import type { LeakedCredential, DomainSearchSummary } from '../services/dataService';
 import { leakRadarApi } from '../api/leakRadar';
 
-const AnimatedNumber = ({ value }: { value: string }) => {
-  const numericValue = parseInt(value.replace(/,/g, '')) || 0;
-  const count = useSpring(0, {
-    mass: 1,
-    stiffness: 100,
-    damping: 30,
-    restDelta: 0.001
-  });
-  const display = useTransform(count, (latest) => 
-    Math.floor(latest).toLocaleString()
-  );
-
-  useEffect(() => {
-    count.set(numericValue);
-  }, [numericValue, count]);
-
-  return <motion.span>{display}</motion.span>;
-};
-
-const DetailCard = ({ title, icon: Icon, data, colorClass, onClick }: { title: string, icon: any, data: any, colorClass: string, onClick?: () => void }) => (
-  <div 
-    onClick={onClick}
-    className={cn(
-      "bg-white/[0.03] border border-white/10 rounded-3xl p-8 hover:bg-white/[0.05] transition-all group",
-      onClick && "cursor-pointer hover:border-accent/30 hover:shadow-[0_0_30px_rgba(168,85,247,0.1)]"
-    )}
-  >
-    <div className="flex items-start justify-between mb-6">
-      <div className="flex items-center gap-4">
-        <div className={cn("group-hover:scale-110 transition-transform", colorClass)}>
-          <Icon className="w-8 h-8" />
-        </div>
-        <div>
-          <h3 className="text-sm font-bold text-white uppercase tracking-wider">{title}</h3>
-          <p className="text-[10px] text-gray-500 mt-1 max-w-[200px] leading-tight">
-            {title === '员工' ? "网站和邮箱域名均匹配搜索域名。" : 
-             title === '第三方' ? "邮箱域名匹配，但网站域名不匹配。" : 
-             "网站域名匹配，但邮箱域名不匹配。"}
-          </p>
-        </div>
-      </div>
-      {onClick && (
-        <div className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center group-hover:bg-accent/20 group-hover:text-accent transition-colors">
-          <ChevronRight className="w-4 h-4" />
-        </div>
-      )}
-    </div>
-    
-    <div className="mb-8">
-      <p className="text-xs font-bold text-gray-500 uppercase tracking-tighter">泄露账户数</p>
-      <p className="text-4xl font-black text-white">{data.count}</p>
-    </div>
-
-    <div>
-      <p className="text-[10px] text-gray-500 mb-3 font-bold uppercase tracking-wider">密码强度分布</p>
-      <StrengthBar strength={data.strength} />
-      
-      <div className="grid grid-cols-4 gap-2 mt-6">
-        {
-          [
-            { label: 'STRONG', val: data.strength.strong || 0, color: 'text-emerald-500' },
-            { label: 'MEDIUM', val: data.strength.medium || 0, color: 'text-blue-500' },
-            { label: 'WEAK', val: data.strength.weak || 0, color: 'text-orange-500' },
-            { label: 'VERY WEAK', val: data.strength.very_weak || 0, color: 'text-red-500' },
-          ].map((item) => {
-            const total = (data.strength.strong || 0) + (data.strength.medium || 0) + (data.strength.weak || 0) + (data.strength.very_weak || 0);
-            const percentage = total > 0 ? ((item.val / total) * 100).toFixed(1) : '0.0';
-            return (
-              <div key={item.label} className="text-center">
-                <p className={cn("text-xs font-black mb-1", item.color)}>{item.val}</p>
-                <p className="text-[9px] text-white font-bold mb-0.5">{percentage} %</p>
-                <p className="text-[8px] text-gray-500 font-bold uppercase whitespace-nowrap">{item.label}</p>
-              </div>
-            );
-          })
-        }
-      </div>
-    </div>
-  </div>
-);
-
-const StrengthBar = ({ strength }: { strength: any }) => {
-  const total = (strength.strong || 0) + (strength.medium || 0) + (strength.weak || 0) + (strength.very_weak || 0);
-  if (total === 0) return <div className="h-2 w-full bg-white/5 rounded-full overflow-hidden" />;
-  
-  const p1 = ((strength.strong || 0) / total) * 100;
-  const p2 = ((strength.medium || 0) / total) * 100;
-  const p3 = ((strength.weak || 0) / total) * 100;
-  const p4 = ((strength.very_weak || 0) / total) * 100;
-
-  return (
-    <div className="h-2 w-full flex rounded-full overflow-hidden">
-      <div style={{ width: `${p1}%` }} className="bg-emerald-500" />
-      <div style={{ width: `${p2}%` }} className="bg-blue-500" />
-      <div style={{ width: `${p3}%` }} className="bg-orange-500" />
-      <div style={{ width: `${p4}%` }} className="bg-red-500" />
-    </div>
-  );
+// 简单的数字显示组件，替代AnimatedNumber
+const SimpleNumber = ({ value }: { value: string }) => {
+  return <span>{value}</span>;
 };
 
 const EmailUsernameSearch = () => {
@@ -129,10 +23,9 @@ const EmailUsernameSearch = () => {
   const [innerSearchQuery, setInnerSearchQuery] = useState('');
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [results, setResults] = useState<{ summary: DomainSearchSummary, credentials: LeakedCredential[] } | null>(null);
-  const [showPasswords, setShowPasswords] = useState<Record<string, boolean>>({});
   const [totalLeaks, setTotalLeaks] = useState<string>('---,---,---,---');
-  const [currentPage, setCurrentPage] = useState(0);
   const [pageSize] = useState(20);
+  const [_currentPage, setCurrentPage] = useState(0);
   // 保存各个分类的数据，避免替换原始完整数据
   const [categoryCredentials, setCategoryCredentials] = useState<Record<string, LeakedCredential[]>>({});
   // 错误状态
@@ -335,7 +228,7 @@ const EmailUsernameSearch = () => {
             website: item.website || item.url || item.domain || item.url_domain || item.url_host || item.source_domain || 'N/A',
               source: item.source || item.breach_name || item.database_name || 'Leak Database',
               leaked_at: item.leaked_at || item.added_at || item.date || item.breach_date || new Date().toISOString(),
-              type: isEmail ? 'Email' : 'Username',
+              type: 'Customer', // 默认为Customer类型，符合LeakedCredential定义
               strength,
               ip_address: item.ip_address,
             first_name: item.first_name,
@@ -389,7 +282,7 @@ const EmailUsernameSearch = () => {
               website: item.website || item.url || item.domain || item.url_domain || item.url_host || item.source_domain || 'N/A',
               source: item.source || item.breach_name || item.database_name || 'Leak Database',
               leaked_at: item.leaked_at || item.added_at || item.date || item.breach_date || new Date().toISOString(),
-              type: isEmail ? 'Email' : 'Username',
+              type: 'Customer', // 默认为Customer类型，符合LeakedCredential定义
               strength,
               ip_address: item.ip_address,
               first_name: item.first_name,
@@ -546,18 +439,20 @@ const EmailUsernameSearch = () => {
     }
   };
 
-  const togglePassword = (id: string | number) => {
-    setShowPasswords(prev => ({ ...prev, [id]: !prev[id] }));
-  };
+  // togglePassword函数已注释，因为未使用
+  // const togglePassword = (id: string | number) => {
+  //   setShowPasswords(prev => ({ ...prev, [id]: !prev[id] }));
+  // };
 
-  const tabs = [
-    { name: '报告', icon: LayoutGrid, count: results?.summary.total ?? 0 },
-    { name: '员工', icon: User, count: results?.summary.employees.count ?? 0 },
-    { name: '第三方', icon: Briefcase, count: results?.summary.third_parties.count ?? 0 },
-    { name: '客户', icon: Users, count: results?.summary.customers.count ?? 0 },
-    { name: 'URLs', icon: LinkIcon, count: results?.summary.urls_count ?? 0 },
-    { name: '子域名', icon: Globe, count: results?.summary.subdomains_count ?? 0 },
-  ];
+  // tabs数组已注释，因为未使用
+  // const tabs = [
+  //   { name: '报告', icon: LayoutGrid, count: results?.summary.total ?? 0 },
+  //   { name: '员工', icon: User, count: results?.summary.employees.count ?? 0 },
+  //   { name: '第三方', icon: Briefcase, count: results?.summary.third_parties.count ?? 0 },
+  //   { name: '客户', icon: Users, count: results?.summary.customers.count ?? 0 },
+  //   { name: 'URLs', icon: LinkIcon, count: results?.summary.urls_count ?? 0 },
+  //   { name: '子域名', icon: Globe, count: results?.summary.subdomains_count ?? 0 },
+  // ];
 
   return (
     <div className="min-h-[calc(100vh-4rem)] flex flex-col animate-in fade-in duration-700">
@@ -573,15 +468,11 @@ const EmailUsernameSearch = () => {
             <div className="absolute -bottom-24 -right-24 w-96 h-96 bg-blue-500/10 rounded-full blur-[120px] pointer-events-none" />
             
             <div className="relative z-10 flex flex-col items-center text-center">
-              <motion.div
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ duration: 0.5 }}
-              >
+              <div>
                 <h1 className="text-7xl md:text-[10rem] font-black text-white tracking-tighter mb-6 leading-none select-none drop-shadow-[0_0_30px_rgba(255,255,255,0.1)]">
-                  <AnimatedNumber value={totalLeaks} />
+                  <SimpleNumber value={totalLeaks} />
                 </h1>
-              </motion.div>
+              </div>
               
               <div className="flex items-center gap-4 mb-12">
                 <div className="h-px w-12 bg-gradient-to-r from-transparent to-accent" />
@@ -658,14 +549,8 @@ const EmailUsernameSearch = () => {
             {/* 正常搜索结果 */}
             {!error && results && (
               <>
-                <AnimatePresence mode="wait">
-                  <motion.div 
-                    key="results-list"
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -10 }}
-                    transition={{ duration: 0.3 }}
-                  >
+                <div>
+                  <div>
                     <div className="space-y-6">
                       {/* 筛选区域 */}
                       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -692,22 +577,16 @@ const EmailUsernameSearch = () => {
                       </div>
                       
                       {/* 筛选选项 */}
-                      <AnimatePresence>
-                        {isFilterOpen && (
-                          <motion.div
-                            initial={{ opacity: 0, height: 0 }}
-                            animate={{ opacity: 1, height: 'auto' }}
-                            exit={{ opacity: 0, height: 0 }}
-                            transition={{ duration: 0.3 }}
-                            className="overflow-hidden"
-                          >
-                            <div className="bg-white/5 rounded-2xl p-6">
-                              <h3 className="text-lg font-bold text-white mb-4">筛选选项</h3>
-                              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                                <div>
-                                  <p className="text-sm font-bold text-gray-400 mb-3">类型</p>
-                                  <div className="flex flex-col gap-2">
-                                    {[
+                      {isFilterOpen && (
+                        <div className="overflow-hidden">
+                          <div className="bg-white/5 rounded-2xl p-6">
+                            <h3 className="text-lg font-bold text-white mb-4">筛选选项</h3>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                              <div>
+                                <p className="text-sm font-bold text-gray-400 mb-3">类型</p>
+                                <div className="flex flex-col gap-2">
+                                  {
+                                    [
                                       { label: '全部', value: 'All' },
                                       { label: '邮箱', value: 'Email' },
                                       { label: '用户名', value: 'Username' }
@@ -724,14 +603,14 @@ const EmailUsernameSearch = () => {
                                       >
                                         <span>{label}</span>
                                       </button>
-                                    ))}
-                                  </div>
+                                    ))
+                                  }
                                 </div>
                               </div>
                             </div>
-                          </motion.div>
-                        )}
-                      </AnimatePresence>
+                          </div>
+                        </div>
+                      )}
                     </div>
                     
                     {/* 结果表格 */}
@@ -755,11 +634,10 @@ const EmailUsernameSearch = () => {
                               <td className="py-4">
                                 <span className={cn(
                                   "px-2 py-1 rounded text-xs font-bold border",
-                                  cred.type === 'Email' ? "bg-purple-500/10 text-purple-400 border-purple-500/20" :
-                                  cred.type === 'Username' ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" :
-                                  "bg-gray-500/10 text-gray-400 border-gray-500/20"
+                                  cred.email && cred.email.includes('@') ? "bg-purple-500/10 text-purple-400 border-purple-500/20" :
+                                  "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
                                 )}>
-                                  {cred.type || 'Unknown'}
+                                  {cred.email && cred.email.includes('@') ? '邮箱' : '用户名'}
                                 </span>
                               </td>
                               <td className="py-4">
@@ -810,8 +688,8 @@ const EmailUsernameSearch = () => {
                         </div>
                       </div>
                     </div>
-                  </motion.div>
-                </AnimatePresence>
+                  </div>
+                </div>
               </>
             )}
 
