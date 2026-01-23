@@ -253,6 +253,21 @@ async function handleApiRequest(req, res) {
       upstreamUrl = 'https://otx.alienvault.com/api/v1';
       targetUrl = `${upstreamUrl}${url.replace(/^\/api\/otx/, '')}`;
       headers['X-OTX-API-KEY'] = OTX_API_KEY;
+      
+      // 添加额外的OTX API所需的头部
+      headers['Accept'] = 'application/json';
+      headers['User-Agent'] = 'Lysir-Security-Platform/1.0';
+      
+      if (!OTX_API_KEY) {
+        console.error('[Dev Server] OTX API Key is missing!');
+        res.writeHead(401, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+          error: 'Authentication Error',
+          message: 'OTX API Key未配置',
+          details: '请在.env文件中设置VITE_OTX_API_KEY'
+        }));
+        return;
+      }
     } else if (url.startsWith('/api/opinion')) {
       // 处理 TrendRadar API 请求 (舆情分析)
       if (!TRENDRADAR_API_URL) {
@@ -323,6 +338,21 @@ async function handleApiRequest(req, res) {
     const upstreamReq = protocol.request(targetUrl, options, (upstreamRes) => {
       console.log(`[Dev Server] <- ${upstreamRes.statusCode} ${targetUrl}`);
       console.log(`[Dev Server] Upstream Headers:`, JSON.stringify(upstreamRes.headers, null, 2));
+      
+      // 检查空响应或错误状态码
+      if (!upstreamRes.statusCode || upstreamRes.statusCode === 0) {
+        console.error('[Dev Server Error] Empty response from upstream');
+        if (!res.writableEnded && !res.destroyed) {
+          res.writeHead(502, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({
+            error: 'Bad Gateway',
+            message: '上游服务器返回空响应',
+            details: 'OTX API可能暂时不可用或请求格式不正确',
+            targetUrl: targetUrl
+          }));
+        }
+        return;
+      }
       
       // 设置响应头
       for (const [key, value] of Object.entries(upstreamRes.headers)) {

@@ -10,18 +10,18 @@ export default {
         background: "#000000",
         foreground: "#ffffff",
         brand: {
-          light: "#4A1A7A",
-          DEFAULT: "#2A0A4A",
-          dark: "#1A0530",
+          light: "#005f73", // 深青蓝
+          DEFAULT: "#0a192f", // 深海军蓝
+          dark: "#050b14", // 极深蓝
         },
-        accent: "#9D4EDD",
-        card: "#111111",
-        border: "#2A0A4A",
+        accent: "#00e0ff", // 亮青色，配合深海背景
+        card: "#0f172a", // 稍微带蓝的深色背景
+        border: "#1e293b", // Slate-800
       },
       backgroundImage: {
         'gradient-radial': 'radial-gradient(var(--tw-gradient-stops))',
         'gradient-conic': 'conic-gradient(from 180deg at 50% 50%, var(--tw-gradient-stops))',
-        'brand-gradient': 'linear-gradient(135deg, #2A0A4A 0%, #000000 100%)',
+        'brand-gradient': 'linear-gradient(135deg, #0a192f 0%, #000000 100%)',
       },
       animation: {
         'pulse-slow': 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite',

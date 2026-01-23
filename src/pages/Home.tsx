@@ -84,7 +84,7 @@ const DataDashboard: React.FC = () => {
   const CustomTooltip = ({ active, payload }: any) => {
     if (active && payload && payload.length) {
       return (
-        <div className="bg-black/90 border border-accent/30 rounded-lg p-4 text-white shadow-[0_0_20px_rgba(139,92,246,0.2)]">
+        <div className="bg-black/90 border border-accent/30 rounded-lg p-4 text-white shadow-[0_0_20px_rgba(0,224,255,0.2)]">
           <p className="mb-2 font-mono text-accent">{payload[0].payload.date}</p>
           {payload.map((entry: any, index: number) => (
             <div key={index} className="flex items-center gap-2 text-sm font-mono my-1">
@@ -143,7 +143,7 @@ const DataDashboard: React.FC = () => {
             {[
               { label: "Today", value: stats.leaks.today, color: "text-emerald-400", border: "border-emerald-500/30" },
               { label: "This Week", value: stats.leaks.this_week, color: "text-blue-400", border: "border-blue-500/30" },
-              { label: "This Month", value: stats.leaks.this_month, color: "text-purple-400", border: "border-purple-500/30" }
+              { label: "This Month", value: stats.leaks.this_month, color: "text-cyan-400", border: "border-cyan-500/30" }
             ].map((item, idx) => (
               <div key={idx} className={`bg-black/40 backdrop-blur-md border ${item.border} rounded-xl p-3 sm:p-4 flex items-center justify-between hover:bg-white/5 transition-colors`}>
                 <span className="text-gray-400 text-[10px] sm:text-xs uppercase tracking-wider">{item.label}</span>
@@ -171,7 +171,7 @@ const DataDashboard: React.FC = () => {
             </h3>
             <div className="flex gap-2 sm:gap-4 flex-wrap">
                {[
-                { name: 'Total', color: '#8b5cf6' },
+                { name: 'Total', color: '#00e0ff' },
                 { name: 'Verified', color: '#3b82f6' },
                 { name: 'Raw', color: '#10b981' }
               ].map((item, i) => (
@@ -188,8 +188,8 @@ const DataDashboard: React.FC = () => {
               <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                 <defs>
                   <linearGradient id="gradTotal" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.3}/>
-                    <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0}/>
+                    <stop offset="5%" stopColor="#00e0ff" stopOpacity={0.3}/>
+                    <stop offset="95%" stopColor="#00e0ff" stopOpacity={0}/>
                   </linearGradient>
                   <linearGradient id="gradVerified" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3}/>
@@ -219,7 +219,7 @@ const DataDashboard: React.FC = () => {
                 <Tooltip content={<CustomTooltip />} cursor={{ stroke: 'rgba(255,255,255,0.2)', strokeWidth: 1 }} />
                 <Area type="monotone" dataKey="raw_lines" stroke="#10b981" strokeWidth={2} fill="url(#gradRaw)" />
                 <Area type="monotone" dataKey="url:user:pass" stroke="#3b82f6" strokeWidth={2} fill="url(#gradVerified)" />
-                <Area type="monotone" dataKey="total" stroke="#8b5cf6" strokeWidth={3} fill="url(#gradTotal)" />
+                <Area type="monotone" dataKey="total" stroke="#00e0ff" strokeWidth={3} fill="url(#gradTotal)" />
               </AreaChart>
             </ResponsiveContainer>
           </div>
@@ -417,7 +417,7 @@ const Home: React.FC = () => {
               </p>
               <div className="flex flex-col sm:flex-row items-center gap-3 sm:gap-4 justify-center w-full px-4">
                 <motion.button
-                  whileHover={{ scale: 1.05, boxShadow: "0 10px 25px -5px rgba(109, 40, 217, 0.3)" }}
+                  whileHover={{ scale: 1.05, boxShadow: "0 10px 25px -5px rgba(0, 224, 255, 0.3)" }}
                   whileTap={{ scale: 0.98 }}
                   className="bg-accent hover:bg-accent/90 text-white font-medium px-6 sm:px-8 py-3 sm:py-4 rounded-full flex items-center justify-center gap-2 text-base sm:text-lg w-full sm:w-auto"
                   onClick={() => navigate('/login')}
@@ -496,7 +496,7 @@ const Home: React.FC = () => {
                 立即加入我们，访问超过千万的泄露数据索引，保护您的企业和客户数据安全。
               </p>
               <motion.button
-                whileHover={{ scale: 1.05, boxShadow: "0 10px 25px -5px rgba(109, 40, 217, 0.3)" }}
+                whileHover={{ scale: 1.05, boxShadow: "0 10px 25px -5px rgba(0, 224, 255, 0.3)" }}
                 whileTap={{ scale: 0.98 }}
                 className="bg-accent hover:bg-accent/90 text-white font-medium px-6 sm:px-8 md:px-10 py-3 sm:py-4 md:py-5 rounded-full flex items-center justify-center gap-2 text-base sm:text-lg mx-auto w-full sm:w-auto"
                 onClick={() => navigate('/login')}

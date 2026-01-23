@@ -19,8 +19,12 @@ const IocSearch = () => {
   const [passiveDnsPage, setPassiveDnsPage] = useState(1);
   const PASSIVE_DNS_PAGE_SIZE = 50;
 
-  // OTX API 查询函数
-  const handleOtxSearch = async (e?: React.FormEvent) => {
+  // 重试机制配置
+  const MAX_RETRIES = 3;
+  const RETRY_DELAY = 2000; // 2秒
+
+  // OTX API 查询函数（带重试机制）
+  const handleOtxSearch = async (e?: React.FormEvent, retryCount = 0) => {
     if (e) e.preventDefault();
     if (!searchQuery.trim() || otxLoading) return;
     
@@ -37,13 +41,12 @@ const IocSearch = () => {
         case 'ip': {
           // 检测是IPv4还是IPv6
           const isIpv6 = searchQuery.includes(':');
-          // 并行获取多个section的数据
-          const [ipGeneral, ipPassiveDns, ipMalware, ipUrlList] = await Promise.all([
-            otxApi.getIpInfo(searchQuery, 'general', isIpv6),
-            otxApi.getIpInfo(searchQuery, 'passive_dns', isIpv6),
-            otxApi.getIpInfo(searchQuery, 'malware', isIpv6),
-            otxApi.getIpInfo(searchQuery, 'url_list', isIpv6)
-          ]);
+          
+          // 改为串行请求，提高稳定性
+          const ipGeneral = await otxApi.getIpInfo(searchQuery, 'general', isIpv6);
+          const ipPassiveDns = await otxApi.getIpInfo(searchQuery, 'passive_dns', isIpv6);
+          const ipMalware = await otxApi.getIpInfo(searchQuery, 'malware', isIpv6);
+          const ipUrlList = await otxApi.getIpInfo(searchQuery, 'url_list', isIpv6);
           
           // 合并IP查询数据
           result = {
@@ -60,13 +63,11 @@ const IocSearch = () => {
         }
         
         case 'domain': {
-          // 并行获取多个section的数据
-          const [generalData, passiveDnsData, whoisData, malwareData] = await Promise.all([
-            otxApi.getDomainInfo(searchQuery, 'general'),
-            otxApi.getDomainInfo(searchQuery, 'passive_dns'),
-            otxApi.getDomainInfo(searchQuery, 'whois'),
-            otxApi.getDomainInfo(searchQuery, 'malware')
-          ]);
+          // 改为串行请求
+          const generalData = await otxApi.getDomainInfo(searchQuery, 'general');
+          const passiveDnsData = await otxApi.getDomainInfo(searchQuery, 'passive_dns');
+          const whoisData = await otxApi.getDomainInfo(searchQuery, 'whois');
+          const malwareData = await otxApi.getDomainInfo(searchQuery, 'malware');
           
           // 合并域名查询数据
           result = {
@@ -79,11 +80,9 @@ const IocSearch = () => {
         }
         
         case 'url': {
-          // 并行获取URL的多个section数据
-          const [urlGeneral, urlUrlList] = await Promise.all([
-            otxApi.getUrlInfo(searchQuery, 'general'),
-            otxApi.getUrlInfo(searchQuery, 'url_list')
-          ]);
+          // 改为串行请求
+          const urlGeneral = await otxApi.getUrlInfo(searchQuery, 'general');
+          const urlUrlList = await otxApi.getUrlInfo(searchQuery, 'url_list');
           
           // 合并URL查询数据
           result = {
@@ -94,11 +93,9 @@ const IocSearch = () => {
         }
         
         case 'cve': {
-          // 并行获取CVE的多个section数据
-          const [cveGeneral, cveTopPulses] = await Promise.all([
-            otxApi.getCveInfo(searchQuery, 'general'),
-            otxApi.getCveInfo(searchQuery, 'top_n_pulses')
-          ]);
+          // 改为串行请求
+          const cveGeneral = await otxApi.getCveInfo(searchQuery, 'general');
+          const cveTopPulses = await otxApi.getCveInfo(searchQuery, 'top_n_pulses');
           
           // 合并CVE查询数据
           result = {
@@ -114,9 +111,44 @@ const IocSearch = () => {
       
       setOtxResults(result);
       setShowResults(true);
+      
     } catch (error: any) {
       console.error('OTX API 查询错误:', error);
-      setOtxError(error.message || '查询失败，请重试');
+      
+      // 如果是网络错误或空响应错误，且未达到最大重试次数，则重试
+      const shouldRetry = (
+        (error.message?.includes('Empty response') || 
+         error.message?.includes('502') ||
+         error.message?.includes('timeout') ||
+         error.message?.includes('ETIMEDOUT') ||
+         error.message?.includes('ECONNRESET')) &&
+        retryCount < MAX_RETRIES
+      );
+      
+      if (shouldRetry) {
+        console.log(`[OTX Search] Retrying... (${retryCount + 1}/${MAX_RETRIES})`);
+        setTimeout(() => {
+          handleOtxSearch(undefined, retryCount + 1);
+        }, RETRY_DELAY);
+        return;
+      }
+      
+      // 根据错误类型提供更友好的错误信息
+      let errorMessage = '查询失败，请重试';
+      
+      if (error.message?.includes('Empty response') || error.message?.includes('502')) {
+        errorMessage = 'OTX API暂时不可用，请稍后重试';
+      } else if (error.message?.includes('401') || error.message?.includes('Authentication')) {
+        errorMessage = 'API认证失败，请检查API密钥配置';
+      } else if (error.message?.includes('404') || error.message?.includes('Not Found')) {
+        errorMessage = '未找到相关威胁情报';
+      } else if (error.message?.includes('timeout') || error.message?.includes('ETIMEDOUT') || error.message?.includes('Network Error')) {
+        errorMessage = '查询超时，请检查网络连接';
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      setOtxError(errorMessage);
     } finally {
       setOtxLoading(false);
     }
@@ -453,35 +485,56 @@ const IocSearch = () => {
                     )}
                     
                     {/* WHOIS信息 - 域名查询特有 */}
-                    {activeSearchType === 'domain' && otxResults.whois && (
+                    {activeSearchType === 'domain' && (
                       <div className="bg-[#25252e] rounded-lg p-6">
                         <h3 className="text-lg font-bold text-white mb-4">WHOIS信息</h3>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                          <div>
-                            <p className="text-xs text-gray-500 uppercase tracking-widest mb-1">注册商</p>
-                            <p className="text-sm font-bold text-white">{otxResults.whois.registrar || 'N/A'}</p>
-                          </div>
-                          <div>
-                            <p className="text-xs text-gray-500 uppercase tracking-widest mb-1">注册日期</p>
-                            <p className="text-sm font-bold text-white">{otxResults.whois.creation_date || 'N/A'}</p>
-                          </div>
-                          <div>
-                            <p className="text-xs text-gray-500 uppercase tracking-widest mb-1">到期日期</p>
-                            <p className="text-sm font-bold text-white">{otxResults.whois.expiration_date || 'N/A'}</p>
-                          </div>
-                          <div>
-                            <p className="text-xs text-gray-500 uppercase tracking-widest mb-1">更新日期</p>
-                            <p className="text-sm font-bold text-white">{otxResults.whois.updated_date || 'N/A'}</p>
-                          </div>
-                          <div className="md:col-span-2">
-                            <p className="text-xs text-gray-500 uppercase tracking-widest mb-1">名称服务器</p>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mt-2">
-                              {(otxResults.whois.name_servers || []).map((ns: string, index: number) => (
-                                <p key={index} className="text-sm font-bold text-white bg-white/5 p-2 rounded">{ns}</p>
-                              ))}
+                        
+                        {/* 如果有结构化数据则显示详情 */}
+                        {otxResults.whois && Object.keys(otxResults.whois).length > 0 ? (
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div>
+                              <p className="text-xs text-gray-500 uppercase tracking-widest mb-1">注册商</p>
+                              <p className="text-sm font-bold text-white">{otxResults.whois.registrar || 'N/A'}</p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-gray-500 uppercase tracking-widest mb-1">注册日期</p>
+                              <p className="text-sm font-bold text-white">{otxResults.whois.creation_date || 'N/A'}</p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-gray-500 uppercase tracking-widest mb-1">到期日期</p>
+                              <p className="text-sm font-bold text-white">{otxResults.whois.expiration_date || 'N/A'}</p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-gray-500 uppercase tracking-widest mb-1">更新日期</p>
+                              <p className="text-sm font-bold text-white">{otxResults.whois.updated_date || 'N/A'}</p>
+                            </div>
+                            <div className="md:col-span-2">
+                              <p className="text-xs text-gray-500 uppercase tracking-widest mb-1">名称服务器</p>
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mt-2">
+                                {(otxResults.whois.name_servers || []).map((ns: string, index: number) => (
+                                  <p key={index} className="text-sm font-bold text-white bg-white/5 p-2 rounded">{ns}</p>
+                                ))}
+                                {(!otxResults.whois.name_servers || otxResults.whois.name_servers.length === 0) && (
+                                  <p className="text-sm text-gray-500 italic">暂无记录</p>
+                                )}
+                              </div>
                             </div>
                           </div>
-                        </div>
+                        ) : (
+                          // 如果没有结构化数据，显示提示和外部链接
+                          <div className="text-center py-6">
+                            <p className="text-gray-400 mb-4">暂无该域名的详细WHOIS记录</p>
+                            <a 
+                              href={`https://whois.domaintools.com/${searchQuery}`} 
+                              target="_blank" 
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-2 text-accent hover:text-accent/80 transition-colors"
+                            >
+                              <span>在 DomainTools 上查看 WHOIS</span>
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
+                            </a>
+                          </div>
+                        )}
                       </div>
                     )}
                     
