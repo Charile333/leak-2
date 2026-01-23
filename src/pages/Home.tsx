@@ -410,10 +410,10 @@ const Home: React.FC = () => {
                 className="h-12 sm:h-14 md:h-16 w-auto object-contain mb-4 sm:mb-6 opacity-90" 
               />
               <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl xl:text-7xl font-bold text-white mb-4 sm:mb-6 leading-tight px-2">
-                保护您的 <span className="text-accent">数字资产</span> 免受数据泄露威胁
+                洞悉数字暗流 <span className="text-accent">智筑安全穹顶</span>
               </h1>
               <p className="text-base sm:text-lg md:text-xl lg:text-2xl text-white/80 mb-6 sm:mb-8 md:mb-10 leading-relaxed max-w-3xl lg:max-w-4xl mx-auto px-4">
-                基于自然语言熵值分析与密码模式识别技术，对暗网数据黑市、GitHub/Gitee等代码平台、Pastebin、钓鱼插件等临时文本存储站点及社交媒体进行深度扫描，精准捕获企业员工/客户账号密码组合
+                谍卫暗网及互联网泄露情报监测系统保护您的 <span className="text-accent font-semibold">数字资产</span> 免受数据泄露威胁
               </p>
               <div className="flex flex-col sm:flex-row items-center gap-3 sm:gap-4 justify-center w-full px-4">
                 <motion.button
