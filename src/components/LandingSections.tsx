@@ -7,11 +7,11 @@ import {
     FileText, 
     Server, 
     Key,
-    Shield,
+    // Shield,
     Zap,
     Activity,
     Search,
-    AlertTriangle,
+    // AlertTriangle,
     ShieldAlert,
     Lock
   } from 'lucide-react';
