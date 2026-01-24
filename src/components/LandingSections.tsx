@@ -74,34 +74,6 @@ const coreServices = [
   }
 ];
 
-// 服务流程数据
-const serviceProcess = [
-  {
-    step: "01",
-    title: "快速接入",
-    desc: "配置监测对象（域名，账号，企业邮箱等），自动生成企业专属监测范围，无需部署探针，不影响业务运行",
-    icon: Search
-  },
-  {
-    step: "02",
-    title: "自动运行",
-    desc: "按配置规则自动监测风险变化，命中规则自动记录与告警，支持平台内通知与订阅提醒",
-    icon: Activity
-  },
-  {
-    step: "03",
-    title: "事件处理",
-    desc: "风险事件自动归档与跟踪，提供标准化处置建议，支持复杂事件人工介入",
-    icon: Shield
-  },
-  {
-    step: "04",
-    title: "持续运营",
-    desc: "风险状态持续更新，自动生成阶段性运行报告，支持长期安全运营管理（风险暴露面降低 30%+）",
-    icon: AlertTriangle
-  }
-];
-
 export const CoreServicesSection: React.FC = () => (
   <section className="h-full flex items-center justify-center container mx-auto px-4">
     <div className="w-full">
@@ -383,7 +355,6 @@ const LogoGrid = ({ logos, activeLogo, setActiveLogo }: { logos: string[], activ
 const LandingSections: React.FC = () => (
   <div className="w-full">
     <CoreServicesSection />
-    <TechAdvantagesSection />
     <FlipCardReplicaSection />
     <ServiceProcessSection />
     <PartnersSection />

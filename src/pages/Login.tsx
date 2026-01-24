@@ -4,7 +4,7 @@ import { ArrowRight, HelpCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 import { useAuth } from '../context/AuthContext';
-import ParticleWaves from '../components/ParticleWaves';
+// import ParticleWaves from '../components/ParticleWaves';
 
 const Login: React.FC = () => {
   const [email, setEmail] = useState('');

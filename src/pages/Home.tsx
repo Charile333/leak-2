@@ -13,12 +13,10 @@ import {
   Area,
   AreaChart
 } from 'recharts';
-import FullPageScroll from '../components/FullPageScroll';
 import CoreServiceMatrix from '../components/CoreServiceMatrix';
 import {
   ServiceProcessSection,
   FlipCardReplicaSection,
-  PartnersSection
 } from '../components/LandingSections';
 import { leakRadarApi } from '../api/leakRadar';
 import Lanyard from '../components/Lanyard';
@@ -234,7 +232,7 @@ const DataDashboard: React.FC = () => {
 const Home: React.FC = () => {
   const navigate = useNavigate();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [currentSection, setCurrentSection] = useState(0);
+  // const [currentSection, setCurrentSection] = useState(0);
 
   return (
     <div className="min-h-screen relative overflow-hidden text-white bg-black">
@@ -242,11 +240,7 @@ const Home: React.FC = () => {
       {/* 移除全局的 LiquidGradientBackground，因为它现在只在第一屏使用 */}
       
       {/* 导航栏 - 固定在顶层，优化响应式设计 */}
-      <div className={`fixed top-0 left-0 w-full z-50 transition-all duration-500 ${
-        currentSection === 0 
-          ? 'bg-transparent border-transparent' 
-          : 'bg-black/90 backdrop-blur-md border-b border-white/10 shadow-lg'
-      }`}>
+      <div className={`fixed top-0 left-0 w-full z-50 transition-all duration-500 bg-transparent border-transparent`}>
         <nav className="container mx-auto px-4 sm:px-6 py-2 md:py-3 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <img 

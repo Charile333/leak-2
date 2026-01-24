@@ -1,5 +1,5 @@
+import { useEffect, useRef } from 'react';
 import { Renderer, Program, Mesh, Color, Triangle } from 'ogl';
-import React, { useEffect, useRef } from 'react';
 
 import './Aurora.css';
 
@@ -47,7 +47,7 @@ float snoise(vec2 v){
           dot(x0, x0),
           dot(x12.xy, x12.xy),
           dot(x12.zw, x12.zw)
-      ),
+      ), 
       0.0
   );
   m = m * m;
@@ -109,20 +109,12 @@ void main() {
 }
 `;
 
-interface AuroraProps {
-  colorStops?: string[];
-  amplitude?: number;
-  blend?: number;
-  time?: number;
-  speed?: number;
-}
-
-export default function Aurora(props: AuroraProps) {
+export default function Aurora(props) {
   const { colorStops = ['#5227FF', '#7cff67', '#5227FF'], amplitude = 1.0, blend = 0.5 } = props;
   const propsRef = useRef(props);
   propsRef.current = props;
 
-  const ctnDom = useRef<HTMLDivElement>(null);
+  const ctnDom = useRef(null);
 
   useEffect(() => {
     const ctn = ctnDom.current;
@@ -139,7 +131,7 @@ export default function Aurora(props: AuroraProps) {
     gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
     gl.canvas.style.backgroundColor = 'transparent';
 
-    let program: Program;
+    let program;
 
     function resize() {
       if (!ctn) return;
@@ -178,7 +170,7 @@ export default function Aurora(props: AuroraProps) {
     ctn.appendChild(gl.canvas);
 
     let animateId = 0;
-    const update = (t: number) => {
+    const update = t => {
       animateId = requestAnimationFrame(update);
       const { time = t * 0.01, speed = 1.0 } = propsRef.current;
       program.uniforms.uTime.value = time * speed * 0.1;
@@ -206,5 +198,5 @@ export default function Aurora(props: AuroraProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [amplitude]);
 
-  return <div ref={ctnDom} className="aurora-container w-full h-full absolute inset-0 z-0" />;
+  return <div ref={ctnDom} className="aurora-container" />;
 }
