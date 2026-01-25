@@ -151,7 +151,7 @@ export const FlipCardDemoSection: React.FC = () => (
 );
 
 export const FlipCardReplicaSection: React.FC = () => (
-  <section className="h-full flex flex-col items-center justify-center relative overflow-hidden bg-black z-20">
+  <section className="min-h-[120vh] flex flex-col items-center justify-center relative overflow-hidden bg-black z-20">
     <div className="absolute inset-0 z-0">
         <Aurora 
             colorStops={["#7cff67","#B19EEF","#5227FF"]} 
@@ -179,6 +179,8 @@ export const FlipCardReplicaSection: React.FC = () => (
 );
 
 
+
+import Squares from './Squares';
 
 export const ServiceProcessSection: React.FC = () => {
   const steps = [
@@ -209,8 +211,17 @@ export const ServiceProcessSection: React.FC = () => {
   ];
 
   return (
-    <section className="h-full flex items-center justify-center relative z-20">
-      <div className="container mx-auto px-4">
+    <section className="min-h-[120vh] flex items-center justify-center relative z-20">
+      <div className="absolute inset-0 z-0">
+        <Squares 
+          direction="diagonal"
+          speed={0.5}
+          squareSize={40}
+          borderColor="#333" 
+          hoverFillColor="#222"
+        />
+      </div>
+      <div className="container mx-auto px-4 pt-32 relative z-10">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}

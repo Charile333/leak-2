@@ -67,9 +67,10 @@ const CoreServiceMatrix: React.FC = () => {
   // but viewport={{ once: true }} should handle it.
   
   return (
-    <div className="min-h-[120vh] flex items-center justify-center relative z-20 overflow-hidden py-32 bg-[#EDE3E9]">
-      {/* 紫色光效 - 从右侧投射 */}
-      <div className="absolute right-[-10%] top-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-purple-900/10 rounded-full blur-[150px] pointer-events-none z-0" />
+    <div className="min-h-[105vh] flex items-center justify-center relative z-20 overflow-hidden bg-[#EDE3E9]">
+      <div className="absolute inset-0 z-0">
+        <div className="absolute right-[-10%] top-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-purple-900/10 rounded-full blur-[150px] pointer-events-none z-0" />
+      </div>
       
       <div className="container mx-auto px-4 relative z-10">
         <motion.div
@@ -144,7 +145,6 @@ const CoreServiceMatrix: React.FC = () => {
             <div className="absolute inset-0 bg-accent/5 blur-[100px] rounded-full" />
             <div className="w-full h-full max-w-[400px] max-h-[400px] relative">
               <SphereScan />
-              
               {/* Central Label */}
               <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-center pointer-events-none">
                 <div className="text-2xl font-bold text-black tracking-widest mb-1">CORE</div>

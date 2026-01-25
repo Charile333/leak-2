@@ -378,7 +378,13 @@ const Home: React.FC = () => {
       {/* 内容包裹器：负责遮挡页脚 */}
       <div className="relative z-20 bg-black mb-[600px] shadow-[0_50px_100px_rgba(0,0,0,1)]">
           {/* 第一屏：英雄区域 - 优化响应式布局 */}
-          <div className="h-screen flex items-center justify-center relative overflow-hidden bg-black z-20">
+          <motion.div 
+            className="min-h-screen flex items-center justify-center relative overflow-hidden bg-black z-20"
+            initial={{ opacity: 0, filter: "blur(10px)" }}
+            whileInView={{ opacity: 1, filter: "blur(0px)" }}
+            viewport={{ once: false, margin: "-10% 0px -10% 0px" }}
+            transition={{ duration: 0.8 }}
+          >
             {/* 背景图片 */}
             <div 
               className="absolute inset-0 z-0 bg-cover bg-center bg-no-repeat"
@@ -428,26 +434,40 @@ const Home: React.FC = () => {
                 </div>
               </motion.div>
             </section>
-          </div>
+          </motion.div>
 
           {/* 第二屏：核心服务矩阵 */}
-          <CoreServiceMatrix />
+          <motion.div
+            initial={{ opacity: 0, filter: "blur(10px)" }}
+            whileInView={{ opacity: 1, filter: "blur(0px)" }}
+            viewport={{ once: false, margin: "-10% 0px -10% 0px" }}
+            transition={{ duration: 0.8 }}
+          >
+            <CoreServiceMatrix />
+          </motion.div>
 
           {/* 第三屏：核心技术壁垒 */}
-          <div className="h-screen">
+          <motion.div
+            initial={{ opacity: 0, filter: "blur(10px)" }}
+            whileInView={{ opacity: 1, filter: "blur(0px)" }}
+            viewport={{ once: false, margin: "-10% 0px -10% 0px" }}
+            transition={{ duration: 0.8 }}
+          >
             <FlipCardReplicaSection />
-          </div>
+          </motion.div>
 
           {/* 第五屏：服务流程 */}
-          <div className="h-screen relative z-10 overflow-hidden bg-black">
-            {/* 使用登录页面的动态粒子波背景 - 修改为仅占据底部 2/5 */}
-            <div className="absolute bottom-0 left-0 right-0 h-[40%] z-0">
-                <ParticleWaves />
-            </div>
-            <div className="relative z-10 h-full">
+          <motion.div
+            initial={{ opacity: 0, filter: "blur(10px)" }}
+            whileInView={{ opacity: 1, filter: "blur(0px)" }}
+            viewport={{ once: false, margin: "-10% 0px -10% 0px" }}
+            transition={{ duration: 0.8 }}
+            className="min-h-[120vh] relative z-10 overflow-hidden bg-black flex flex-col mb-32"
+          >
+            <div className="relative z-10 flex-1">
               <ServiceProcessSection />
             </div>
-          </div>
+          </motion.div>
 
           {/* 第六屏：合作案例展示区 */}
           {/* <div className="h-screen relative z-10 flex items-center justify-center bg-gray-900">
@@ -457,7 +477,13 @@ const Home: React.FC = () => {
           </div> */}
 
           {/* 第七屏：数据统计区域 */}
-          <div className="h-screen flex items-center justify-center relative z-10 bg-black">
+          <motion.div 
+            className="min-h-screen flex items-center justify-center relative z-20 bg-black"
+            initial={{ opacity: 0, filter: "blur(10px)" }}
+            whileInView={{ opacity: 1, filter: "blur(0px)" }}
+            viewport={{ once: false, margin: "-10% 0px -10% 0px" }}
+            transition={{ duration: 0.8 }}
+          >
             <section className="container mx-auto px-4 sm:px-6">
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
@@ -471,11 +497,17 @@ const Home: React.FC = () => {
                 <DataDashboard />
               </motion.div>
             </section>
-          </div>
+          </motion.div>
 
           {/* 第八屏：行动召唤与页脚 */}
-          <div className="bg-black min-h-screen flex flex-col justify-center">
-                <section className="container mx-auto px-4 sm:px-6 flex-1 flex flex-col justify-center py-20">
+          <motion.div 
+            className="bg-black min-h-screen flex flex-col justify-center"
+            initial={{ opacity: 0, filter: "blur(10px)" }}
+            whileInView={{ opacity: 1, filter: "blur(0px)" }}
+            viewport={{ once: false, margin: "-10% 0px -10% 0px" }}
+            transition={{ duration: 0.8 }}
+          >
+                <section className="container mx-auto px-4 sm:px-6 flex-1 flex flex-col justify-center">
                   <motion.div
                     initial={{ opacity: 0, scale: 0.9 }}
                     whileInView={{ opacity: 1, scale: 1 }}
@@ -499,7 +531,7 @@ const Home: React.FC = () => {
                     </motion.button>
                   </motion.div>
                 </section>
-          </div>
+          </motion.div>
       </div>
 
       {/* Parallax Footer */}
