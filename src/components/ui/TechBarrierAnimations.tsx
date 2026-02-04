@@ -118,7 +118,7 @@ const BaseCanvas: React.FC<AnimationProps & { logic: (ctx: CanvasRenderingContex
 
 export const PulseWaveCanvas: React.FC<AnimationProps> = (props) => {
   const logic = (ctx: CanvasRenderingContext2D, time: number, centerX: number, centerY: number) => {
-    DOT_RINGS.forEach((ring, ringIndex) => {
+    DOT_RINGS.forEach((ring) => {
       for (let i = 0; i < ring.count; i++) {
         const angle = (i / ring.count) * Math.PI * 2;
         const pulseTime = time * 2 - ringIndex * 0.4;
@@ -155,7 +155,7 @@ export const ScanningWaveCanvas: React.FC<AnimationProps> = (props) => {
     const scanPhase = (Math.sin(time * scanSpeed) + 1) / 2;
     const scanY = centerY + (easeInOutSine(scanPhase) * 2 - 1) * (centerY + scanHeight / 2);
 
-    DOT_RINGS.forEach((ring, ringIndex) => {
+    DOT_RINGS.forEach((ring) => {
       for (let i = 0; i < ring.count; i++) {
         const angle = (i / ring.count) * Math.PI * 2;
         const x = centerX + Math.cos(angle) * ring.radius;
