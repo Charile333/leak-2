@@ -118,7 +118,7 @@ const BaseCanvas: React.FC<AnimationProps & { logic: (ctx: CanvasRenderingContex
 
 export const PulseWaveCanvas: React.FC<AnimationProps> = (props) => {
   const logic = (ctx: CanvasRenderingContext2D, time: number, centerX: number, centerY: number) => {
-    DOT_RINGS.forEach((ring) => {
+    DOT_RINGS.forEach((ring, ringIndex) => {
       for (let i = 0; i < ring.count; i++) {
         const angle = (i / ring.count) * Math.PI * 2;
         const pulseTime = time * 2 - ringIndex * 0.4;
