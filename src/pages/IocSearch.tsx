@@ -23,6 +23,40 @@ const IocSearch = () => {
   const MAX_RETRIES = 3;
   const RETRY_DELAY = 2000; // 2秒
 
+  // 自动识别输入类型
+  const detectSearchType = (input: string): 'ip' | 'domain' | 'url' | 'cve' | null => {
+    const trimmedInput = input.trim();
+    
+    // IP Regex (IPv4 and IPv6)
+    const ipRegex = /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$|^(([0-9a-fA-F]{1,4}:){7,7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|:((:[0-9a-fA-F]{1,4}){1,7}|:)|fe80:(:[0-9a-fA-F]{0,4}){0,4}%[0-9a-zA-Z]{1,}|::(ffff(:0{1,4}){0,1}:){0,1}((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\.){3,3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])|([0-9a-fA-F]{1,4}:){1,4}:((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\.){3,3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9]))$/;
+    
+    // Domain Regex
+    const domainRegex = /^(?!:\/\/)([a-zA-Z0-9-_]+\.)*[a-zA-Z0-9][a-zA-Z0-9-_]+\.[a-zA-Z]{2,11}?$/;
+    
+    // URL Regex
+    const urlRegex = /^(https?:\/\/)?([\da-z\.-]+)\.([a-z\.]{2,6})([\/\w \.-]*)*\/?$/;
+    
+    // CVE Regex
+    const cveRegex = /^CVE-\d{4}-\d{4,7}$/i;
+
+    if (ipRegex.test(trimmedInput)) return 'ip';
+    if (cveRegex.test(trimmedInput)) return 'cve';
+    if (urlRegex.test(trimmedInput) && (trimmedInput.includes('/') || trimmedInput.includes('http'))) return 'url';
+    if (domainRegex.test(trimmedInput)) return 'domain';
+    
+    return null;
+  };
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setSearchQuery(value);
+    
+    const detectedType = detectSearchType(value);
+    if (detectedType) {
+      setActiveSearchType(detectedType);
+    }
+  };
+
   // OTX API 查询函数（带重试机制）
   const handleOtxSearch = async (e?: React.FormEvent, retryCount = 0) => {
     if (e) e.preventDefault();
@@ -232,7 +266,7 @@ const IocSearch = () => {
                     <input
                       type="text"
                       value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
+                      onChange={handleInputChange}
                       placeholder={
                         activeSearchType === 'ip' ? "输入IP地址" :
                         activeSearchType === 'domain' ? "输入域名" :

@@ -526,18 +526,18 @@ const Home: React.FC = () => {
                     initial={{ opacity: 0, scale: 0.9 }}
                     whileInView={{ opacity: 1, scale: 1 }}
                     transition={{ duration: 0.6 }}
-                    className="bg-gradient-to-r from-accent/20 to-accent/10 backdrop-blur-lg border border-white/20 rounded-2xl sm:rounded-3xl p-6 sm:p-8 md:p-12 lg:p-16 text-center shadow-2xl"
+                    className="bg-[#8A2BE2] backdrop-blur-lg border border-white/20 rounded-2xl sm:rounded-3xl p-6 sm:p-8 md:p-12 lg:p-16 text-center shadow-2xl"
                   >
-                    <h2 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold text-white mb-4 sm:mb-6">
+                    <h2 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold text-black mb-4 sm:mb-6">
                       准备好保护您的数据了吗？
                     </h2>
-                    <p className="text-base sm:text-lg md:text-xl text-white/80 mb-6 sm:mb-8 md:mb-10 max-w-2xl sm:max-w-3xl mx-auto px-2">
+                    <p className="text-base sm:text-lg md:text-xl text-black/80 mb-6 sm:mb-8 md:mb-10 max-w-2xl sm:max-w-3xl mx-auto px-2">
                       让安全，从被动防御升级为情报驱动的主动防御。
                     </p>
                     <motion.button
-                      whileHover={{ scale: 1.05, boxShadow: "0 10px 25px -5px rgba(0, 224, 255, 0.3)" }}
+                      whileHover={{ scale: 1.05, boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.3)" }}
                       whileTap={{ scale: 0.98 }}
-                      className="bg-accent hover:bg-accent/90 text-white font-medium px-6 sm:px-8 md:px-10 py-3 sm:py-4 md:py-5 rounded-full flex items-center justify-center gap-2 text-base sm:text-lg mx-auto w-full sm:w-auto"
+                      className="bg-black hover:bg-black/90 text-white font-medium px-6 sm:px-8 md:px-10 py-3 sm:py-4 md:py-5 rounded-full flex items-center justify-center gap-2 text-base sm:text-lg mx-auto w-full sm:w-auto"
                       onClick={() => navigate('/login')}
                     >
                       登录并开始使用

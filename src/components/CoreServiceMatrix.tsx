@@ -122,8 +122,8 @@ const CoreServiceMatrix: React.FC = () => {
                     ))}
                   </ul>
                 </div>
-                <div className="p-3 rounded-xl bg-black/5 border border-black/10 group-hover:border-accent/50 group-hover:bg-accent/10 transition-all duration-300 md:mt-1 shrink-0">
-                  <service.icon className="w-6 h-6 text-accent" />
+                <div className="p-3 md:mt-1 shrink-0 transition-transform duration-300 ease-out group-hover:scale-125 group-hover:-rotate-12">
+                  <service.icon className="w-10 h-10 text-accent transition-all duration-300 group-hover:drop-shadow-[0_0_10px_rgba(138,43,226,0.6)]" />
                 </div>
               </motion.div>
             ))}
@@ -186,8 +186,8 @@ const CoreServiceMatrix: React.FC = () => {
                     ))}
                   </ul>
                 </div>
-                <div className="p-3 rounded-xl bg-black/5 border border-black/10 group-hover:border-accent/50 group-hover:bg-accent/10 transition-all duration-300 md:mt-1 shrink-0">
-                  <service.icon className="w-6 h-6 text-accent" />
+                <div className="p-3 md:mt-1 shrink-0 transition-transform duration-300 ease-out group-hover:scale-125 group-hover:rotate-12">
+                  <service.icon className="w-10 h-10 text-accent transition-all duration-300 group-hover:drop-shadow-[0_0_10px_rgba(138,43,226,0.6)]" />
                 </div>
               </motion.div>
             ))}

@@ -137,7 +137,6 @@ export const CoreServicesSection: React.FC = () => (
 
 import { FlipCardStack } from './FlipCardStack';
 import { FlipCardOriginal } from './FlipCardOriginal';
-import Aurora from './Aurora';
 
 
 
@@ -150,33 +149,81 @@ export const FlipCardDemoSection: React.FC = () => (
   </section>
 );
 
-export const FlipCardReplicaSection: React.FC = () => (
-  <section className="min-h-[120vh] flex flex-col items-center justify-center relative overflow-hidden bg-black z-20">
-    <div className="absolute inset-0 z-0">
-        <Aurora 
-            colorStops={["#7cff67","#B19EEF","#5227FF"]} 
-            blend={1.0} 
-            amplitude={3.0} 
-            speed={0.5} 
-        />
-    </div>
+import { PulseWaveCanvas, ScanningWaveCanvas, SharpPulseCanvas } from './ui/TechBarrierAnimations';
 
-    <div className="absolute inset-0 bg-accent/5 skew-y-3 transform origin-top-left scale-110 opacity-20 pointer-events-none z-10" />
+export const FlipCardReplicaSection: React.FC = () => {
+  const techBarriers = [
+    { 
+      id: '1', 
+      component: PulseWaveCanvas, 
+      title: "全源情报捕获",
+      desc: [
+        "需覆盖暗网Tor/I2P网络、35+主流代码平台、黑产Telegram/Discord社群，钓鱼插件等立体监测面",
+        "建立包含数据特征指纹、交易模式画像、攻击者身份图谱的多维情报仓库"
+      ]
+    },
+    { 
+      id: '2', 
+      component: ScanningWaveCanvas, 
+      title: "智能风险决策",
+      desc: [
+        "建立3200万节点企业数字资产关系网，实现「0.5%数据碎片→完整业务系统→APT组织画像」的链式追溯",
+        "自研NLP框架可解析黑市暗语47类变体（如用「蔬菜包」指代用户信息、「钢板价」隐喻商业秘密交易）"
+      ]
+    },
+    { 
+      id: '3', 
+      component: SharpPulseCanvas, 
+      title: "闭环处置支撑",
+      desc: [
+        "提供月度报告以及年度报告，线上咨询，给予事件闭环支撑",
+        "减缓外泄行为带来的负面影响，弥补安全能力的短板"
+      ]
+    },
+  ];
 
-    <motion.div
-      initial={{ opacity: 0 }}
-      whileInView={{ opacity: 1 }}
-      viewport={{ once: true }}
-      className="text-center mb-16 relative z-20 pointer-events-auto"
-    >
-      <h2 className="text-3xl md:text-5xl font-bold mb-4 text-white tracking-tight">核心技术壁垒</h2>
-      <div className="w-20 h-1 bg-gradient-to-r from-cyan-500 to-blue-600 mx-auto rounded-full" />
-    </motion.div>
-    <div className="container mx-auto px-4 flex flex-col items-center relative z-20 pointer-events-auto">
-      <FlipCardOriginal />
-    </div>
-  </section>
-);
+  return (
+    <section className="min-h-[120vh] flex flex-col items-center justify-center relative overflow-hidden bg-[#B0A4E3] z-20">
+      <motion.div
+        initial={{ opacity: 0 }}
+        whileInView={{ opacity: 1 }}
+        viewport={{ once: true }}
+        className="text-center mb-16 relative z-20 pointer-events-auto"
+      >
+        <h2 className="text-3xl md:text-5xl font-bold mb-4 text-[#8A2BE2] tracking-tight">核心技术壁垒</h2>
+        <div className="w-20 h-1 bg-gradient-to-r from-cyan-500 to-blue-600 mx-auto rounded-full" />
+      </motion.div>
+      <div className="container mx-auto px-4 relative z-20 pointer-events-auto">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+          {techBarriers.map((item, index) => (
+            <motion.div
+              key={index}
+              initial={{ opacity: 0, y: 30 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ delay: index * 0.2 }}
+              className="flex flex-col bg-[#070D3F] backdrop-blur-sm border border-white/10 rounded-2xl overflow-hidden hover:border-accent/50 transition-colors duration-300 min-h-[600px]"
+            >
+              <div className="h-64 w-full flex items-center justify-center bg-black/20">
+                <item.component className="w-full h-full" />
+              </div>
+              <div className="p-6 flex-1 flex flex-col">
+                <h3 className="text-2xl font-bold text-[#8A2BE2] mb-4">{item.title}</h3>
+                <div className="space-y-2">
+                  {item.desc.map((text, i) => (
+                    <p key={i} className="text-sm text-white/80 leading-relaxed">
+                      {text}
+                    </p>
+                  ))}
+                </div>
+              </div>
+            </motion.div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+};
 
 
 
