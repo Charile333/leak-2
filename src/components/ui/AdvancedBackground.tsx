@@ -185,14 +185,16 @@ export const AdvancedBackground: React.FC<AdvancedBackgroundProps> = ({ classNam
       shapes.forEach(shape => {
         ctx.beginPath();
         if (shape.type === 'circle') {
-          ctx.arc(shape.x, shape.y, shape.radius, 0, Math.PI * 2);
+          ctx.arc(shape.x, shape.y, shape.radius || 0, 0, Math.PI * 2);
         } else if (shape.type === 'triangle') {
-          ctx.moveTo(shape.x, shape.y - shape.size / 2);
-          ctx.lineTo(shape.x + shape.size / 2, shape.y + shape.size / 2);
-          ctx.lineTo(shape.x - shape.size / 2, shape.y + shape.size / 2);
+          const size = shape.size || 0;
+          ctx.moveTo(shape.x, shape.y - size / 2);
+          ctx.lineTo(shape.x + size / 2, shape.y + size / 2);
+          ctx.lineTo(shape.x - size / 2, shape.y + size / 2);
           ctx.closePath();
         } else if (shape.type === 'square') {
-          ctx.rect(shape.x - shape.size / 2, shape.y - shape.size / 2, shape.size, shape.size);
+          const size = shape.size || 0;
+          ctx.rect(shape.x - size / 2, shape.y - size / 2, size, size);
         }
         ctx.fillStyle = `rgba(0, 149, 217, ${shape.opacity})`;
         ctx.fill();

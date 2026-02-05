@@ -26,17 +26,6 @@ export const SectionBackground: React.FC<SectionBackgroundProps> = ({
     resizeCanvas();
     window.addEventListener('resize', resizeCanvas);
 
-    // 抽象线段数据
-    const lineCount = 8;
-    const lineSpacing = canvas.height / (lineCount + 1);
-    const lines = Array.from({ length: lineCount }, (_, i) => ({
-      y: lineSpacing * (i + 1),
-      amplitude: 80,
-      frequency: 0.004,
-      opacity: 0.08,
-      speed: 0
-    }));
-
     // 粒子数据
     const particles = Array.from({ length: 50 }, () => ({
       x: Math.random() * canvas.width,
@@ -46,13 +35,6 @@ export const SectionBackground: React.FC<SectionBackgroundProps> = ({
       speedY: (Math.random() - 0.5) * 0.5,
       opacity: Math.random() * 0.5 + 0.1
     }));
-
-    // 光带数据
-    const lightBands = [
-      { x: 0, y: canvas.height * 0.3, width: canvas.width, height: 1, opacity: 0.1, speed: 0.5 },
-      { x: 0, y: canvas.height * 0.6, width: canvas.width, height: 1, opacity: 0.08, speed: 0.3 },
-      { x: 0, y: canvas.height * 0.9, width: canvas.width, height: 1, opacity: 0.06, speed: 0.2 }
-    ];
 
     // 网格数据
     const gridSize = 50;
