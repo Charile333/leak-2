@@ -204,7 +204,7 @@ export const FlipCardReplicaSection: React.FC = () => {
               className="flex flex-col bg-[#070D3F] backdrop-blur-sm border border-white/10 rounded-2xl overflow-hidden hover:border-accent/50 transition-colors duration-300 min-h-[600px]"
             >
               <div className="h-64 w-full flex items-center justify-center bg-black/20">
-                <item.component className="w-full h-full" />
+                <item.component className="h-full w-auto aspect-square" />
               </div>
               <div className="p-6 flex-1 flex flex-col">
                 <h3 className="text-2xl font-bold text-[#8A2BE2] mb-4">{item.title}</h3>

@@ -111,7 +111,7 @@ const BaseCanvas: React.FC<AnimationProps & { logic: (ctx: CanvasRenderingContex
     };
   }, [logic]);
 
-  return <canvas ref={canvasRef} className={`w-full h-full ${className}`} />;
+  return <canvas ref={canvasRef} className={className} />;
 };
 
 // --- Specific Animations ---
