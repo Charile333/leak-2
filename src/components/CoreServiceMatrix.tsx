@@ -67,11 +67,7 @@ const CoreServiceMatrix: React.FC = () => {
   // but viewport={{ once: true }} should handle it.
   
   return (
-    <div className="min-h-[105vh] flex items-center justify-center relative z-20 overflow-hidden bg-[#EDE3E9]">
-      <div className="absolute inset-0 z-0">
-        <div className="absolute right-[-10%] top-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-purple-900/10 rounded-full blur-[150px] pointer-events-none z-0" />
-      </div>
-      
+    <div className="min-h-screen flex items-center justify-center relative z-20 overflow-hidden">
       <div className="container mx-auto px-4 relative z-10">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -79,10 +75,10 @@ const CoreServiceMatrix: React.FC = () => {
           transition={{ duration: 0.8 }}
           className="text-center mb-12"
         >
-          <h2 className="text-3xl md:text-5xl font-bold text-black mb-4">
+          <h2 className="text-3xl md:text-5xl font-bold text-white mb-4">
             核心服务<span className="text-accent">矩阵</span>
           </h2>
-          <p className="text-black/60 max-w-2xl mx-auto">
+          <p className="text-muted max-w-2xl mx-auto">
             以数据为核心，构建全方位的数字资产防御体系
           </p>
         </motion.div>
@@ -105,10 +101,10 @@ const CoreServiceMatrix: React.FC = () => {
                 className="flex flex-col md:flex-row items-center md:items-start gap-4 text-center md:text-right group"
               >
                 <div className="flex-1 md:text-right text-center w-full">
-                  <h3 className="text-xl font-bold text-black mb-3 group-hover:text-accent transition-colors">
+                  <h3 className="text-xl font-bold text-white mb-3 group-hover:text-accent transition-colors">
                     {service.title}
                   </h3>
-                  <ul className="text-xs sm:text-sm text-gray-600 leading-relaxed space-y-1.5 inline-block md:block text-left md:text-right w-full">
+                  <ul className="text-xs sm:text-sm text-muted leading-relaxed space-y-1.5 inline-block md:block text-left md:text-right w-full">
                     {Array.isArray(service.description) && service.description.map((item, i) => (
                       <li key={i} className="flex items-start md:justify-end justify-start gap-2">
                          {/* Mobile bullet */}
@@ -123,7 +119,7 @@ const CoreServiceMatrix: React.FC = () => {
                   </ul>
                 </div>
                 <div className="p-3 md:mt-1 shrink-0 transition-transform duration-300 ease-out group-hover:scale-125 group-hover:-rotate-12">
-                  <service.icon className="w-10 h-10 text-accent transition-all duration-300 group-hover:drop-shadow-[0_0_10px_rgba(138,43,226,0.6)]" />
+                  <service.icon className="w-10 h-10 text-accent transition-all duration-300 group-hover:drop-shadow-[0_0_10px_rgba(56,189,248,0.3)]" />
                 </div>
               </motion.div>
             ))}
@@ -152,8 +148,8 @@ const CoreServiceMatrix: React.FC = () => {
               </div>
 
               {/* Orbital Rings */}
-              <div className="absolute inset-0 border border-black/10 rounded-full animate-[spin_10s_linear_infinite]" />
-              <div className="absolute inset-10 border border-black/10 rounded-full animate-[spin_15s_linear_infinite_reverse]" />
+              <div className="absolute inset-0 border border-white/10 rounded-full animate-[spin_10s_linear_infinite]" />
+              <div className="absolute inset-10 border border-white/10 rounded-full animate-[spin_15s_linear_infinite_reverse]" />
             </div>
           </motion.div>
 
@@ -174,10 +170,10 @@ const CoreServiceMatrix: React.FC = () => {
                 className="flex flex-col md:flex-row-reverse items-center md:items-start gap-4 text-center md:text-left group"
               >
                 <div className="flex-1 md:text-left text-center w-full">
-                  <h3 className="text-xl font-bold text-black mb-3 group-hover:text-accent transition-colors">
+                  <h3 className="text-xl font-bold text-white mb-3 group-hover:text-accent transition-colors">
                     {service.title}
                   </h3>
-                  <ul className="text-xs sm:text-sm text-gray-600 leading-relaxed space-y-1.5 inline-block md:block text-left w-full">
+                  <ul className="text-xs sm:text-sm text-muted leading-relaxed space-y-1.5 inline-block md:block text-left w-full">
                     {Array.isArray(service.description) && service.description.map((item, i) => (
                       <li key={i} className="flex items-start justify-start gap-2">
                          <div className="w-1.5 h-1.5 rounded-full bg-accent/50 mt-1.5 shrink-0" />

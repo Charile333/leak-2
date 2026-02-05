@@ -23,7 +23,7 @@ const CodeLeak = () => {
       icon: <Code className="w-8 h-8" />,
       title: '敏感代码识别',
       description: '使用AI算法识别API密钥、数据库连接、硬编码密码等敏感信息',
-      color: 'from-purple-500/20 to-purple-500/5'
+      color: 'from-accent/20 to-accent/5'
     },
     {
       icon: <Shield className="w-8 h-8" />,
@@ -43,9 +43,9 @@ const CodeLeak = () => {
     <div className="min-h-[calc(100vh-4rem)] bg-gradient-to-b from-[#0a0a0c] to-[#1a1a2e] animate-in fade-in duration-700">
       <div className="relative pt-10 pb-16">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="relative overflow-hidden rounded-[50px] border border-white/10 bg-[#0a0a0c] backdrop-blur-2xl p-16 lg:p-24 shadow-[0_0_100px_rgba(168,85,247,0.1)]">
+          <div className="relative overflow-hidden rounded-[50px] border border-white/10 bg-[#0a0a0c] backdrop-blur-2xl p-16 lg:p-24 shadow-[0_0_100px_rgba(56,189,248,0.05)]">
             <div className="absolute inset-0 opacity-20">
-              <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(circle_at_top_left,rgba(59,130,246,0.3),transparent_50%),radial-gradient(circle_at_bottom_right,rgba(168,85,247,0.3),transparent_50%)]"></div>
+              <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(circle_at_top_left,rgba(59,130,246,0.3),transparent_50%),radial-gradient(circle_at_bottom_right,rgba(56,189,248,0.3),transparent_50%)]"></div>
             </div>
 
             <div className="relative z-10">
@@ -95,7 +95,7 @@ const CodeLeak = () => {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.8, delay: 0.4 }}
-                className="bg-gradient-to-r from-blue-500/10 to-purple-500/10 border border-white/10 rounded-2xl p-8"
+                className="bg-gradient-to-r from-blue-500/10 to-accent/10 border border-white/10 rounded-2xl p-8"
               >
                 <div className="flex items-start gap-4 mb-4">
                   <div className="p-3 bg-yellow-500/20 rounded-xl border border-yellow-500/30">
@@ -109,7 +109,7 @@ const CodeLeak = () => {
                         <span>实时监控GitHub、Gitee、GitLab等代码托管平台</span>
                       </li>
                       <li className="flex items-start gap-2">
-                        <Eye className="w-4 h-4 text-purple-400 mt-0.5 shrink-0" />
+                        <Eye className="w-4 h-4 text-accent mt-0.5 shrink-0" />
                         <span>AI算法识别API密钥、数据库连接、硬编码密码</span>
                       </li>
                       <li className="flex items-start gap-2">

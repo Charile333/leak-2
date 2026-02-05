@@ -12,7 +12,7 @@ const originalData = [
     desc: "暗网、代码库、黑产渠道全链路覆盖，无死角捕获威胁情报",
     icon: MapIcon,
     image: "/card/card-1.png", // Added image path
-    color: "from-purple-500 to-indigo-600",
+    color: "from-accent to-cyan-600",
     details: [
       "需覆盖暗网Tor/12P网络、35+主流代码平台、黑产Telegram/Discord社群，钓鱼插件等立体监测面建立包含数据特征指纹、交易模式画像、攻击者身份图谱的多维情报仓库，",
     ]

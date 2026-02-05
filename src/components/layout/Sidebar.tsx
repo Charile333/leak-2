@@ -130,7 +130,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isPinned, setIsPinned }) => {
               className={cn(
                 "absolute right-6 top-4 p-2 rounded-lg transition-all duration-300",
                 isPinned 
-                  ? "bg-accent/20 text-accent shadow-[0_0_15px_rgba(168,85,247,0.3)]" 
+                  ? "bg-accent/20 text-accent shadow-[0_0_15px_rgba(56,189,248,0.15)]" 
                   : "bg-white/5 text-gray-500 hover:text-white hover:bg-white/10"
               )}
               title={isPinned ? "取消固定" : "固定菜单"}
@@ -231,7 +231,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isPinned, setIsPinned }) => {
                               className={({ isActive }) => cn(
                                 "block px-3 py-2 text-xs rounded-lg transition-all duration-300 whitespace-nowrap",
                                 isActive 
-                                  ? "text-accent font-bold bg-accent/10 shadow-[inset_0_0_10px_rgba(168,85,247,0.1)]" 
+                                  ? "text-accent font-bold bg-accent/10 shadow-[inset_0_0_10px_rgba(56,189,248,0.05)]" 
                                   : "text-gray-500 hover:text-gray-200 hover:bg-white/5"
                               )}
                             >

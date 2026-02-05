@@ -4,6 +4,7 @@ import { ArrowRight, Menu, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 // import ParticleWaves from '../components/ParticleWaves';
 // import LiquidGradientBackground from '../components/LiquidGradientBackground'; // Removed as requested
+import { SectionBackground } from '../components/ui/SectionBackground';
 import {
   XAxis,
   YAxis,
@@ -185,7 +186,7 @@ const DataDashboard: React.FC = () => {
             </h3>
             <div className="flex gap-2 sm:gap-4 flex-wrap">
                {[
-                { name: 'Total', color: '#8b5cf6' }, // Vivid Violet
+                { name: 'Total', color: '#38BDF8' }, // Ice Blue
                 { name: 'Verified', color: '#ec4899' }, // Pink
                 { name: 'Raw', color: '#06b6d4' } // Cyan
               ].map((item, i) => (
@@ -249,7 +250,7 @@ const Home: React.FC = () => {
   // const [currentSection, setCurrentSection] = useState(0);
 
   return (
-    <div className="min-h-screen relative overflow-hidden text-white bg-black">
+    <div className="min-h-screen relative overflow-hidden text-white">
       {/* 液体渐变背景 - 固定在底层 - 仅在第一页显示 */}
       {/* 移除全局的 LiquidGradientBackground，因为它现在只在第一屏使用 */}
       
@@ -290,7 +291,7 @@ const Home: React.FC = () => {
             <motion.button
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.98 }}
-              className="bg-accent hover:bg-accent/90 text-white font-medium px-4 lg:px-6 py-2 lg:py-3 rounded-full flex items-center gap-2 text-sm lg:text-base"
+              className="glass-button hover:bg-white hover:text-background text-white font-medium px-4 lg:px-6 py-2 lg:py-3 rounded-full flex items-center gap-2 text-sm lg:text-base"
               onClick={() => navigate('/login')}
             >
               登录
@@ -374,7 +375,7 @@ const Home: React.FC = () => {
                 <motion.button
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
-                  className="bg-accent hover:bg-accent/90 text-white font-medium px-6 py-3 rounded-full flex items-center justify-center gap-2 text-base w-full"
+                  className="glass-button hover:bg-white hover:text-background text-white font-medium px-6 py-3 rounded-full flex items-center justify-center gap-2 text-base w-full"
                   onClick={() => {
                     navigate('/login');
                     setIsMobileMenuOpen(false);
@@ -390,10 +391,12 @@ const Home: React.FC = () => {
       </div>
 
       {/* 内容包裹器：负责遮挡页脚 */}
-      <div className="relative z-20 bg-black mb-[600px] shadow-[0_50px_100px_rgba(0,0,0,1)]">
+      <div className="relative z-20 mb-[600px] bg-[#080C12]">
+        {/* 底部阴影，增强视觉效果 */}
+        <div className="absolute bottom-0 left-0 w-full h-20 bg-gradient-to-t from-black to-transparent"></div>
           {/* 第一屏：英雄区域 - 优化响应式布局 */}
           <motion.div 
-            className="min-h-screen flex items-center justify-center relative overflow-hidden bg-black z-20"
+            className="min-h-screen flex items-center justify-center relative overflow-hidden z-20"
             initial={{ opacity: 0, filter: "blur(10px)" }}
             whileInView={{ opacity: 1, filter: "blur(0px)" }}
             viewport={{ once: false, margin: "-10% 0px -10% 0px" }}
@@ -456,8 +459,12 @@ const Home: React.FC = () => {
             whileInView={{ opacity: 1, filter: "blur(0px)" }}
             viewport={{ once: false, margin: "-10% 0px -10% 0px" }}
             transition={{ duration: 0.8 }}
+            className="min-h-screen relative"
           >
-            <CoreServiceMatrix />
+            <SectionBackground zIndex={0} />
+            <div className="relative z-10 h-full flex items-center justify-center">
+              <CoreServiceMatrix />
+            </div>
           </motion.div>
 
           {/* 第三屏：核心技术壁垒 */}
@@ -466,8 +473,12 @@ const Home: React.FC = () => {
             whileInView={{ opacity: 1, filter: "blur(0px)" }}
             viewport={{ once: false, margin: "-10% 0px -10% 0px" }}
             transition={{ duration: 0.8 }}
+            className="min-h-screen relative"
           >
-            <FlipCardReplicaSection />
+            <SectionBackground zIndex={0} />
+            <div className="relative z-10 h-full flex items-center justify-center">
+              <FlipCardReplicaSection />
+            </div>
           </motion.div>
 
           {/* 第五屏：服务流程 */}
@@ -476,7 +487,7 @@ const Home: React.FC = () => {
             whileInView={{ opacity: 1, filter: "blur(0px)" }}
             viewport={{ once: false, margin: "-10% 0px -10% 0px" }}
             transition={{ duration: 0.8 }}
-            className="min-h-[120vh] relative z-10 overflow-hidden bg-black flex flex-col mb-32"
+            className="min-h-[120vh] relative z-10 overflow-hidden flex flex-col mb-32"
           >
             <div className="relative z-10 flex-1">
               <ServiceProcessSection />
@@ -492,7 +503,7 @@ const Home: React.FC = () => {
 
           {/* 第七屏：数据统计区域 */}
           <motion.div 
-            className="min-h-screen flex items-center justify-center relative z-20 bg-black"
+            className="min-h-screen flex items-center justify-center relative z-20"
             initial={{ opacity: 0, filter: "blur(10px)" }}
             whileInView={{ opacity: 1, filter: "blur(0px)" }}
             viewport={{ once: false, margin: "-10% 0px -10% 0px" }}
@@ -515,7 +526,7 @@ const Home: React.FC = () => {
 
           {/* 第八屏：行动召唤与页脚 */}
           <motion.div 
-            className="bg-black min-h-screen flex flex-col justify-center"
+            className="min-h-screen flex flex-col justify-center"
             initial={{ opacity: 0, filter: "blur(10px)" }}
             whileInView={{ opacity: 1, filter: "blur(0px)" }}
             viewport={{ once: false, margin: "-10% 0px -10% 0px" }}
@@ -526,12 +537,12 @@ const Home: React.FC = () => {
                     initial={{ opacity: 0, scale: 0.9 }}
                     whileInView={{ opacity: 1, scale: 1 }}
                     transition={{ duration: 0.6 }}
-                    className="bg-[#8A2BE2] backdrop-blur-lg border border-white/20 rounded-2xl sm:rounded-3xl p-6 sm:p-8 md:p-12 lg:p-16 text-center shadow-2xl"
+                    className="bg-accent backdrop-blur-lg border border-white/20 rounded-2xl sm:rounded-3xl p-6 sm:p-8 md:p-12 lg:p-16 text-center shadow-2xl"
                   >
-                    <h2 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold text-black mb-4 sm:mb-6">
+                    <h2 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold text-background mb-4 sm:mb-6">
                       准备好保护您的数据了吗？
                     </h2>
-                    <p className="text-base sm:text-lg md:text-xl text-black/80 mb-6 sm:mb-8 md:mb-10 max-w-2xl sm:max-w-3xl mx-auto px-2">
+                    <p className="text-base sm:text-lg md:text-xl text-background/80 mb-6 sm:mb-8 md:mb-10 max-w-2xl sm:max-w-3xl mx-auto px-2">
                       让安全，从被动防御升级为情报驱动的主动防御。
                     </p>
                     <motion.button
@@ -546,6 +557,9 @@ const Home: React.FC = () => {
                   </motion.div>
                 </section>
           </motion.div>
+          
+          {/* 页脚遮挡层，确保页脚始终被遮挡，直到滚动到页面底部 */}
+          <div className="h-[600px] bg-[#080C12] relative z-10"></div>
       </div>
 
       {/* Parallax Footer */}

@@ -52,7 +52,7 @@ const OpinionAnalysis = () => {
       {/* 顶部状态栏 */}
       <div className="max-w-7xl mx-auto mb-8 flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-purple-400">
+          <h1 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-accent">
             舆情态势感知
           </h1>
           <p className="text-gray-400 mt-1">实时监控全网热点，AI 智能研判风险</p>
@@ -159,13 +159,13 @@ const OpinionAnalysis = () => {
           {/* 情感分布 */}
           <div className="bg-[#1a1a20] rounded-xl border border-white/5 p-6">
             <h2 className="text-lg font-bold mb-4 flex items-center gap-2">
-              <TrendingUp className="text-purple-400" />
+              <TrendingUp className="text-accent" />
               AI 情感研判
             </h2>
             <div className="h-48 flex items-center justify-center">
               {analysis.length > 0 ? (
                 <div className="text-center">
-                  <div className="text-4xl font-bold text-purple-400 mb-2">
+                  <div className="text-4xl font-bold text-accent mb-2">
                     {analysis.filter(a => a.sentiment === 'negative').length}
                   </div>
                   <div className="text-sm text-gray-400">今日负面预警</div>

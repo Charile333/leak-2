@@ -7,13 +7,10 @@ import {
     FileText, 
     Server, 
     Key,
-    // Shield,
     Zap,
-    Activity,
-    Search,
-    AlertTriangle,
-    ShieldAlert,
-    // Lock
+    RefreshCw,
+    CheckCircle,
+    TrendingUp
   } from 'lucide-react';
 
 // 核心服务数据
@@ -21,9 +18,9 @@ const coreServices = [
   {
     title: "暗网情报监测",
     icon: Globe,
-    color: "text-purple-400",
-    bg: "bg-purple-500/10",
-    border: "border-purple-500/20",
+    color: "text-accent",
+    bg: "bg-accent/10",
+    border: "border-accent/20",
     coreAbility: "23 个国际暗网交易市场实时追踪，覆盖多语言对话监测与勒索泄露动态预警",
     techHighlight: "数字货币交易链溯源 + 暗网俚语语义识别"
   },
@@ -75,19 +72,19 @@ const coreServices = [
 ];
 
 export const CoreServicesSection: React.FC = () => (
-  <section className="h-full flex items-center justify-center container mx-auto px-4">
-    <div className="w-full">
+  <section className="h-full flex items-center justify-center container mx-auto px-4 py-16">
+    <div className="w-full max-w-7xl">
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         whileInView={{ opacity: 1, y: 0 }}
         viewport={{ once: true }}
-        className="text-center mb-16"
+        className="text-center mb-20"
       >
-        <h2 className="text-3xl md:text-5xl font-bold mb-4">核心服务矩阵</h2>
+        <h2 className="text-3xl md:text-5xl font-bold mb-6">核心服务矩阵</h2>
         <p className="text-white/60">六大维度构建全方位数字资产防御体系</p>
       </motion.div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
         {coreServices.map((service, index) => (
           <motion.div
             key={index}
@@ -96,7 +93,7 @@ export const CoreServicesSection: React.FC = () => (
             viewport={{ once: true }}
             transition={{ delay: index * 0.1 }}
             whileHover={{ y: -5 }}
-            className={`p-6 rounded-2xl border ${service.border} ${service.bg} backdrop-blur-sm hover:bg-opacity-20 transition-all duration-300 group`}
+            className={`p-8 rounded-2xl border ${service.border} ${service.bg} backdrop-blur-sm hover:bg-opacity-20 transition-all duration-300 group`}
           >
             <div className="flex items-start justify-between mb-6">
               <div className={`p-3 rounded-xl bg-white/5 border border-white/10 ${service.color}`}>
@@ -140,8 +137,8 @@ import { FlipCardStack } from './FlipCardStack';
 
 
 export const FlipCardDemoSection: React.FC = () => (
-  <section className="h-full flex items-center justify-center bg-black relative overflow-hidden">
-    <div className="absolute inset-0 bg-gradient-to-t from-purple-900/20 to-transparent pointer-events-none" />
+  <section className="h-full flex items-center justify-center relative overflow-hidden">
+    <div className="absolute inset-0 bg-gradient-to-t from-accent/20 to-transparent pointer-events-none" />
     <div className="container mx-auto px-4 flex flex-col items-start">
       <FlipCardStack />
     </div>
@@ -182,15 +179,15 @@ export const FlipCardReplicaSection: React.FC = () => {
   ];
 
   return (
-    <section className="min-h-[120vh] flex flex-col items-center justify-center relative overflow-hidden bg-[#B0A4E3] z-20">
+    <section className="min-h-screen flex flex-col items-center justify-center relative overflow-hidden z-20">
       <motion.div
         initial={{ opacity: 0 }}
         whileInView={{ opacity: 1 }}
         viewport={{ once: true }}
         className="text-center mb-16 relative z-20 pointer-events-auto"
       >
-        <h2 className="text-3xl md:text-5xl font-bold mb-4 text-[#8A2BE2] tracking-tight">核心技术壁垒</h2>
-        <div className="w-20 h-1 bg-gradient-to-r from-cyan-500 to-blue-600 mx-auto rounded-full" />
+        <h2 className="text-3xl md:text-5xl font-bold mb-4 text-accent tracking-tight">核心技术壁垒</h2>
+        <div className="w-20 h-1 bg-gradient-to-r from-accent to-accent/60 mx-auto rounded-full" />
       </motion.div>
       <div className="container mx-auto px-4 relative z-20 pointer-events-auto">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
@@ -201,13 +198,13 @@ export const FlipCardReplicaSection: React.FC = () => {
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
               transition={{ delay: index * 0.2 }}
-              className="flex flex-col bg-[#070D3F] backdrop-blur-sm border border-white/10 rounded-2xl overflow-hidden hover:border-accent/50 transition-colors duration-300 min-h-[600px]"
+              className="flex flex-col bg-[#0D1216] backdrop-blur-sm border border-white/10 rounded-2xl overflow-hidden hover:border-accent/50 transition-colors duration-300 min-h-[450px]"
             >
               <div className="h-64 w-full flex items-center justify-center">
                 <item.component className="h-full w-auto aspect-square" />
               </div>
               <div className="p-6 flex-1 flex flex-col">
-                <h3 className="text-2xl font-bold text-[#8A2BE2] mb-4">{item.title}</h3>
+                <h3 className="text-2xl font-bold text-accent mb-4">{item.title}</h3>
                 <div className="space-y-2">
                   {item.desc.map((text, i) => (
                     <p key={i} className="text-sm text-white/80 leading-relaxed">
@@ -234,25 +231,25 @@ export const ServiceProcessSection: React.FC = () => {
       step: "01",
       title: "快速接入",
       desc: "配置监测对象（域名，账号，企业邮箱等），自动生成企业专属监测范围，无需部署探针，不影响业务运行",
-      icon: Search
+      icon: Zap
     },
     {
       step: "02",
       title: "自动运行",
       desc: "按配置规则自动监测风险变化，命中规则自动记录与告警，支持平台内通知与订阅提醒",
-      icon: Activity
+      icon: RefreshCw
     },
     {
       step: "03",
       title: "事件处理",
       desc: "风险事件自动归档与跟踪，提供标准化处置建议，支持复杂事件人工介入",
-      icon: ShieldAlert
+      icon: CheckCircle
     },
     {
       step: "04",
       title: "持续运营",
       desc: "风险状态持续更新，自动生成阶段性运行报告，支持长期安全运营管理（风险暴露面降低 30%+）",
-      icon: AlertTriangle
+      icon: TrendingUp
     }
   ];
 
@@ -267,18 +264,18 @@ export const ServiceProcessSection: React.FC = () => {
           hoverFillColor="#222"
         />
       </div>
-      <div className="container mx-auto px-4 pt-32 relative z-10">
+      <div className="container mx-auto px-4 pt-40 relative z-10">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
-          className="text-center mb-16"
+          className="text-center mb-20"
         >
-          <h2 className="text-3xl md:text-5xl font-bold mb-4 text-white">服务流程</h2>
-          <div className="w-20 h-1 bg-accent mx-auto rounded-full" />
+          <h2 className="text-3xl md:text-5xl font-bold mb-6 text-[#0095D9]">服务流程</h2>
+          <div className="w-20 h-1 bg-[#0095D9] mx-auto rounded-full" />
         </motion.div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-10">
           {steps.map((item, index) => (
             <motion.div
               key={index}
@@ -288,15 +285,15 @@ export const ServiceProcessSection: React.FC = () => {
               transition={{ delay: index * 0.2 }}
               className="relative group"
             >
-              <div className="absolute inset-0 bg-gradient-to-b from-accent/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 rounded-2xl blur-xl" />
-              <div className="relative bg-white/5 backdrop-blur-sm border border-white/10 p-8 rounded-2xl h-full hover:border-accent/50 transition-colors duration-300">
+              <div className="absolute inset-0 bg-gradient-to-b from-[#0095D9]/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 rounded-2xl blur-xl" />
+              <div className="relative bg-white/5 backdrop-blur-sm border border-white/10 p-10 rounded-2xl h-full hover:border-[#0095D9]/50 transition-colors duration-300">
                 <div className="text-6xl font-bold text-white/5 absolute top-4 right-4 font-mono">
                   {item.step}
                 </div>
-                <div className="w-12 h-12 bg-accent/20 rounded-lg flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-300">
-                  <item.icon className="text-accent w-6 h-6" />
+                <div className="w-12 h-12 bg-[#0095D9]/20 rounded-lg flex items-center justify-center mb-8 group-hover:scale-110 transition-transform duration-300">
+                  <item.icon className="text-[#0095D9] w-6 h-6" />
                 </div>
-                <h3 className="text-xl font-bold text-white mb-4">{item.title}</h3>
+                <h3 className="text-xl font-bold text-white mb-6">{item.title}</h3>
                 <p className="text-gray-400 text-sm leading-relaxed">
                   {item.desc}
                 </p>

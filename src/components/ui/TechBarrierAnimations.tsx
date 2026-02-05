@@ -39,7 +39,7 @@ function interpolateColor(color1: string, color2: string, t: number, opacity: nu
 
 const COLORS = {
   primary: "#ffffff",
-  accent: "#8A2BE2"
+  accent: "#0095D9"
 };
 
 const DOT_RINGS = [

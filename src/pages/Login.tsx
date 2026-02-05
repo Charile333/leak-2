@@ -122,7 +122,7 @@ const Login: React.FC = () => {
       >
         <button
           onClick={() => window.history.back()}
-          className="flex items-center gap-2 bg-white/[0.05] backdrop-blur-md border border-white/10 rounded-full px-6 py-3 text-sm font-medium text-white hover:bg-white/[0.1] hover:border-white/20 transition-all duration-300 shadow-lg hover:shadow-xl hover:shadow-purple-500/10"
+          className="flex items-center gap-2 bg-white/[0.05] backdrop-blur-md border border-white/10 rounded-full px-6 py-3 text-sm font-medium text-white hover:bg-white/[0.1] hover:border-white/20 transition-all duration-300 shadow-lg hover:shadow-xl hover:shadow-accent/10"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>

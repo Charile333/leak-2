@@ -7,21 +7,21 @@ export default {
   theme: {
     extend: {
       colors: {
-        background: "#000000",
+        background: "#080C12",
         foreground: "#ffffff",
-        brand: {
-          light: "#005f73", // 深青蓝
-          DEFAULT: "#0a192f", // 深海军蓝
-          dark: "#050b14", // 极深蓝
-        },
-        accent: "#00e0ff", // 亮青色，配合深海背景
-        card: "#0f172a", // 稍微带蓝的深色背景
-        border: "#1e293b", // Slate-800
+        primary: "#FFFFFF",
+        accent: "#38BDF8",
+        secondary: "#1E293B",
+        muted: "#94A3B8",
+        warning: "#FACC15",
+        card: "#0F1623",
+        border: "#1E293B",
+        tech: "#0D1216",
       },
       backgroundImage: {
         'gradient-radial': 'radial-gradient(var(--tw-gradient-stops))',
         'gradient-conic': 'conic-gradient(from 180deg at 50% 50%, var(--tw-gradient-stops))',
-        'brand-gradient': 'linear-gradient(135deg, #0a192f 0%, #000000 100%)',
+        'brand-gradient': 'linear-gradient(135deg, #080C12 0%, #0F1623 100%)',
       },
       animation: {
         'pulse-slow': 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite',

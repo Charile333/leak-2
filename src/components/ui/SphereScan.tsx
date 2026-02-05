@@ -18,7 +18,7 @@ const SphereScan: React.FC<SphereScanProps> = ({ className }) => {
     // Configuration
     const GLOBAL_SPEED = 0.5;
     const MONOCHROME_FILL = (opacity: number) =>
-      `rgba(168, 85, 247, ${Math.max(0, Math.min(1, opacity))})`; // Using accent color #a855f7
+      `rgba(0, 149, 217, ${Math.max(0, Math.min(1, opacity))})`; // Using #0095D9
 
     let animationFrameId: number;
     let time = 0;

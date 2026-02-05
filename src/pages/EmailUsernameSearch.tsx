@@ -460,9 +460,9 @@ const EmailUsernameSearch = () => {
       {/* 核心展示区 */}
       <div className="relative pt-10 pb-16">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="relative overflow-hidden rounded-[50px] border border-white/10 bg-[#0a0a0c] backdrop-blur-2xl p-16 lg:p-24 shadow-[0_0_100px_rgba(168,85,247,0.1)]">
+          <div className="relative overflow-hidden rounded-[50px] border border-white/10 bg-[#0a0a0c] backdrop-blur-2xl p-16 lg:p-24 shadow-[0_0_100px_rgba(56,189,248,0.05)]">
             {/* 装饰性背景 */}
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(168,85,247,0.1),transparent_70%)] pointer-events-none" />
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(56,189,248,0.1),transparent_70%)] pointer-events-none" />
             <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 pointer-events-none mix-blend-overlay" />
             <div className="absolute -top-24 -left-24 w-96 h-96 bg-accent/10 rounded-full blur-[120px] pointer-events-none" />
             <div className="absolute -bottom-24 -right-24 w-96 h-96 bg-blue-500/10 rounded-full blur-[120px] pointer-events-none" />
@@ -491,7 +491,7 @@ const EmailUsernameSearch = () => {
                 className="w-full max-w-3xl relative group"
               >
                   {/* 原始搜索表单 */}
-                  <div className="relative flex items-center bg-white/[0.03] backdrop-blur-3xl border border-white/10 rounded-[28px] overflow-hidden p-2 shadow-2xl focus-within:border-accent/50 focus-within:shadow-[0_0_50px_rgba(168,85,247,0.15)] transition-all duration-500">
+                  <div className="relative flex items-center bg-white/[0.03] backdrop-blur-3xl border border-white/10 rounded-[28px] overflow-hidden p-2 shadow-2xl focus-within:border-accent/50 focus-within:shadow-[0_0_50px_rgba(56,189,248,0.1)] transition-all duration-500">
                     <input
                       type="text"
                       value={searchQuery}
@@ -502,7 +502,7 @@ const EmailUsernameSearch = () => {
                     <button 
                       type="submit"
                       disabled={isSearching}
-                      className="bg-accent hover:bg-accent/80 disabled:opacity-50 text-white px-12 py-5 rounded-[22px] font-black transition-all text-xl shadow-xl hover:scale-[1.02] active:scale-[0.98] flex items-center gap-3 purple-glow"
+                      className="bg-accent hover:bg-accent/80 disabled:opacity-50 text-white px-12 py-5 rounded-[22px] font-black transition-all text-xl shadow-xl hover:scale-[1.02] active:scale-[0.98] flex items-center gap-3 accent-glow"
                     >
                       {isSearching ? (
                         <div className="flex items-center gap-3">
@@ -634,7 +634,7 @@ const EmailUsernameSearch = () => {
                               <td className="py-4">
                                 <span className={cn(
                                   "px-2 py-1 rounded text-xs font-bold border",
-                                  cred.email && cred.email.includes('@') ? "bg-purple-500/10 text-purple-400 border-purple-500/20" :
+                                  cred.email && cred.email.includes('@') ? "bg-accent/10 text-accent border-accent/20" :
                                   "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
                                 )}>
                                   {cred.email && cred.email.includes('@') ? '邮箱' : '用户名'}

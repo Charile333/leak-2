@@ -28,7 +28,7 @@ const FileLeak = () => {
       icon: <Database className="w-8 h-8" />,
       title: '泄露风险评估',
       description: '评估文件泄露风险等级，提供修复建议和安全加固方案',
-      color: 'from-purple-500/20 to-purple-500/5'
+      color: 'from-accent/20 to-accent/5'
     },
     {
       icon: <Search className="w-8 h-8" />,
@@ -42,9 +42,9 @@ const FileLeak = () => {
     <div className="min-h-[calc(100vh-4rem)] bg-gradient-to-b from-[#0a0a0c] to-[#1a1a2e] animate-in fade-in duration-700">
       <div className="relative pt-10 pb-16">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="relative overflow-hidden rounded-[50px] border border-white/10 bg-[#0a0a0c] backdrop-blur-2xl p-16 lg:p-24 shadow-[0_0_100px_rgba(168,85,247,0.1)]">
+          <div className="relative overflow-hidden rounded-[50px] border border-white/10 bg-[#0a0a0c] backdrop-blur-2xl p-16 lg:p-24 shadow-[0_0_100px_rgba(56,189,248,0.05)]">
             <div className="absolute inset-0 opacity-20">
-              <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(circle_at_top_left,rgba(59,130,246,0.3),transparent_50%),radial-gradient(circle_at_bottom_right,rgba(168,85,247,0.3),transparent_50%)]"></div>
+              <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(circle_at_top_left,rgba(59,130,246,0.3),transparent_50%),radial-gradient(circle_at_bottom_right,rgba(56,189,248,0.3),transparent_50%)]"></div>
             </div>
 
             <div className="relative z-10">
@@ -112,7 +112,7 @@ const FileLeak = () => {
                         <span>AI算法识别机密文档、财务报表、合同文件</span>
                       </li>
                       <li className="flex items-start gap-2">
-                        <Shield className="w-4 h-4 text-purple-400 mt-0.5 shrink-0" />
+                        <Shield className="w-4 h-4 text-accent mt-0.5 shrink-0" />
                         <span>评估文件泄露风险等级，提供修复建议</span>
                       </li>
                       <li className="flex items-start gap-2">

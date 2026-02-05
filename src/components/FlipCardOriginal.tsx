@@ -258,7 +258,7 @@ export const FlipCardOriginal: React.FC = () => {
             transition={{ duration: 0.4, ease: "easeOut" }}
             className="text-right"
           >
-            <h2 className="text-5xl md:text-7xl font-bold text-[#8A2BE2] leading-tight">
+            <h2 className="text-5xl md:text-7xl font-bold text-accent leading-tight">
               {topCard.title}
             </h2>
             <div className="w-24 h-2 bg-accent mt-6 ml-auto rounded-full" />

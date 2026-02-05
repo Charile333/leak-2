@@ -48,7 +48,7 @@ const LargeSearch: React.FC<LargeSearchProps> = ({
           className={cn(
             "absolute right-3 top-3 bottom-3 px-8",
             "bg-accent hover:bg-accent/80 text-white font-bold rounded-lg",
-            "transition-all duration-300 purple-glow active:scale-95",
+            "transition-all duration-300 accent-glow active:scale-95",
             "hidden md:block"
           )}
         >
