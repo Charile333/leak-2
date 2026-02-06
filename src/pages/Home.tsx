@@ -564,7 +564,7 @@ const Home: React.FC = () => {
 
       {/* Parallax Footer */}
       <div className="fixed bottom-0 left-0 w-full h-[600px] z-0">
-        <footer className="h-full bg-[#D972FF] relative overflow-hidden flex flex-col justify-center">
+        <footer className="h-full bg-[#0095D9] relative overflow-hidden flex flex-col justify-center">
             {/* 左上角文字 */}
             <div className="absolute top-8 left-4 sm:top-12 sm:left-12 z-10 max-w-xl pointer-events-none select-none">
               <h2 className="text-white text-2xl sm:text-3xl md:text-4xl font-bold mb-4 tracking-tight drop-shadow-md">
