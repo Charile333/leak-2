@@ -559,7 +559,7 @@ const Home: React.FC = () => {
           </motion.div>
           
           {/* 页脚遮挡层，确保页脚始终被遮挡，直到滚动到页面底部 */}
-          <div className="h-[300px] bg-[#080C12] relative z-10"></div>
+          <div className="h-[300px] w-full bg-[#080C12] relative z-10"></div>
       </div>
 
       {/* Parallax Footer */}
