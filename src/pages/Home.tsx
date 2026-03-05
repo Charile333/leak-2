@@ -391,7 +391,7 @@ const Home: React.FC = () => {
       </div>
 
       {/* 内容包裹器：负责遮挡页脚 */}
-      <div className="relative z-20 mb-[300px] bg-[#080C12]">
+      <div className="relative z-20 mb-[600px] bg-[#080C12]">
         {/* 底部阴影，增强视觉效果 */}
         <div className="absolute bottom-0 left-0 w-full h-20 bg-gradient-to-t from-black to-transparent"></div>
           {/* 第一屏：英雄区域 - 优化响应式布局 */}
@@ -559,7 +559,7 @@ const Home: React.FC = () => {
           </motion.div>
           
           {/* 页脚遮挡层，确保页脚始终被遮挡，直到滚动到页面底部 */}
-          <div className="h-[300px] w-full bg-[#080C12] relative z-10"></div>
+          <div className="h-[600px] w-full bg-[#080C12] relative z-10"></div>
       </div>
 
       {/* Parallax Footer */}
