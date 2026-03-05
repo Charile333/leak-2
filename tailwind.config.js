@@ -10,7 +10,7 @@ export default {
         background: "#080C12",
         foreground: "#ffffff",
         primary: "#FFFFFF",
-        accent: "#38BDF8",
+        accent: "#9333EA",
         secondary: "#1E293B",
         muted: "#94A3B8",
         warning: "#FACC15",
