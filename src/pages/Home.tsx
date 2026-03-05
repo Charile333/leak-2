@@ -526,7 +526,7 @@ const Home: React.FC = () => {
 
           {/* 第八屏：行动召唤与页脚 */}
           <motion.div 
-            className="min-h-[50vh] flex flex-col justify-center py-16"
+            className="min-h-[30vh] flex flex-col justify-center py-8"
             initial={{ opacity: 0, filter: "blur(10px)" }}
             whileInView={{ opacity: 1, filter: "blur(0px)" }}
             viewport={{ once: false, margin: "-10% 0px -10% 0px" }}
