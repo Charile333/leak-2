@@ -716,6 +716,84 @@ class LeakRadarAPI {
       body: JSON.stringify({ email })
     });
   }
+
+  /**
+   * Get dark web statistics
+   * GET /search/dark-web/stats
+   */
+  async getDarkWebStatistics(): Promise<{ success: boolean; total_posts: number; total_sources: number; latest_ingested_at: string; oldest_published_at: string }> {
+    const response = await this.request<any>('/search/dark-web/stats');
+    return {
+      success: true,
+      total_posts: response.total_posts,
+      total_sources: response.total_sources,
+      latest_ingested_at: response.latest_ingested_at,
+      oldest_published_at: response.oldest_published_at
+    };
+  }
+
+  /**
+   * Search dark web mentions
+   * POST /search/dark-web
+   * @param query Search query
+   * @param page Page number
+   * @param pageSize Results per page
+   * @param advanced Advanced search flag (Not used in new API)
+   * @param sortBy Sort by field (Not used in new API)
+   * @param sortOrder Sort order (Not used in new API)
+   */
+  async searchDarkWebMentions(
+    query: string, 
+    page: number = 1, 
+    pageSize: number = 10,
+    advanced: boolean = false,
+    sortBy: string = 'published_at',
+    sortOrder: 'asc' | 'desc' = 'desc'
+  ): Promise<{ success: boolean; results: Array<{ id: string; source: string; title: string; content: string; published_at: string; url: string }>; total: number }> {
+    const response = await this.request<{ items: any[]; total: number }>(`/search/dark-web`, {
+      method: 'POST',
+      body: JSON.stringify({
+        query,
+        page,
+        page_size: pageSize
+      })
+    });
+
+    return {
+      success: true,
+      results: response.items.map(item => ({
+        id: item.id,
+        source: item.source_name || item.source,
+        title: item.title,
+        content: item.content,
+        published_at: item.published_at,
+        url: item.source_ref
+      })),
+      total: response.total
+    };
+  }
+
+  /**
+   * Get dark web post by ID
+   * GET /search/dark-web/posts/{id}
+   * @param id Post ID
+   */
+  async getDarkWebPostById(id: string): Promise<{ success: boolean; post: any }> {
+    return this.request<{ success: boolean; post: any }>(`/search/dark-web/posts/${id}`);
+  }
+
+  /**
+   * Get dark web sources
+   * GET /search/dark-web/sources
+   * Returns a list of all scraped forum sources with their post counts
+   */
+  async getDarkWebSources(): Promise<{ success: boolean; sources: Array<{ id: string; name: string; post_count: number; url: string }> }> {
+    const response = await this.request<{ sources: Array<{ id: string; name: string; post_count: number; url: string }> }>('/search/dark-web/sources');
+    return {
+      success: true,
+      sources: response.sources
+    };
+  }
 }
 
 export const leakRadarApi = new LeakRadarAPI();

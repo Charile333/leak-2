@@ -51,7 +51,7 @@ const DetailCard = ({ title, icon: Icon, data, colorClass, onClick }: { title: s
     onClick={onClick}
     className={cn(
       "bg-white/[0.03] border border-white/10 rounded-3xl p-8 hover:bg-white/[0.05] transition-all group",
-      onClick && "cursor-pointer hover:border-accent/30 hover:shadow-[0_0_30px_rgba(56,189,248,0.05)]"
+      onClick && "cursor-pointer hover:border-accent/30 hover:shadow-[0_0_30px_rgba(147,51,234,0.05)]"
     )}
   >
     <div className="flex items-start justify-between mb-6">
@@ -88,7 +88,7 @@ const DetailCard = ({ title, icon: Icon, data, colorClass, onClick }: { title: s
         {
           [
             { label: 'STRONG', val: data.strength.strong || 0, color: 'text-emerald-500' },
-            { label: 'MEDIUM', val: data.strength.medium || 0, color: 'text-blue-500' },
+            { label: 'MEDIUM', val: data.strength.medium || 0, color: 'text-accent' },
             { label: 'WEAK', val: data.strength.weak || 0, color: 'text-orange-500' },
             { label: 'VERY WEAK', val: data.strength.very_weak || 0, color: 'text-red-500' },
           ].map((item) => {
@@ -120,7 +120,7 @@ const StrengthBar = ({ strength }: { strength: any }) => {
   return (
     <div className="h-2 w-full flex rounded-full overflow-hidden">
       <div style={{ width: `${p1}%` }} className="bg-emerald-500" />
-      <div style={{ width: `${p2}%` }} className="bg-blue-500" />
+      <div style={{ width: `${p2}%` }} className="bg-accent" />
       <div style={{ width: `${p3}%` }} className="bg-orange-500" />
       <div style={{ width: `${p4}%` }} className="bg-red-500" />
     </div>
@@ -1145,7 +1145,7 @@ const Dashboard = () => {
                         title="客户" 
                         icon={UserMinus} 
                         data={results.summary.customers} 
-                        colorClass="text-blue-500"
+                        colorClass="text-accent"
                         onClick={() => {
                           setActiveTab('客户');
                           setCurrentPage(0);
@@ -1238,7 +1238,7 @@ const Dashboard = () => {
                     </div>
                   
                     {/* 结果展示表格 */}
-                    <div className="overflow-x-auto bg-white/5 rounded-2xl border border-white/10 shadow-[0_0_30px_rgba(56,189,248,0.02)]">
+                    <div className="overflow-x-auto bg-white/5 rounded-2xl border border-white/10 shadow-[0_0_30px_rgba(147,51,234,0.02)]">
                       <table className="w-full min-w-[800px]">
                         <thead>
                           <tr className="border-b border-white/10 bg-gradient-to-r from-accent/20 to-transparent">
@@ -1282,7 +1282,7 @@ const Dashboard = () => {
                               return (
                                 <tr 
                                   key={credential.id || globalIndex} 
-                                  className="transition-all duration-200 hover:bg-white/10 hover:shadow-[inset_0_0_0_1px_rgba(56,189,248,0.1)]"
+                                  className="transition-all duration-200 hover:bg-white/10 hover:shadow-[inset_0_0_0_1px_rgba(147,51,234,0.1)]"
                                 >
                                   {/* URL和子域名标签页只显示URL和次数 */}
                                   {activeTab === 'URLs' || activeTab === '子域名' ? (
@@ -1320,7 +1320,7 @@ const Dashboard = () => {
                                     [
                                       <td key="url" className="px-8 py-5 whitespace-nowrap">
                                         <div className="flex items-center gap-2">
-                                          <Globe className="w-4 h-4 text-blue-400" />
+                                          <Globe className="w-4 h-4 text-accent" />
                                           <div className="relative">
                                             <span className={`text-sm text-white font-medium ${globalIndex >= 10 ? 'blur-sm opacity-50' : ''}`}>
                                               {credential.website || credential.source || 'N/A'}
@@ -1337,7 +1337,7 @@ const Dashboard = () => {
                                         <div className="relative">
                                           <div className={`inline-flex items-center justify-center px-3 py-1 rounded-full text-xs font-bold ${globalIndex >= 10 ? 'blur-sm opacity-50' : ''}`}>
                                             {credential.email && credential.email.includes('@') ? (
-                                              <span className="bg-blue-500/20 text-blue-400">EMAIL</span>
+                                              <span className="bg-accent/20 text-accent">EMAIL</span>
                                             ) : (
                                               <span className="bg-green-500/20 text-green-400">USERNAME</span>
                                             )}

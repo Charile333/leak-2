@@ -4,7 +4,7 @@
   --color-background: #080C12;
   --color-foreground: #ffffff;
   --color-primary: #FFFFFF;
-  --color-accent: #38BDF8;
+  --color-accent: #0095d9;
   --color-secondary: #1E293B;
   --color-muted: #94A3B8;
   --color-warning: #FACC15;
@@ -12,19 +12,29 @@
   --color-border: #334155;
 }
 
+/* Functional Page Theme - Purple Accent */
+.functional-theme {
+  --accent: #a855f7;       /* purple-500 */
+  --color-accent: #a855f7; /* Tailwind v4 variable override */
+  --base-color: #a855f7;   /* Shimmer base */
+  --shimmer-color: #9333ea; /* Shimmer highlight (purple-600) */
+  
+  /* Update other related variables if necessary */
+}
+
 :root {
   --background: #080C12;
   --foreground: #ffffff;
   --primary: #FFFFFF;
-  --accent: #38BDF8;
+  --accent: #0095d9;
   --secondary: #1E293B;
   --muted: #94A3B8;
   --warning: #FACC15;
   --card: #0F1623;
   --border: #1E293B;
   /* Shimmer text variables */
-  --base-color: #38BDF8;
-  --shimmer-color: #0EA5E9;
+  --base-color: #0095d9;
+  --shimmer-color: #0077ae;
   --shimmer-width: 25%;
   --duration: 7s;
 }
@@ -72,7 +82,7 @@ body {
   }
   
   .accent-glow {
-    box-shadow: 0 0 15px rgba(56, 189, 248, 0.1);
+    box-shadow: 0 0 15px rgba(0, 149, 217, 0.1);
   }
   
   .glass-button {
@@ -98,12 +108,12 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(56, 189, 248, 0.2);
+  background: rgba(0, 149, 217, 0.2);
   border-radius: 10px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(56, 189, 248, 0.4);
+  background: rgba(0, 149, 217, 0.4);
 }
 
 /* Shimmer text animation */
@@ -136,6 +146,6 @@ body {
     -webkit-text-fill-color: initial;
     text-shadow: 
       0 0 0 rgba(0,0,0,0),
-      0 0 20px rgba(56, 189, 248, 0.06);
+      0 0 20px rgba(0, 149, 217, 0.06);
   }
 }

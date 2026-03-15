@@ -52,7 +52,7 @@ const OpinionAnalysis = () => {
       {/* 顶部状态栏 */}
       <div className="max-w-7xl mx-auto mb-8 flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-accent">
+          <h1 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-accent to-purple-400">
             舆情态势感知
           </h1>
           <p className="text-gray-400 mt-1">实时监控全网热点，AI 智能研判风险</p>
@@ -99,7 +99,7 @@ const OpinionAnalysis = () => {
           <div className="bg-[#1a1a20] rounded-xl border border-white/5 p-6 min-h-[600px]">
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-xl font-bold flex items-center gap-2">
-                <Activity className="text-blue-400" /> 
+                <Activity className="text-accent" /> 
                 实时资讯流
               </h2>
               <div className="flex gap-2">
@@ -123,7 +123,7 @@ const OpinionAnalysis = () => {
                   <div className="flex justify-between items-start gap-4">
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-2">
-                        <span className="px-2 py-0.5 text-[10px] bg-blue-500/20 text-blue-300 rounded">
+                        <span className="px-2 py-0.5 text-[10px] bg-accent/20 text-accent rounded">
                           {item.source}
                         </span>
                         <span className="text-xs text-gray-500">
@@ -134,7 +134,7 @@ const OpinionAnalysis = () => {
                         href={item.url} 
                         target="_blank" 
                         rel="noreferrer"
-                        className="text-base font-medium text-gray-200 group-hover:text-blue-400 transition-colors line-clamp-2"
+                        className="text-base font-medium text-gray-200 group-hover:text-accent transition-colors line-clamp-2"
                       >
                         {item.title}
                       </a>

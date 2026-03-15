@@ -21,7 +21,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
   };
 
   return (
-    <div className="min-h-screen bg-[#0a0a0c] text-white flex overflow-hidden relative">
+    <div className="min-h-screen bg-[#0a0a0c] text-white flex overflow-hidden relative functional-theme">
       {/* Global Background Elements */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none -z-10">
         <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-brand/10 blur-[120px] rounded-full" />

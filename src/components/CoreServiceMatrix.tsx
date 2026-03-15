@@ -76,7 +76,7 @@ const CoreServiceMatrix: React.FC = () => {
           className="text-center mb-12"
         >
           <h2 className="text-3xl md:text-5xl font-bold text-white mb-4">
-            核心服务<span className="text-accent">矩阵</span>
+            核心服务<span className="text-home-accent">矩阵</span>
           </h2>
           <p className="text-muted max-w-2xl mx-auto">
             以数据为核心，构建全方位的数字资产防御体系
@@ -101,25 +101,25 @@ const CoreServiceMatrix: React.FC = () => {
                 className="flex flex-col md:flex-row items-center md:items-start gap-4 text-center md:text-right group"
               >
                 <div className="flex-1 md:text-right text-center w-full">
-                  <h3 className="text-xl font-bold text-white mb-3 group-hover:text-accent transition-colors">
+                  <h3 className="text-xl font-bold text-white mb-3 group-hover:text-home-accent transition-colors">
                     {service.title}
                   </h3>
                   <ul className="text-xs sm:text-sm text-muted leading-relaxed space-y-1.5 inline-block md:block text-left md:text-right w-full">
                     {Array.isArray(service.description) && service.description.map((item, i) => (
                       <li key={i} className="flex items-start md:justify-end justify-start gap-2">
                          {/* Mobile bullet */}
-                         <div className="md:hidden w-1.5 h-1.5 rounded-full bg-accent/50 mt-1.5 shrink-0" />
+                         <div className="md:hidden w-1.5 h-1.5 rounded-full bg-home-accent/50 mt-1.5 shrink-0" />
                          
                          <span>{item}</span>
                          
                          {/* Desktop bullet */}
-                         <div className="hidden md:block w-1.5 h-1.5 rounded-full bg-accent/50 mt-1.5 shrink-0" />
+                         <div className="hidden md:block w-1.5 h-1.5 rounded-full bg-home-accent/50 mt-1.5 shrink-0" />
                       </li>
                     ))}
                   </ul>
                 </div>
                 <div className="p-3 md:mt-1 shrink-0 transition-transform duration-300 ease-out group-hover:scale-125 group-hover:-rotate-12">
-                  <service.icon className="w-10 h-10 text-accent transition-all duration-300 group-hover:drop-shadow-[0_0_10px_rgba(56,189,248,0.3)]" />
+                  <service.icon className="w-10 h-10 text-home-accent transition-all duration-300 group-hover:drop-shadow-[0_0_10px_rgba(56,189,248,0.3)]" />
                 </div>
               </motion.div>
             ))}
@@ -183,7 +183,7 @@ const CoreServiceMatrix: React.FC = () => {
                   </ul>
                 </div>
                 <div className="p-3 md:mt-1 shrink-0 transition-transform duration-300 ease-out group-hover:scale-125 group-hover:rotate-12">
-                  <service.icon className="w-10 h-10 text-accent transition-all duration-300 group-hover:drop-shadow-[0_0_10px_rgba(138,43,226,0.6)]" />
+                  <service.icon className="w-10 h-10 text-accent transition-all duration-300 group-hover:drop-shadow-[0_0_10px_rgba(0,149,217,0.6)]" />
                 </div>
               </motion.div>
             ))}

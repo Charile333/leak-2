@@ -10,64 +10,49 @@ import {
     Zap,
     RefreshCw,
     CheckCircle,
-    TrendingUp
+    TrendingUp,
+    ShieldCheck,
+    Database,
+    Activity
   } from 'lucide-react';
 
 // 核心服务数据
 const coreServices = [
   {
-    title: "暗网情报监测",
     icon: Globe,
-    color: "text-accent",
-    bg: "bg-accent/10",
-    border: "border-accent/20",
-    coreAbility: "23 个国际暗网交易市场实时追踪，覆盖多语言对话监测与勒索泄露动态预警",
-    techHighlight: "数字货币交易链溯源 + 暗网俚语语义识别"
-  },
-  {
-    title: "黑产舆情监测",
-    icon: MessageSquare,
-    color: "text-red-400",
-    bg: "bg-red-500/10",
-    border: "border-red-500/20",
-    coreAbility: "146 个黑产聚集平台（Telegram/Discord 等）7×24 小时监控，日均解析 2TB 非结构化数据",
-    techHighlight: "38 类黑产术语智能识别（如“银行卡四件套”“爬虫 API”）"
-  },
-  {
-    title: "代码泄露监测",
-    icon: Code,
+    title: "全球资产测绘",
+    coreAbility: "覆盖 42 亿+ IPv4 及 IPv6 资产",
+    techHighlight: "实时监测端口、服务与组件指纹",
     color: "text-blue-400",
-    bg: "bg-blue-500/10",
-    border: "border-blue-500/20",
-    coreAbility: "12 大代码库（GitHub/GitLab 等）全覆盖，21 种编程语言敏感信息识别",
-    techHighlight: "AST 语法树深度分析，精准捕获密钥硬编码、核心算法暴露等 7 类风险"
+    bg: "bg-blue-400/5",
+    border: "border-blue-400/20"
   },
   {
-    title: "敏感文件监测",
-    icon: FileText,
-    color: "text-yellow-400",
-    bg: "bg-yellow-500/10",
-    border: "border-yellow-500/20",
-    coreAbility: "38 个共享平台（百度网盘 / MEGA 等）扫描，132 种文件格式精准匹配",
-    techHighlight: "文档 DNA 指纹算法，重构传播路径 + 定位泄露源头"
+    icon: ShieldCheck,
+    title: "漏洞风险感知",
+    coreAbility: "自动化验证 POC/EXP",
+    techHighlight: "精准识别 Log4j、Fastjson 等高危漏洞风险",
+    color: "text-purple-400",
+    bg: "bg-purple-400/5",
+    border: "border-purple-400/20"
   },
   {
-    title: "资产失陷监测",
-    icon: Server,
+    icon: Database,
+    title: "数据泄露监测",
+    coreAbility: "7x24 小时监控暗网、代码托管平台",
+    techHighlight: "及时发现企业敏感数据泄露",
     color: "text-orange-400",
-    bg: "bg-orange-500/10",
-    border: "border-orange-500/20",
-    coreAbility: "十亿级 DNS 数据库支撑，72 小时内自动识别失陷资产",
-    techHighlight: "9 类指纹特征匹配（HTTPS 证书 / JA3 等），快速提取攻击 IOC"
+    bg: "bg-orange-400/5",
+    border: "border-orange-400/20"
   },
   {
-    title: "对外账密泄露监测",
-    icon: Key,
-    color: "text-green-400",
-    bg: "bg-green-500/10",
-    border: "border-green-500/20",
-    coreAbility: "全球泄露数据库对接，员工 / 客户账密泄露实时预警",
-    techHighlight: "彩虹表碰撞检测 + 模糊匹配，自动触发密码重置与多因素认证"
+    icon: Activity,
+    title: "威胁情报联动",
+    coreAbility: "集成多源威胁情报",
+    techHighlight: "自动关联攻击组织、恶意 IP 与 C2 服务器",
+    color: "text-emerald-400",
+    bg: "bg-emerald-400/5",
+    border: "border-emerald-400/20"
   }
 ];
 

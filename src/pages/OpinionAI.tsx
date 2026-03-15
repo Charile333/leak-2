@@ -50,10 +50,10 @@ const OpinionAI = () => {
           {/* 进度指示器（装饰性） */}
           <div className="grid grid-cols-3 gap-4 mb-8">
             <div className="p-4 bg-white/5 rounded-xl border border-white/5 flex flex-col items-center gap-2">
-              <Server className="w-5 h-5 text-blue-400" />
+              <Server className="w-5 h-5 text-accent" />
               <span className="text-xs text-gray-500">数据采集</span>
               <div className="w-full h-1 bg-white/10 rounded-full overflow-hidden">
-                <div className="w-full h-full bg-blue-500/50" />
+                <div className="w-full h-full bg-accent/50" />
               </div>
             </div>
             <div className="p-4 bg-white/5 rounded-xl border border-white/5 flex flex-col items-center gap-2">

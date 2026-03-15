@@ -136,11 +136,14 @@ const SphereScan: React.FC<SphereScanProps> = ({ className }) => {
         ref={canvasRef} 
         className="w-full h-full block"
       />
-      {/* Corner decorations */}
-      <div className="absolute top-0 left-0 w-8 h-8 border-t-2 border-l-2 border-accent/50 rounded-tl-lg" />
-      <div className="absolute top-0 right-0 w-8 h-8 border-t-2 border-r-2 border-accent/50 rounded-tr-lg" />
-      <div className="absolute bottom-0 left-0 w-8 h-8 border-b-2 border-l-2 border-accent/50 rounded-bl-lg" />
-      <div className="absolute bottom-0 right-0 w-8 h-8 border-b-2 border-r-2 border-accent/50 rounded-br-lg" />
+      {/* Top Left */}
+      <div className="absolute top-0 left-0 w-8 h-8 border-t-2 border-l-2 border-home-accent/50 rounded-tl-lg" />
+      {/* Top Right */}
+      <div className="absolute top-0 right-0 w-8 h-8 border-t-2 border-r-2 border-home-accent/50 rounded-tr-lg" />
+      {/* Bottom Left */}
+      <div className="absolute bottom-0 left-0 w-8 h-8 border-b-2 border-l-2 border-home-accent/50 rounded-bl-lg" />
+      {/* Bottom Right */}
+      <div className="absolute bottom-0 right-0 w-8 h-8 border-b-2 border-r-2 border-home-accent/50 rounded-br-lg" />
     </div>
   );
 };

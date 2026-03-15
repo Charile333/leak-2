@@ -20,7 +20,7 @@ import {
   FlipCardReplicaSection,
 } from '../components/LandingSections';
 import { leakRadarApi } from '../api/leakRadar';
-import Lanyard from '../components/Lanyard';
+import Footer from '../components/layout/Footer';
 
 // 综合数据仪表盘组件
 const DataDashboard: React.FC = () => {
@@ -203,8 +203,8 @@ const DataDashboard: React.FC = () => {
               <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                 <defs>
                   <linearGradient id="gradTotal" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.3}/>
-                    <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0}/>
+                    <stop offset="5%" stopColor="#0095d9" stopOpacity={0.3}/>
+                    <stop offset="95%" stopColor="#0095d9" stopOpacity={0}/>
                   </linearGradient>
                   <linearGradient id="gradVerified" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#ec4899" stopOpacity={0.3}/>
@@ -234,7 +234,7 @@ const DataDashboard: React.FC = () => {
                 <Tooltip content={<CustomTooltip />} cursor={{ stroke: 'rgba(255,255,255,0.2)', strokeWidth: 1 }} />
                 <Area type="monotone" dataKey="raw_lines" stroke="#06b6d4" strokeWidth={2} fill="url(#gradRaw)" />
                 <Area type="monotone" dataKey="url:user:pass" stroke="#ec4899" strokeWidth={2} fill="url(#gradVerified)" />
-                <Area type="monotone" dataKey="total" stroke="#8b5cf6" strokeWidth={3} fill="url(#gradTotal)" />
+                <Area type="monotone" dataKey="total" stroke="#0095d9" strokeWidth={3} fill="url(#gradTotal)" />
               </AreaChart>
             </ResponsiveContainer>
           </div>
@@ -525,38 +525,38 @@ const Home: React.FC = () => {
           </motion.div>
 
           {/* 第八屏：行动召唤与页脚 */}
-          <motion.div 
-            className="min-h-[30vh] flex flex-col justify-center py-8"
-            initial={{ opacity: 0, filter: "blur(10px)" }}
-            whileInView={{ opacity: 1, filter: "blur(0px)" }}
-            viewport={{ once: false, margin: "-10% 0px -10% 0px" }}
-            transition={{ duration: 0.8 }}
-          >
-                <section className="container mx-auto px-4 sm:px-6 flex-1 flex flex-col justify-center">
-                  <motion.div
-                    initial={{ opacity: 0, scale: 0.9 }}
-                    whileInView={{ opacity: 1, scale: 1 }}
-                    transition={{ duration: 0.6 }}
-                    className="bg-accent backdrop-blur-lg border border-white/20 rounded-2xl sm:rounded-3xl p-6 sm:p-8 md:p-12 lg:p-16 text-center shadow-2xl"
-                  >
-                    <h2 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold text-background mb-4 sm:mb-6">
-                      准备好保护您的数据了吗？
-                    </h2>
-                    <p className="text-base sm:text-lg md:text-xl text-background/80 mb-6 sm:mb-8 md:mb-10 max-w-2xl sm:max-w-3xl mx-auto px-2">
-                      让安全，从被动防御升级为情报驱动的主动防御。
-                    </p>
-                    <motion.button
-                      whileHover={{ scale: 1.05, boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.3)" }}
-                      whileTap={{ scale: 0.98 }}
-                      className="bg-black hover:bg-black/90 text-white font-medium px-6 sm:px-8 md:px-10 py-3 sm:py-4 md:py-5 rounded-full flex items-center justify-center gap-2 text-base sm:text-lg mx-auto w-full sm:w-auto"
-                      onClick={() => navigate('/login')}
-                    >
-                      登录并开始使用
-                      <ArrowRight className="w-4 sm:w-5 h-4 sm:h-5" />
-                    </motion.button>
-                  </motion.div>
-                </section>
-          </motion.div>
+          <div className="w-full">
+            <section className="w-full relative flex flex-col items-center justify-center py-24 sm:py-32 md:py-40 text-center overflow-hidden">
+              {/* 背景图片层 */}
+              <div className="absolute inset-0 z-0">
+                <img src="/mimi.jpg" alt="Background" className="w-full h-full object-cover" />
+                <div className="absolute inset-0 bg-black/50" />
+              </div>
+              
+              <motion.div
+                initial={{ opacity: 0, scale: 0.9 }}
+                whileInView={{ opacity: 1, scale: 1 }}
+                transition={{ duration: 0.6 }}
+                className="relative z-10 max-w-4xl mx-auto px-4"
+              >
+                <h2 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold text-white mb-4 sm:mb-6 drop-shadow-lg">
+                  准备好保护您的数据了吗？
+                </h2>
+                <p className="text-base sm:text-lg md:text-xl text-white/90 mb-6 sm:mb-8 md:mb-10 max-w-2xl mx-auto drop-shadow-md">
+                  让安全，从被动防御升级为情报驱动的主动防御。
+                </p>
+                <motion.button
+                  whileHover={{ scale: 1.05, boxShadow: "0 10px 25px -5px rgba(255, 255, 255, 0.2)" }}
+                  whileTap={{ scale: 0.98 }}
+                  className="bg-accent hover:bg-accent/90 text-white font-medium px-6 sm:px-8 md:px-10 py-3 sm:py-4 md:py-5 rounded-full flex items-center justify-center gap-2 text-base sm:text-lg mx-auto w-full sm:w-auto shadow-xl border border-white/10"
+                  onClick={() => navigate('/login')}
+                >
+                  登录并开始使用
+                  <ArrowRight className="w-4 sm:w-5 h-4 sm:h-5" />
+                </motion.button>
+              </motion.div>
+            </section>
+          </div>
           
           {/* 页脚遮挡层，确保页脚始终被遮挡，直到滚动到页面底部 */}
           <div className="h-[600px] w-full bg-[#080C12] relative z-10"></div>
@@ -564,26 +564,7 @@ const Home: React.FC = () => {
 
       {/* Parallax Footer */}
       <div className="fixed bottom-0 left-0 w-full h-[600px] z-0">
-        <footer className="h-full bg-[#0095D9] relative overflow-hidden flex flex-col justify-center">
-            {/* 左上角文字 */}
-            <div className="absolute top-8 left-4 sm:top-12 sm:left-12 z-10 max-w-xl pointer-events-none select-none">
-              <h2 className="text-white text-2xl sm:text-3xl md:text-4xl font-bold mb-4 tracking-tight drop-shadow-md">
-                数据泄露，不能等发生之后再处理
-              </h2>
-              <p className="text-white/90 text-sm sm:text-base md:text-lg leading-relaxed drop-shadow-sm font-medium">
-                谍卫帮助企业提前发现暗网与互联网中的数据泄露、暴露与入侵风为安全决策提供真实、可验报支撑。
-              </p>
-            </div>
-
-            <Lanyard position={[0, 0, 20]} gravity={[0, -40, 0]} />
-
-            {/* 底部版权信息 */}
-            <div className="absolute bottom-4 left-0 w-full text-center z-10 pointer-events-none select-none">
-              <p className="text-white/60 text-xs sm:text-sm font-mono tracking-widest">
-                © 2026 Lysirsec
-              </p>
-            </div>
-        </footer>
+        <Footer />
       </div>
     </div>
   );
