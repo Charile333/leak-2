@@ -1,5 +1,5 @@
 import React from 'react';
-import { motion } from 'framer-motion';
+// import { motion } from 'framer-motion';
 import { 
   ShieldCheck, 
   Globe
@@ -96,10 +96,6 @@ const Footer: React.FC = () => {
             © {currentYear} Lysir Security Inc. All rights reserved.
           </p>
           <div className="flex items-center gap-6">
-            <span className="flex items-center gap-2 text-xs text-gray-500">
-                <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></span>
-                System Operational
-            </span>
             <div className="flex items-center gap-4 text-xs text-gray-500">
                 <a href="#" className="hover:text-gray-300 transition-colors">隐私政策</a>
                 <a href="#" className="hover:text-gray-300 transition-colors">服务条款</a>
