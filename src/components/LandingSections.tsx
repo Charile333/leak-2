@@ -2,11 +2,6 @@ import React from 'react';
 import { motion } from 'framer-motion';
 import { 
     Globe, 
-    MessageSquare, 
-    Code, 
-    FileText, 
-    Server, 
-    Key,
     Zap,
     RefreshCw,
     CheckCircle,

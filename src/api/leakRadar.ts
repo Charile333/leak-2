@@ -746,10 +746,11 @@ class LeakRadarAPI {
     query: string, 
     page: number = 1, 
     pageSize: number = 10,
-    advanced: boolean = false,
-    sortBy: string = 'published_at',
-    sortOrder: 'asc' | 'desc' = 'desc'
+    _advanced: boolean = false,
+    _sortBy: string = 'published_at',
+    _sortOrder: 'asc' | 'desc' = 'desc'
   ): Promise<{ success: boolean; results: Array<{ id: string; source: string; title: string; content: string; published_at: string; url: string }>; total: number }> {
+    // 使用 _ 前缀标记未使用的参数，避免 TypeScript 报错
     const response = await this.request<{ items: any[]; total: number }>(`/search/dark-web`, {
       method: 'POST',
       body: JSON.stringify({

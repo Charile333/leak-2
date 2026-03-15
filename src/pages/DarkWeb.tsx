@@ -1,10 +1,9 @@
 import { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
+// import { motion } from 'framer-motion';
 import { 
   Search, 
   Shield,
   Database,
-  Clock,
   RefreshCw,
   Loader2,
   AlertCircle,
@@ -59,7 +58,7 @@ const DarkWeb = () => {
     }
   };
 
-  const [sourcesList, setSourcesList] = useState<Array<{ id: string; name: string; post_count: number; url: string }>>([]);
+  // const [sourcesList, setSourcesList] = useState<Array<{ id: string; name: string; post_count: number; url: string }>>([]);
 
   // 加载暗网统计信息
   useEffect(() => {
@@ -75,7 +74,7 @@ const DarkWeb = () => {
         // 获取暗网来源信息
         const sourcesResponse = await leakRadarApi.getDarkWebSources();
         if (sourcesResponse.success && sourcesResponse.sources) {
-          setSourcesList(sourcesResponse.sources);
+          // setSourcesList(sourcesResponse.sources);
           // 如果统计信息中没有total_sources，则从来源列表长度计算
           if (!statsResponse.success) {
             setSources(sourcesResponse.sources.length || 5);
@@ -149,6 +148,13 @@ const DarkWeb = () => {
               <RefreshCw className="w-4 h-4 text-gray-400" />
               <span className="text-sm text-gray-300">最后更新</span>
               <span className="px-3 py-1 bg-green-500/20 text-green-400 rounded-full text-sm font-medium">刚刚</span>
+            </div>
+            
+            {/* 来源数统计 */}
+            <div className="flex items-center gap-2">
+              <Globe className="w-4 h-4 text-gray-400" />
+              <span className="text-sm text-gray-300">来源</span>
+              <span className="px-3 py-1 bg-blue-500/20 text-blue-400 rounded-full text-sm font-medium">{sources.toLocaleString()}</span>
             </div>
           </div>
         </div>

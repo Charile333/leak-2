@@ -8,8 +8,7 @@ import {
   ArrowRight, 
   ShieldCheck, 
   Globe, 
-  Database, 
-  Lock 
+  Database
 } from 'lucide-react';
 
 const Footer: React.FC = () => {
