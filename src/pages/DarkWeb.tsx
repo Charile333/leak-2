@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 // import { motion } from 'framer-motion';
 import { 
   Search, 
@@ -9,7 +9,10 @@ import {
   AlertCircle,
   Calendar,
   Globe,
-  MessageSquare
+  MessageSquare,
+  X,
+  Copy,
+  ExternalLink
 } from 'lucide-react';
 import { leakRadarApi } from '../api/leakRadar';
 
@@ -26,6 +29,62 @@ const DarkWeb = () => {
 
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 10;
+
+  // 侧边栏状态
+  const [selectedResult, setSelectedResult] = useState<any | null>(null);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isLoadingDetails, setIsLoadingDetails] = useState(false);
+  const sidebarRef = useRef<HTMLDivElement>(null);
+
+  // 获取帖子详情
+  const fetchPostDetails = async (post: any) => {
+    // 先设置基本信息并打开抽屉
+    setSelectedResult(post);
+    setIsSidebarOpen(true);
+    setIsLoadingDetails(true);
+
+    try {
+      const response = await leakRadarApi.getDarkWebPostById(post.id);
+      if (response && response.content) {
+        // 更新选中结果，合并详情数据，重点是覆盖 content
+        setSelectedResult((prev: any) => ({
+          ...prev,
+          ...response,
+          raw_content: response.content // 官方接口返回的是直接的对象，内容在 content 字段
+        }));
+      }
+    } catch (err) {
+      console.error('获取帖子详情失败:', err);
+      // 失败时保持原有摘要数据不变，并可以考虑给个提示
+    } finally {
+      setIsLoadingDetails(false);
+    }
+  };
+
+  // 点击外部关闭侧边栏
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (sidebarRef.current && !sidebarRef.current.contains(event.target as Node)) {
+        setIsSidebarOpen(false);
+      }
+    };
+
+    if (isSidebarOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isSidebarOpen]);
+
+  // 处理复制内容
+  const handleCopyContent = () => {
+    const contentToCopy = selectedResult?.raw_content || selectedResult?.content;
+    if (contentToCopy) {
+      navigator.clipboard.writeText(contentToCopy);
+      // 可以考虑添加一个 toast 提示
+    }
+  };
 
   // 搜索处理函数
   const handleSearch = async (e: React.FormEvent) => {
@@ -240,27 +299,62 @@ const DarkWeb = () => {
             <div className="space-y-4">
               {searchResults.map((result, index) => (
                 <div key={index} className="bg-[#1a1a2e] border border-white/5 rounded-xl p-4 hover:border-accent/50 transition-colors">
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <h3 className="text-white font-medium mb-2">{result.title || '未命名帖子'}</h3>
-                      <p className="text-gray-400 text-sm mb-3">{result.content || '无内容'}</p>
-                      <div className="flex items-center gap-4 text-xs text-gray-500">
-                        <div className="flex items-center gap-1">
-                          <Calendar className="w-3 h-3" />
-                          <span>{result.date || '未知日期'}</span>
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <Globe className="w-3 h-3" />
-                          <span>{result.source || '未知来源'}</span>
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <MessageSquare className="w-3 h-3" />
-                          <span>{result.comments || 0} 评论</span>
-                        </div>
+                  <div className="flex flex-col gap-2">
+                    {/* 标题 */}
+                    <div className="flex items-start justify-between">
+                      <h3 className="text-white font-bold text-lg">{result.title || '未命名帖子'}</h3>
+                      <div className="px-3 py-1 bg-accent/20 text-accent rounded-full text-xs font-medium shrink-0">
+                        {result.source || '未知来源'}
                       </div>
                     </div>
-                    <div className="px-3 py-1 bg-accent/20 text-accent rounded-full text-xs font-medium">
-                      {result.type || '帖子'}
+
+                    {/* 元信息：源网址 + 作者 */}
+                    <div className="flex flex-wrap items-center gap-4 text-xs text-gray-400">
+                      {/* 源网址 */}
+                      <div className="flex items-center gap-1.5 text-yellow-500/80">
+                        <span className="i-lucide-folder w-3.5 h-3.5">📁</span>
+                        <a 
+                          href={result.url} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="hover:underline truncate max-w-[300px]"
+                        >
+                          {result.url || '无链接'}
+                        </a>
+                      </div>
+                      
+                      {/* 作者 */}
+                      {result.author && (
+                        <div className="flex items-center gap-1.5 text-gray-300 bg-white/5 px-2 py-0.5 rounded">
+                          <span className="i-lucide-user w-3.5 h-3.5">👤</span>
+                          <span>{result.author}</span>
+                        </div>
+                      )}
+
+                      {/* 发布时间 */}
+                      <div className="flex items-center gap-1.5 ml-auto">
+                        <Calendar className="w-3.5 h-3.5" />
+                        <span>{result.published_at ? new Date(result.published_at).toLocaleString() : '未知日期'}</span>
+                      </div>
+                    </div>
+
+                    {/* 内容摘要 */}
+                    <div className="mt-2 text-sm text-gray-300 leading-relaxed font-mono bg-black/20 p-3 rounded border border-white/5">
+                      <p className="line-clamp-6 whitespace-pre-wrap">{result.content || '无内容'}</p>
+                    </div>
+
+                    {/* 底部操作栏 */}
+                    <div className="flex justify-end items-center mt-2 gap-3 pt-2 border-t border-white/5">
+                      {/* <button className="text-xs text-accent hover:text-accent/80 flex items-center gap-1 transition-colors">
+                        <span className="i-lucide-copy w-3 h-3">📋</span>
+                        查看来源
+                      </button> */}
+                      <button 
+                        className="bg-accent/10 text-accent hover:bg-accent hover:text-white text-xs px-4 py-1.5 rounded transition-all font-medium flex items-center gap-1"
+                        onClick={() => fetchPostDetails(result)}
+                      >
+                        查看完整内容
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -337,6 +431,153 @@ const DarkWeb = () => {
           </div>
         )}
       </div>
+
+      {/* 侧边滑出抽屉 */}
+      {isSidebarOpen && (
+        <div className="fixed inset-0 z-50 flex justify-end">
+          {/* 遮罩层 */}
+          <div 
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity"
+            onClick={() => setIsSidebarOpen(false)}
+          ></div>
+          
+          {/* 抽屉内容 */}
+          <div 
+            ref={sidebarRef}
+            className="relative w-full max-w-2xl bg-[#1e1e36] border-l border-white/10 shadow-2xl flex flex-col h-full animate-in slide-in-from-right duration-300"
+          >
+            {/* 头部 */}
+            <div className="flex-none flex items-center justify-between p-4 border-b border-white/10 bg-[#1a1a2e]">
+              <div className="flex items-center gap-3">
+                <span className="px-2.5 py-1 bg-red-500/20 text-red-400 text-xs font-bold rounded">暗网</span>
+                <div className="flex items-center gap-1.5 text-gray-300 text-sm">
+                  <Globe className="w-4 h-4" />
+                  {selectedResult?.source || '未知来源'}
+                </div>
+              </div>
+              <button 
+                onClick={() => setIsSidebarOpen(false)}
+                className="p-2 text-gray-400 hover:text-white hover:bg-white/5 rounded-lg transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* 标题区 */}
+            <div className="flex-none p-6 border-b border-white/5">
+              <h2 className="text-xl font-bold text-white mb-6">
+                {selectedResult?.title || '未命名帖子'}
+              </h2>
+              
+              <div className="grid grid-cols-2 gap-y-4 text-sm">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-gray-400">
+                    <span className="i-lucide-user w-4 h-4">👤</span>
+                  </div>
+                  <div>
+                    <div className="text-gray-500 text-xs mb-0.5">作者</div>
+                    <div className="text-gray-200 font-medium">{selectedResult?.author || '匿名'}</div>
+                  </div>
+                </div>
+                
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-gray-400">
+                    <Calendar className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <div className="text-gray-500 text-xs mb-0.5">发布时间</div>
+                    <div className="text-gray-200 font-medium">
+                      {selectedResult?.published_at ? new Date(selectedResult.published_at).toLocaleString() : '未知'}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-gray-400">
+                    <RefreshCw className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <div className="text-gray-500 text-xs mb-0.5">收录时间</div>
+                    <div className="text-gray-200 font-medium">
+                      {selectedResult?.published_at ? new Date(selectedResult.published_at).toLocaleString() : '未知'}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-gray-400">
+                    <Globe className="w-4 h-4" />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="text-gray-500 text-xs mb-0.5">分类</div>
+                    <a 
+                      href={selectedResult?.url} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="text-blue-400 hover:text-blue-300 hover:underline font-medium truncate block"
+                    >
+                      {selectedResult?.url || '无链接'}
+                    </a>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* 内容区 (带内部滚动) */}
+            <div className="flex-1 flex flex-col min-h-0 p-6 bg-[#1a1a2e]/50">
+              <div className="flex-none flex items-center justify-between mb-3">
+                <h3 className="text-sm font-bold text-gray-400">内容</h3>
+                <button 
+                  onClick={handleCopyContent}
+                  className="flex items-center gap-1.5 text-xs text-accent hover:text-accent/80 transition-colors disabled:opacity-50"
+                  disabled={isLoadingDetails}
+                >
+                  <Copy className="w-3.5 h-3.5" />
+                  复制
+                </button>
+              </div>
+              <div className="flex-1 overflow-y-auto bg-[#1e1e36] rounded-lg border border-white/5 p-4 custom-scrollbar relative">
+                {isLoadingDetails ? (
+                  <div className="absolute inset-0 flex items-center justify-center bg-[#1e1e36]/80 backdrop-blur-sm">
+                    <div className="flex flex-col items-center gap-2 text-accent">
+                      <Loader2 className="w-6 h-6 animate-spin" />
+                      <span className="text-xs font-medium">加载完整内容中...</span>
+                    </div>
+                  </div>
+                ) : null}
+                <pre className="text-gray-300 text-sm font-mono whitespace-pre-wrap break-words">
+                  {selectedResult?.raw_content || selectedResult?.content || '无内容'}
+                </pre>
+              </div>
+              <div className="flex-none mt-3 text-xs text-gray-500">
+                {(selectedResult?.raw_content || selectedResult?.content || '').length} 个字符 {isLoadingDetails ? '(加载中...)' : '(已加载完整内容)'}
+              </div>
+            </div>
+
+            {/* 底部操作栏 */}
+            <div className="flex-none p-4 border-t border-white/10 bg-[#1e1e36] flex justify-end gap-3">
+              <button 
+                onClick={handleCopyContent}
+                className="flex items-center gap-2 px-6 py-2.5 bg-[#25253e] hover:bg-[#2a2a4a] text-gray-300 border border-white/10 rounded-lg text-sm font-medium transition-colors"
+              >
+                <Copy className="w-4 h-4" />
+                全部复制
+              </button>
+              {selectedResult?.url && (
+                <a 
+                  href={selectedResult.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-sm font-medium transition-colors shadow-lg shadow-blue-500/20"
+                >
+                  查看原始帖子内容
+                  <ExternalLink className="w-4 h-4" />
+                </a>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

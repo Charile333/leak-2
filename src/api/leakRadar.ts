@@ -768,7 +768,10 @@ class LeakRadarAPI {
         title: item.title,
         content: item.content,
         published_at: item.published_at,
-        url: item.source_ref
+        url: item.source_ref,
+        author: item.author, // 新增作者字段
+        source_url: item.source_ref, // 新增源网址字段，与url相同，用于UI区分
+        raw_content: item.raw_content || item.content // 尝试获取原始完整内容
       })),
       total: response.total
     };
@@ -776,11 +779,12 @@ class LeakRadarAPI {
 
   /**
    * Get dark web post by ID
-   * GET /search/dark-web/posts/{id}
+   * GET /search/dark-web/post/{id}
    * @param id Post ID
    */
-  async getDarkWebPostById(id: string): Promise<{ success: boolean; post: any }> {
-    return this.request<{ success: boolean; post: any }>(`/search/dark-web/posts/${id}`);
+  async getDarkWebPostById(id: string): Promise<any> {
+    // 根据官方文档，返回的是直接的帖子对象，而不是包在 post 字段里
+    return this.request<any>(`/search/dark-web/post/${id}`);
   }
 
   /**
