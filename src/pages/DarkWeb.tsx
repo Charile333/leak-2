@@ -9,7 +9,6 @@ import {
   AlertCircle,
   Calendar,
   Globe,
-  MessageSquare,
   X,
   Copy,
   ExternalLink
