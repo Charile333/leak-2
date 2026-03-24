@@ -7,6 +7,77 @@ import {
 import { cn } from '../lib/utils';
 import { otxApi } from '../api/otxApi';
 
+const IOC_UNAVAILABLE_MESSAGE = 'IOC情报集功能暂时不可用';
+
+const pickFirstValue = (...values: any[]) =>
+  values.find((value) => value !== undefined && value !== null && value !== '');
+
+const toDisplayText = (value: any, fallback: string = 'N/A') => {
+  if (value === undefined || value === null || value === '') return fallback;
+  if (typeof value === 'string' || typeof value === 'number') return String(value);
+  if (typeof value === 'boolean') return value ? '是' : '否';
+  return fallback;
+};
+
+const toDisplayScalar = (value: any) => {
+  if (typeof value === 'string' || typeof value === 'number') return value;
+  return undefined;
+};
+
+const formatDisplayDate = (value: any) => {
+  if (!value) return 'N/A';
+  if (typeof value === 'object') return 'N/A';
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return String(value);
+  }
+
+  return date.toLocaleDateString('zh-CN');
+};
+
+const buildCveResult = (cveGeneral: any, cveTopPulses: any, searchQuery: string) => {
+  const cvssScore = pickFirstValue(
+    toDisplayScalar(cveGeneral?.base_score),
+    toDisplayScalar(cveGeneral?.cvss_score),
+    toDisplayScalar(cveGeneral?.cvss),
+    toDisplayScalar(cveGeneral?.cvss3?.base_score),
+    toDisplayScalar(cveGeneral?.cvss3?.score),
+    toDisplayScalar(cveGeneral?.cvss3?.cvssV3?.baseScore),
+    toDisplayScalar(cveGeneral?.cvss_v3?.base_score),
+    toDisplayScalar(cveGeneral?.cvss_v3?.score),
+    toDisplayScalar(cveGeneral?.cvssv3?.base_score),
+    toDisplayScalar(cveGeneral?.cvssv3?.score),
+    toDisplayScalar(cveGeneral?.cvss?.base_score),
+    toDisplayScalar(cveGeneral?.cvss?.score),
+    toDisplayScalar(cveGeneral?.cvss?.cvssV3?.baseScore),
+    toDisplayScalar(cveGeneral?.cvss2?.base_score),
+    toDisplayScalar(cveGeneral?.cvss2?.score),
+    toDisplayScalar(cveGeneral?.cvss_v2?.base_score),
+    toDisplayScalar(cveGeneral?.cvss_v2?.score),
+    toDisplayScalar(cveGeneral?.cvssv2?.base_score),
+    toDisplayScalar(cveGeneral?.cvssv2?.score)
+  );
+
+  const publishedDate = pickFirstValue(
+    cveGeneral?.published,
+    cveGeneral?.published_date,
+    cveGeneral?.date_published,
+    cveGeneral?.release_date,
+    cveGeneral?.created,
+    cveGeneral?.created_at,
+    cveGeneral?.modified
+  );
+
+  return {
+    ...cveGeneral,
+    indicator: toDisplayText(cveGeneral?.indicator || cveGeneral?.name || searchQuery.toUpperCase()),
+    base_score: toDisplayText(cvssScore),
+    published: formatDisplayDate(publishedDate),
+    top_n_pulses: cveTopPulses?.top_n_pulses || []
+  };
+};
+
 const IocSearch = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeSearchType, setActiveSearchType] = useState<'ip' | 'domain' | 'url' | 'cve'>('ip');
@@ -76,11 +147,12 @@ const IocSearch = () => {
           // 检测是IPv4还是IPv6
           const isIpv6 = searchQuery.includes(':');
           
-          // 改为串行请求，提高稳定性
-          const ipGeneral = await otxApi.getIpInfo(searchQuery, 'general', isIpv6);
-          const ipPassiveDns = await otxApi.getIpInfo(searchQuery, 'passive_dns', isIpv6);
-          const ipMalware = await otxApi.getIpInfo(searchQuery, 'malware', isIpv6);
-          const ipUrlList = await otxApi.getIpInfo(searchQuery, 'url_list', isIpv6);
+          const [ipGeneral, ipPassiveDns, ipMalware, ipUrlList] = await Promise.all([
+            otxApi.getIpInfo(searchQuery, 'general', isIpv6),
+            otxApi.getIpInfo(searchQuery, 'passive_dns', isIpv6),
+            otxApi.getIpInfo(searchQuery, 'malware', isIpv6),
+            otxApi.getIpInfo(searchQuery, 'url_list', isIpv6)
+          ]);
           
           // 合并IP查询数据
           result = {
@@ -97,11 +169,12 @@ const IocSearch = () => {
         }
         
         case 'domain': {
-          // 改为串行请求
-          const generalData = await otxApi.getDomainInfo(searchQuery, 'general');
-          const passiveDnsData = await otxApi.getDomainInfo(searchQuery, 'passive_dns');
-          const whoisData = await otxApi.getDomainInfo(searchQuery, 'whois');
-          const malwareData = await otxApi.getDomainInfo(searchQuery, 'malware');
+          const [generalData, passiveDnsData, whoisData, malwareData] = await Promise.all([
+            otxApi.getDomainInfo(searchQuery, 'general'),
+            otxApi.getDomainInfo(searchQuery, 'passive_dns'),
+            otxApi.getDomainInfo(searchQuery, 'whois'),
+            otxApi.getDomainInfo(searchQuery, 'malware')
+          ]);
           
           // 合并域名查询数据
           result = {
@@ -114,9 +187,10 @@ const IocSearch = () => {
         }
         
         case 'url': {
-          // 改为串行请求
-          const urlGeneral = await otxApi.getUrlInfo(searchQuery, 'general');
-          const urlUrlList = await otxApi.getUrlInfo(searchQuery, 'url_list');
+          const [urlGeneral, urlUrlList] = await Promise.all([
+            otxApi.getUrlInfo(searchQuery, 'general'),
+            otxApi.getUrlInfo(searchQuery, 'url_list')
+          ]);
           
           // 合并URL查询数据
           result = {
@@ -127,15 +201,12 @@ const IocSearch = () => {
         }
         
         case 'cve': {
-          // 改为串行请求
-          const cveGeneral = await otxApi.getCveInfo(searchQuery, 'general');
-          const cveTopPulses = await otxApi.getCveInfo(searchQuery, 'top_n_pulses');
+          const [cveGeneral, cveTopPulses] = await Promise.all([
+            otxApi.getCveInfo(searchQuery, 'general'),
+            otxApi.getCveInfo(searchQuery, 'top_n_pulses')
+          ]);
           
-          // 合并CVE查询数据
-          result = {
-            ...cveGeneral,
-            top_n_pulses: cveTopPulses?.top_n_pulses || []
-          };
+          result = buildCveResult(cveGeneral, cveTopPulses, searchQuery);
           break;
         }
         
@@ -171,13 +242,13 @@ const IocSearch = () => {
       let errorMessage = '查询失败，请重试';
       
       if (error.message?.includes('Empty response') || error.message?.includes('502')) {
-        errorMessage = 'OTX API暂时不可用，请稍后重试';
+        errorMessage = IOC_UNAVAILABLE_MESSAGE;
       } else if (error.message?.includes('401') || error.message?.includes('Authentication')) {
         errorMessage = 'API认证失败，请检查API密钥配置';
       } else if (error.message?.includes('404') || error.message?.includes('Not Found')) {
         errorMessage = '未找到相关威胁情报';
       } else if (error.message?.includes('timeout') || error.message?.includes('ETIMEDOUT') || error.message?.includes('Network Error')) {
-        errorMessage = '查询超时，请检查网络连接';
+        errorMessage = IOC_UNAVAILABLE_MESSAGE;
       } else if (error.message) {
         errorMessage = error.message;
       }
@@ -587,13 +658,24 @@ const IocSearch = () => {
                       <div className="bg-[#25252e] rounded-lg p-6">
                         <h3 className="text-lg font-bold text-white mb-4">相关威胁情报</h3>
                         <div className="space-y-4">
-                          {otxResults.top_n_pulses.map((pulse: any, index: number) => (
+                          {otxResults.top_n_pulses.map((pulse: any, index: number) => {
+                            const pulseDescription = typeof pulse?.description === 'string'
+                              ? pulse.description
+                              : '暂无描述';
+                            const pulseModified = pulse?.modified
+                              ? new Date(pulse.modified).toLocaleDateString()
+                              : 'N/A';
+
+                            return (
                             <div key={index} className="bg-white/5 p-4 rounded-lg">
-                              <h4 className="text-sm font-bold text-white">{pulse.name}</h4>
-                              <p className="text-xs text-gray-400 mt-1">{pulse.description.substring(0, 150)}...</p>
-                              <p className="text-xs text-gray-500 mt-2">{pulse.author_name} • {new Date(pulse.modified).toLocaleDateString()}</p>
+                              <h4 className="text-sm font-bold text-white">{pulse?.name || '未命名情报'}</h4>
+                              <p className="text-xs text-gray-400 mt-1">
+                                {pulseDescription.length > 150 ? `${pulseDescription.slice(0, 150)}...` : pulseDescription}
+                              </p>
+                              <p className="text-xs text-gray-500 mt-2">{pulse?.author_name || '未知来源'} • {pulseModified}</p>
                             </div>
-                          ))}
+                            );
+                          })}
                         </div>
                       </div>
                     )}

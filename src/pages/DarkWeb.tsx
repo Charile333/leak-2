@@ -15,6 +15,9 @@ import {
 } from 'lucide-react';
 import { leakRadarApi } from '../api/leakRadar';
 
+const MIN_QUERY_LENGTH = 3;
+const SHORT_QUERY_ERROR = '[查询结果] 错误信息：搜索词必须至少包含 3 个字符。';
+
 const DarkWeb = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearching, setIsSearching] = useState(false);
@@ -88,7 +91,14 @@ const DarkWeb = () => {
   // 搜索处理函数
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!searchQuery.trim()) return;
+    const trimmedQuery = searchQuery.trim();
+    if (!trimmedQuery) return;
+    if (trimmedQuery.length < MIN_QUERY_LENGTH) {
+      setSearchResults([]);
+      setTotalResults(0);
+      setError(SHORT_QUERY_ERROR);
+      return;
+    }
 
     setIsSearching(true);
     setError('');
@@ -96,7 +106,7 @@ const DarkWeb = () => {
 
     try {
       const response = await leakRadarApi.searchDarkWebMentions(
-        searchQuery, 
+        trimmedQuery, 
         1, 
         pageSize,
         advancedSearch,
@@ -148,14 +158,22 @@ const DarkWeb = () => {
 
   // 分页处理
   const handlePageChange = async (newPage: number) => {
-    if (!searchQuery.trim()) return;
+    const trimmedQuery = searchQuery.trim();
+    if (!trimmedQuery) return;
+    if (trimmedQuery.length < MIN_QUERY_LENGTH) {
+      setSearchResults([]);
+      setTotalResults(0);
+      setError(SHORT_QUERY_ERROR);
+      return;
+    }
 
     setIsSearching(true);
+    setError('');
     setCurrentPage(newPage);
 
     try {
       const response = await leakRadarApi.searchDarkWebMentions(
-        searchQuery, 
+        trimmedQuery, 
         newPage, 
         pageSize,
         advancedSearch,
