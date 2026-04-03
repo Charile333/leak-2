@@ -37,14 +37,20 @@
   --shimmer-color: #0077ae;
   --shimmer-width: 25%;
   --duration: 7s;
+  --font-sans: "Aptos", "Segoe UI Variable", "Segoe UI", "PingFang SC", "Noto Sans SC", sans-serif;
+  --font-display: "Bahnschrift", "Aptos Display", "Segoe UI Variable Display", "Segoe UI", "PingFang SC", "Noto Sans SC", sans-serif;
+  --font-mono: "IBM Plex Mono", "Cascadia Code", "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
 }
 
 body {
   margin: 0;
   color: var(--foreground);
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+  font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  font-kerning: normal;
+  text-rendering: optimizeLegibility;
+  line-height: 1.6;
 }
 
 @layer base {
@@ -53,6 +59,25 @@ body {
     background: radial-gradient(circle at 50% 20%, #1a2332 0%, #080c12 100%);
     color: var(--foreground);
     position: relative;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    font-family: var(--font-display);
+    font-kerning: normal;
+    text-wrap: balance;
+  }
+
+  p,
+  li,
+  input,
+  textarea,
+  button {
+    line-height: 1.6;
   }
   
   body::before {
@@ -70,7 +95,130 @@ body {
 
 @layer components {
   .glass-card {
-    @apply bg-white/5 backdrop-blur-lg border border-[#334155]/20 rounded-xl;
+    @apply bg-white/[0.04] backdrop-blur-md border border-[#334155]/15 rounded-xl;
+  }
+
+  .console-shell {
+    background: color-mix(in srgb, var(--background) 88%, #0f1623 12%);
+    border-color: color-mix(in srgb, var(--foreground) 8%, transparent);
+  }
+
+  .console-panel {
+    background: color-mix(in srgb, var(--card) 88%, transparent);
+    border: 1px solid color-mix(in srgb, var(--foreground) 8%, transparent);
+    backdrop-filter: blur(14px);
+    transition:
+      transform 220ms cubic-bezier(0.22, 1, 0.36, 1),
+      border-color 220ms ease,
+      box-shadow 220ms ease,
+      background-color 220ms ease;
+  }
+
+  .console-panel-strong {
+    background: color-mix(in srgb, var(--card) 94%, #05070c 6%);
+    border: 1px solid color-mix(in srgb, var(--foreground) 10%, transparent);
+    backdrop-filter: blur(20px);
+    transition:
+      transform 220ms cubic-bezier(0.22, 1, 0.36, 1),
+      border-color 220ms ease,
+      box-shadow 220ms ease,
+      background-color 220ms ease;
+  }
+
+  .console-panel:hover,
+  .console-panel-strong:hover {
+    transform: translateY(-1px);
+    border-color: color-mix(in srgb, var(--accent) 18%, color-mix(in srgb, var(--foreground) 8%, transparent));
+    box-shadow:
+      0 18px 40px -28px rgba(0, 0, 0, 0.6),
+      0 0 0 1px color-mix(in srgb, var(--accent) 7%, transparent);
+  }
+
+  .console-control {
+    position: relative;
+    overflow: hidden;
+    isolation: isolate;
+    background: color-mix(in srgb, var(--foreground) 5%, transparent);
+    border: 1px solid color-mix(in srgb, var(--foreground) 10%, transparent);
+    color: color-mix(in srgb, var(--foreground) 82%, transparent);
+    transition:
+      background-color 0.2s ease,
+      border-color 0.2s ease,
+      color 0.2s ease,
+      transform 0.2s cubic-bezier(0.22, 1, 0.36, 1),
+      box-shadow 0.2s ease;
+  }
+
+  .console-control::before,
+  .glass-button::before {
+    content: "";
+    position: absolute;
+    inset: -1px auto -1px -30%;
+    width: 32%;
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      rgba(255, 255, 255, 0.14) 50%,
+      transparent 100%
+    );
+    opacity: 0;
+    pointer-events: none;
+    transform: skewX(-18deg) translateX(0);
+    transition: opacity 0.25s ease, transform 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .console-control:hover {
+    background: color-mix(in srgb, var(--foreground) 8%, transparent);
+    color: var(--foreground);
+    transform: translateY(-1px);
+    box-shadow: 0 12px 28px -20px rgba(0, 0, 0, 0.75);
+  }
+
+  .console-control:hover::before,
+  .glass-button:hover::before {
+    opacity: 1;
+    transform: skewX(-18deg) translateX(320%);
+  }
+
+  .console-control:active,
+  .glass-button:active {
+    transform: translateY(0) scale(0.985);
+  }
+
+  .console-muted {
+    color: color-mix(in srgb, var(--foreground) 38%, transparent);
+  }
+
+  .console-subtle {
+    color: color-mix(in srgb, var(--foreground) 56%, transparent);
+  }
+
+  .console-divider {
+    border-color: color-mix(in srgb, var(--foreground) 8%, transparent);
+  }
+
+  .console-accent-soft {
+    background: color-mix(in srgb, var(--accent) 14%, transparent);
+    color: var(--accent);
+  }
+
+  .font-display {
+    font-family: var(--font-display);
+    font-kerning: normal;
+    letter-spacing: -0.03em;
+  }
+
+  .font-data {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum" 1, "ss01" 1;
+  }
+
+  .text-label {
+    font-size: 0.75rem;
+    line-height: 1.25rem;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
   }
   
   .hairline-border {
@@ -82,19 +230,30 @@ body {
   }
   
   .accent-glow {
-    box-shadow: 0 0 15px rgba(0, 149, 217, 0.1);
+    box-shadow: 0 0 10px rgba(0, 149, 217, 0.07);
   }
   
   .glass-button {
-    background: rgba(255, 255, 255, 0.1);
-    backdrop-filter: blur(12px);
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    transition: all 0.2s ease;
+    position: relative;
+    overflow: hidden;
+    isolation: isolate;
+    background: rgba(255, 255, 255, 0.07);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    transition:
+      background-color 0.2s ease,
+      border-color 0.2s ease,
+      transform 0.2s cubic-bezier(0.22, 1, 0.36, 1),
+      box-shadow 0.2s ease;
   }
   
   .glass-button:hover {
-    background: rgba(255, 255, 255, 0.2);
-    border-color: rgba(255, 255, 255, 0.3);
+    background: rgba(255, 255, 255, 0.12);
+    border-color: rgba(255, 255, 255, 0.2);
+    transform: translateY(-1px);
+    box-shadow:
+      0 18px 32px -24px rgba(0, 0, 0, 0.68),
+      0 0 0 1px color-mix(in srgb, var(--accent) 9%, transparent);
   }
 }
 
@@ -136,6 +295,20 @@ body {
   -webkit-text-fill-color: transparent;
   animation: shimmer var(--duration) linear infinite;
   text-shadow: 0 1px 0 rgba(0,0,0,0.3);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .console-panel,
+  .console-panel-strong,
+  .console-control,
+  .glass-button {
+    transition-duration: 0.01ms !important;
+  }
+
+  .console-control::before,
+  .glass-button::before {
+    display: none;
+  }
 }
 
 /* Fallback for browsers that don't support background-clip: text */

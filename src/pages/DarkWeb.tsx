@@ -1,375 +1,548 @@
-import { useState, useEffect, useRef } from 'react';
-// import { motion } from 'framer-motion';
-import { 
-  Search, 
-  Shield,
-  Database,
-  RefreshCw,
-  Loader2,
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
+import { createPortal } from 'react-dom';
+import {
   AlertCircle,
   Calendar,
-  Globe,
-  X,
+  ChevronLeft,
+  ChevronRight,
   Copy,
-  ExternalLink
+  ExternalLink,
+  FileText,
+  Globe,
+  Loader2,
+  Search,
+  SlidersHorizontal,
+  X,
 } from 'lucide-react';
-import { leakRadarApi } from '../api/leakRadar';
+import { leakRadarApi } from '../api/leakRadar.ts';
 
 const MIN_QUERY_LENGTH = 3;
-const SHORT_QUERY_ERROR = '[查询结果] 错误信息：搜索词必须至少包含 3 个字符。';
+const PAGE_SIZE = 10;
+
+type SortMode = 'relevance' | 'published_at';
+
+type DarkWebResult = {
+  id: string;
+  source?: string;
+  title?: string;
+  content?: string;
+  raw_content?: string;
+  published_at?: string;
+  ingested_at?: string;
+  collected_at?: string;
+  created_at?: string;
+  url?: string;
+  source_url?: string;
+  author?: string;
+};
+
+const QUICK_QUERIES = ['telegram', 'ransomware', 'walmart.com', 'admin@admin.com'];
+
+const formatDate = (value?: string) => {
+  if (!value) return '未知时间';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleString('zh-CN');
+};
+
+const getExcerpt = (result: DarkWebResult) => {
+  const source = result.content || result.raw_content || '';
+  if (!source) return '该结果暂无可预览内容。';
+  return source.length > 220 ? `${source.slice(0, 220)}...` : source;
+};
+
+const getIngestedAt = (result: DarkWebResult) =>
+  result.ingested_at || result.collected_at || result.created_at;
+
+const Panel = ({
+  title,
+  children,
+  right,
+}: {
+  title: string;
+  children: React.ReactNode;
+  right?: React.ReactNode;
+}) => (
+  <section className="overflow-hidden rounded-[28px] border border-white/8 bg-[#11141c]/82 backdrop-blur-2xl">
+    <div className="flex items-center justify-between border-b border-white/6 px-6 py-4">
+      <h2 className="text-base font-semibold text-white">{title}</h2>
+      {right}
+    </div>
+    <div className="px-6 py-6">{children}</div>
+  </section>
+);
+
+const EmptyState = ({ title, text }: { title: string; text: string }) => (
+  <div className="rounded-[28px] border border-dashed border-white/10 bg-white/[0.02] px-6 py-10 text-center">
+    <h3 className="text-lg font-semibold text-white">{title}</h3>
+    <p className="mt-3 text-sm leading-7 text-white/55">{text}</p>
+  </div>
+);
+
+const MetaCard = ({ label, value }: { label: string; value: string }) => (
+  <div className="rounded-[18px] border border-white/8 bg-[#0d1219] px-4 py-3">
+    <p className="text-[11px] uppercase tracking-[0.22em] text-white/42">{label}</p>
+    <p className="mt-2 break-all text-sm leading-6 text-white/82">{value}</p>
+  </div>
+);
 
 const DarkWeb = () => {
   const [searchQuery, setSearchQuery] = useState('');
-  const [isSearching, setIsSearching] = useState(false);
-  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [submittedQuery, setSubmittedQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<DarkWebResult[]>([]);
   const [totalResults, setTotalResults] = useState(0);
-  const [error, setError] = useState<string>('');
-  const [sources, setSources] = useState(5); // 默认来源数量
-  const [posts, setPosts] = useState(701028); // 默认帖子总数
+  const [sortMode, setSortMode] = useState<SortMode>('relevance');
   const [advancedSearch, setAdvancedSearch] = useState(false);
-  const [activeTab, setActiveTab] = useState('简单模式');
-
+  const [isSearching, setIsSearching] = useState(false);
+  const [error, setError] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
-  const pageSize = 10;
-
-  // 侧边栏状态
-  const [selectedResult, setSelectedResult] = useState<any | null>(null);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [sources, setSources] = useState(0);
+  const [posts, setPosts] = useState(0);
+  const [latestUpdateText, setLatestUpdateText] = useState('加载中...');
+  const [selectedResult, setSelectedResult] = useState<DarkWebResult | null>(null);
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [isLoadingDetails, setIsLoadingDetails] = useState(false);
-  const sidebarRef = useRef<HTMLDivElement>(null);
+  const drawerRef = useRef<HTMLDivElement>(null);
 
-  // 获取帖子详情
-  const fetchPostDetails = async (post: any) => {
-    // 先设置基本信息并打开抽屉
-    setSelectedResult(post);
-    setIsSidebarOpen(true);
+  const totalPages = Math.max(1, Math.ceil(totalResults / PAGE_SIZE));
+
+  const summaryStats = useMemo(
+    () => [
+      { label: '已收录帖子', value: posts.toLocaleString() },
+      { label: '活跃源数量', value: sources.toLocaleString() },
+      { label: '最近同步', value: latestUpdateText },
+    ],
+    [latestUpdateText, posts, sources]
+  );
+
+  const loadPage = async (page: number, queryOverride?: string) => {
+    const query = (queryOverride ?? searchQuery).trim();
+    if (!query) {
+      setError('');
+      setSearchResults([]);
+      setTotalResults(0);
+      return;
+    }
+
+    if (query.length < MIN_QUERY_LENGTH) {
+      setSearchResults([]);
+      setTotalResults(0);
+      setError(`请输入至少 ${MIN_QUERY_LENGTH} 个字符后再搜索。`);
+      return;
+    }
+
+    setIsSearching(true);
+    setError('');
+    setCurrentPage(page);
+
+    try {
+      const response = await leakRadarApi.searchDarkWebMentions(
+        query,
+        page,
+        PAGE_SIZE,
+        advancedSearch,
+        sortMode,
+        'desc'
+      );
+
+      if (response.success) {
+        setSubmittedQuery(query);
+        setSearchResults(response.results || []);
+        setTotalResults(response.total || 0);
+        return;
+      }
+
+      setSearchResults([]);
+      setTotalResults(0);
+      setError('当前无法加载暗网搜索结果。');
+    } catch (err: any) {
+      setSearchResults([]);
+      setTotalResults(0);
+      setError(err?.message || '当前无法加载暗网搜索结果。');
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  const fetchPostDetails = async (result: DarkWebResult) => {
+    setSelectedResult(result);
+    setIsDrawerOpen(true);
     setIsLoadingDetails(true);
 
     try {
-      const response = await leakRadarApi.getDarkWebPostById(post.id);
-      if (response && response.content) {
-        // 更新选中结果，合并详情数据，重点是覆盖 content
-        setSelectedResult((prev: any) => ({
-          ...prev,
+      const response = await leakRadarApi.getDarkWebPostById(result.id);
+      if (response) {
+        setSelectedResult({
+          ...result,
           ...response,
-          raw_content: response.content // 官方接口返回的是直接的对象，内容在 content 字段
-        }));
+          source: response.source_name || response.source || result.source,
+          source_url: response.source_url || response.source_ref || result.source_url || result.url,
+          url: response.source_ref || response.url || result.url,
+          author: response.author || result.author,
+          published_at: response.published_at || result.published_at,
+          ingested_at:
+            response.ingested_at ||
+            response.collected_at ||
+            response.created_at ||
+            result.ingested_at,
+          raw_content: response.raw_content || response.content || result.raw_content || result.content,
+          content: response.content || result.content,
+        });
       }
     } catch (err) {
-      console.error('获取帖子详情失败:', err);
-      // 失败时保持原有摘要数据不变，并可以考虑给个提示
+      console.error('Failed to load dark web post details:', err);
     } finally {
       setIsLoadingDetails(false);
     }
   };
 
-  // 点击外部关闭侧边栏
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (sidebarRef.current && !sidebarRef.current.contains(event.target as Node)) {
-        setIsSidebarOpen(false);
-      }
-    };
-
-    if (isSidebarOpen) {
-      document.addEventListener('mousedown', handleClickOutside);
-    }
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [isSidebarOpen]);
-
-  // 处理复制内容
-  const handleCopyContent = () => {
-    const contentToCopy = selectedResult?.raw_content || selectedResult?.content;
-    if (contentToCopy) {
-      navigator.clipboard.writeText(contentToCopy);
-      // 可以考虑添加一个 toast 提示
-    }
+  const handleSearch = async (event: React.FormEvent) => {
+    event.preventDefault();
+    await loadPage(1, searchQuery);
   };
 
-  // 搜索处理函数
-  const handleSearch = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const trimmedQuery = searchQuery.trim();
-    if (!trimmedQuery) return;
-    if (trimmedQuery.length < MIN_QUERY_LENGTH) {
-      setSearchResults([]);
-      setTotalResults(0);
-      setError(SHORT_QUERY_ERROR);
-      return;
-    }
-
-    setIsSearching(true);
-    setError('');
-    setCurrentPage(1);
-
-    try {
-      const response = await leakRadarApi.searchDarkWebMentions(
-        trimmedQuery, 
-        1, 
-        pageSize,
-        advancedSearch,
-        activeTab === '按日期排序' ? 'published_at' : 'relevance',
-        activeTab === '按日期排序' ? 'desc' : 'desc'
-      );
-      if (response.success) {
-        setSearchResults(response.results || []);
-        setTotalResults(response.total || 0);
-      } else {
-        setError('搜索失败，请重试');
-      }
-    } catch (err: any) {
-      setError(err.message || '搜索失败，请检查网络连接');
-    } finally {
-      setIsSearching(false);
-    }
+  const handleCopyContent = async () => {
+    const content = selectedResult?.raw_content || selectedResult?.content;
+    if (!content) return;
+    await navigator.clipboard.writeText(content);
   };
 
-  // const [sourcesList, setSourcesList] = useState<Array<{ id: string; name: string; post_count: number; url: string }>>([]);
-
-  // 加载暗网统计信息
   useEffect(() => {
-    const loadDarkWebStatistics = async () => {
+    const loadStats = async () => {
       try {
-        // 获取暗网统计信息
-        const statsResponse = await leakRadarApi.getDarkWebStatistics();
+        const [statsResponse, sourcesResponse] = await Promise.all([
+          leakRadarApi.getDarkWebStatistics(),
+          leakRadarApi.getDarkWebSources(),
+        ]);
+
         if (statsResponse.success) {
-          setPosts(statsResponse.total_posts || 701028);
-          setSources(statsResponse.total_sources || 5);
+          setPosts(statsResponse.total_posts || 0);
+          setSources(statsResponse.total_sources || 0);
+          setLatestUpdateText(formatDate(statsResponse.latest_ingested_at));
         }
 
-        // 获取暗网来源信息
-        const sourcesResponse = await leakRadarApi.getDarkWebSources();
-        if (sourcesResponse.success && sourcesResponse.sources) {
-          // setSourcesList(sourcesResponse.sources);
-          // 如果统计信息中没有total_sources，则从来源列表长度计算
-          if (!statsResponse.success) {
-            setSources(sourcesResponse.sources.length || 5);
-          }
+        if (sourcesResponse.success && !statsResponse.success) {
+          setSources(sourcesResponse.sources.length || 0);
         }
       } catch (err) {
         console.error('Failed to load dark web statistics:', err);
+        setLatestUpdateText('暂不可用');
       }
     };
 
-    loadDarkWebStatistics();
+    loadStats();
   }, []);
 
-  // 分页处理
-  const handlePageChange = async (newPage: number) => {
-    const trimmedQuery = searchQuery.trim();
-    if (!trimmedQuery) return;
-    if (trimmedQuery.length < MIN_QUERY_LENGTH) {
-      setSearchResults([]);
-      setTotalResults(0);
-      setError(SHORT_QUERY_ERROR);
-      return;
-    }
+  useEffect(() => {
+    if (!submittedQuery) return;
+    void loadPage(1, submittedQuery);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sortMode, advancedSearch]);
 
-    setIsSearching(true);
-    setError('');
-    setCurrentPage(newPage);
-
-    try {
-      const response = await leakRadarApi.searchDarkWebMentions(
-        trimmedQuery, 
-        newPage, 
-        pageSize,
-        advancedSearch,
-        activeTab === '按日期排序' ? 'published_at' : 'relevance',
-        activeTab === '按日期排序' ? 'desc' : 'desc'
-      );
-      if (response.success) {
-        setSearchResults(response.results || []);
-      } else {
-        setError('加载分页数据失败');
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (drawerRef.current && !drawerRef.current.contains(event.target as Node)) {
+        setIsDrawerOpen(false);
       }
-    } catch (err: any) {
-      setError(err.message || '加载分页数据失败');
-    } finally {
-      setIsSearching(false);
-    }
-  };
+    };
 
-  // 示例输入处理
-  const handleExampleClick = (example: string) => {
-    setSearchQuery(example);
-  };
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setIsDrawerOpen(false);
+      }
+    };
+
+    if (!isDrawerOpen) return;
+
+    document.body.style.overflow = 'hidden';
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleEscape);
+
+    return () => {
+      document.body.style.overflow = '';
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleEscape);
+    };
+  }, [isDrawerOpen]);
+
+  const drawerOverlay =
+    typeof document !== 'undefined' ? (
+      <AnimatePresence>
+        {isDrawerOpen && (
+          <>
+            <motion.button
+              type="button"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.22 }}
+              className="fixed inset-0 z-[140] bg-[#04070d]/76 backdrop-blur-sm"
+              aria-label="关闭详情面板"
+              onClick={() => setIsDrawerOpen(false)}
+            />
+
+            <motion.aside
+              ref={drawerRef}
+              initial={{ x: '100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '100%' }}
+              transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
+              className="fixed right-0 top-0 z-[150] h-screen w-full max-w-[560px] border-l border-accent/15 bg-[#0a0f16]/96 shadow-[-24px_0_80px_rgba(0,0,0,0.42)] backdrop-blur-2xl"
+            >
+              <div className="flex h-full flex-col">
+                <div className="flex items-start justify-between border-b border-accent/10 px-6 py-5">
+                  <div className="min-w-0 pr-4">
+                    <h2 className="text-xl font-semibold leading-relaxed text-white">
+                      {selectedResult?.title || '未命名结果'}
+                    </h2>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsDrawerOpen(false)}
+                    className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-accent/15 bg-accent/10 text-accent/80 transition-colors hover:bg-accent/15 hover:text-accent"
+                    aria-label="关闭详情"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+
+                <div className="flex-1 overflow-hidden px-6 py-6">
+                  {!selectedResult ? null : (
+                    <div className="flex h-full min-h-0 flex-col gap-5">
+                      <div className="shrink-0 grid gap-2.5 sm:grid-cols-2">
+                        <MetaCard label="作者" value={selectedResult.author || '未知'} />
+                        <MetaCard label="发布时间" value={formatDate(selectedResult.published_at)} />
+                        <MetaCard label="收录时间" value={formatDate(getIngestedAt(selectedResult))} />
+                        <MetaCard
+                          label="来源网站"
+                          value={selectedResult.source_url || selectedResult.url || '暂无来源网站'}
+                        />
+                      </div>
+
+                      <div className="flex min-h-0 flex-1 flex-col rounded-[24px] border border-accent/12 bg-[#0d1219] px-5 py-5 shadow-[inset_0_1px_0_rgba(168,85,247,0.04)]">
+                        <div className="mb-3 shrink-0 flex items-center gap-2 text-sm font-medium text-white/86">
+                          {isLoadingDetails ? (
+                            <Loader2 className="h-4 w-4 animate-spin text-accent" />
+                          ) : (
+                            <FileText className="h-4 w-4 text-accent" />
+                          )}
+                          <span>完整记录</span>
+                        </div>
+                        <div className="min-h-0 flex-1 overflow-y-auto rounded-[18px] border border-white/6 bg-black/10 px-4 py-4 pr-3 whitespace-pre-wrap text-sm leading-7 text-white/72">
+                          {selectedResult.raw_content ||
+                            selectedResult.content ||
+                            '当前结果暂无返回的完整正文。'}
+                        </div>
+                        <div className="mt-4 shrink-0 flex flex-wrap gap-3">
+                          <button
+                            type="button"
+                            onClick={handleCopyContent}
+                            className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-sm text-white/72 transition-colors hover:bg-white/[0.06]"
+                          >
+                            <Copy className="h-4 w-4" />
+                            复制内容
+                          </button>
+                          {(selectedResult.source_url || selectedResult.url) && (
+                            <a
+                              href={selectedResult.source_url || selectedResult.url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex items-center gap-2 rounded-full border border-accent/20 bg-accent/10 px-4 py-2 text-sm text-accent transition-colors hover:bg-accent/14"
+                            >
+                              <ExternalLink className="h-4 w-4" />
+                              打开来源网站
+                            </a>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </motion.aside>
+          </>
+        )}
+      </AnimatePresence>
+    ) : null;
 
   return (
-    <div className="min-h-[calc(100vh-4rem)] bg-[#1a1a2e] animate-in fade-in duration-700">
-      {/* 功能完善中横幅 */}
-      <div className="w-full bg-yellow-500/20 border-b border-yellow-500/40 p-4 text-center">
-        <p className="text-yellow-400 font-bold text-lg">功能完善中</p>
-      </div>
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* 顶部标题和统计信息 */}
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-red-500/20 rounded-lg">
-              <Shield className="w-6 h-6 text-red-400" />
+    <div className="min-h-[calc(100vh-4rem)]">
+      <div className="relative overflow-hidden rounded-[36px] border border-white/8 bg-[#0a0f16] px-5 py-6 shadow-[0_30px_120px_rgba(0,0,0,0.28)] sm:px-8 lg:px-10">
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(168,85,247,0.16),transparent_34%),radial-gradient(circle_at_78%_18%,rgba(168,85,247,0.08),transparent_28%),linear-gradient(180deg,rgba(255,255,255,0.02),transparent_24%)]" />
+        <div className="relative z-10">
+          <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center gap-3">
+              <span className="rounded-full border border-accent/20 bg-accent/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.22em] text-accent">
+                暗网搜索
+              </span>
+              <span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1 text-[11px] uppercase tracking-[0.22em] text-white/56">
+                全文查看
+              </span>
             </div>
-            <h1 className="text-2xl font-bold text-white">暗网搜索</h1>
-          </div>
-          
-          <div className="flex items-center gap-6">
-            <div className="flex items-center gap-2">
-              <Database className="w-4 h-4 text-gray-400" />
-              <span className="text-sm text-gray-300">帖子总数</span>
-              <span className="px-3 py-1 bg-accent/20 text-accent rounded-full text-sm font-medium">{posts.toLocaleString()}</span>
-            </div>
-            
-            <div className="flex items-center gap-2">
-              <RefreshCw className="w-4 h-4 text-gray-400" />
-              <span className="text-sm text-gray-300">最后更新</span>
-              <span className="px-3 py-1 bg-green-500/20 text-green-400 rounded-full text-sm font-medium">刚刚</span>
-            </div>
-            
-            {/* 来源数统计 */}
-            <div className="flex items-center gap-2">
-              <Globe className="w-4 h-4 text-gray-400" />
-              <span className="text-sm text-gray-300">来源</span>
-              <span className="px-3 py-1 bg-blue-500/20 text-blue-400 rounded-full text-sm font-medium">{sources.toLocaleString()}</span>
+            <div className="rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-xs text-white/56">
+              搜索、筛选、查看完整内容
             </div>
           </div>
-        </div>
-        
-        {/* 描述文本 */}
-        <p className="text-sm text-gray-400 mb-6">
-          在暗网论坛和市场中搜索您的公司、域名、IP和员工凭据的提及，提前防范威胁。
-        </p>
-        
-        {/* 搜索框 */}
-        <div className="bg-[#25253e] border border-white/10 rounded-2xl p-6 mb-6">
-          <form onSubmit={handleSearch} className="flex gap-4">
-            <div className="flex-1 relative">
-              <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-500" />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="搜索关键词：公司名称、域名、IP、邮箱..."
-                className="w-full bg-[#1a1a2e] border border-white/5 rounded-xl pl-12 pr-4 py-3 text-white placeholder:text-gray-500 focus:outline-none focus:border-accent/50"
-              />
+
+          <div className="grid gap-5 lg:grid-cols-[1.15fr_0.85fr] lg:items-end">
+            <div className="max-w-3xl">
+              <h1 className="text-2xl font-semibold tracking-[-0.04em] text-white sm:text-3xl lg:text-4xl">
+                暗网搜索
+              </h1>
+              <p className="mt-3 max-w-2xl text-sm leading-7 text-white/58 sm:text-base">
+                在暗网论坛和市场中搜索您的公司、域名、IP 和员工凭据的提及，提前防范威胁。
+              </p>
             </div>
-            <button
-              type="submit"
-              disabled={isSearching}
-              className="bg-accent hover:bg-accent/80 disabled:opacity-50 text-white px-6 py-3 rounded-xl font-medium transition-all flex items-center gap-2"
-            >
-              {isSearching ? (
-                <Loader2 className="w-5 h-5 animate-spin" />
-              ) : (
-                <Search className="w-5 h-5" />
-              )}
-              搜索
-            </button>
+
+            <div className="grid gap-2 sm:grid-cols-3">
+              {summaryStats.map((stat) => (
+                <div key={stat.label} className="rounded-[22px] border border-white/8 bg-white/[0.03] px-4 py-4">
+                  <p className="text-[11px] uppercase tracking-[0.24em] text-white/40">{stat.label}</p>
+                  <p className="mt-2 text-lg font-semibold text-white">{stat.value}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <form onSubmit={handleSearch} className="mt-6 space-y-4">
+            <div className="rounded-[30px] border border-white/8 bg-[#0f141d]/84 p-3 shadow-[0_20px_60px_rgba(0,0,0,0.24)] backdrop-blur-2xl">
+              <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
+                <div className="flex min-w-0 flex-1 items-center gap-3 rounded-[22px] border border-white/8 bg-white/[0.03] px-4 py-3 focus-within:border-accent/30 sm:px-5 sm:py-4">
+                  <Search className="h-5 w-5 shrink-0 text-accent/80" />
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(event) => setSearchQuery(event.target.value)}
+                    placeholder="搜索域名、邮箱、人物、论坛关键词、公司名或泄露主题"
+                    className="min-w-0 flex-1 bg-transparent text-sm text-white outline-none placeholder:text-white/30 sm:text-base"
+                  />
+                </div>
+
+                <div className="grid gap-3 sm:grid-cols-3 xl:w-[480px]">
+                  <label className="flex items-center gap-2 rounded-[22px] border border-white/8 bg-white/[0.03] px-4 py-3 text-sm text-white/70">
+                    <SlidersHorizontal className="h-4 w-4 text-accent/80" />
+                    <select
+                      value={sortMode}
+                      onChange={(event) => setSortMode(event.target.value as SortMode)}
+                      className="w-full bg-transparent text-sm text-white outline-none"
+                    >
+                      <option value="relevance" className="bg-[#11141c]">
+                        相关性
+                      </option>
+                      <option value="published_at" className="bg-[#11141c]">
+                        最新优先
+                      </option>
+                    </select>
+                  </label>
+
+                  <label className="flex items-center justify-center gap-2 rounded-[22px] border border-white/8 bg-white/[0.03] px-4 py-3 text-sm text-white/70">
+                    <input
+                      type="checkbox"
+                      checked={advancedSearch}
+                      onChange={(event) => setAdvancedSearch(event.target.checked)}
+                      className="h-4 w-4 accent-accent"
+                    />
+                    高级搜索
+                  </label>
+
+                  <button
+                    type="submit"
+                    disabled={isSearching}
+                    className="inline-flex items-center justify-center gap-3 rounded-[22px] bg-accent px-6 py-3 text-sm font-semibold text-white transition-all hover:bg-accent/90 disabled:opacity-70"
+                  >
+                    {isSearching ? <Loader2 className="h-5 w-5 animate-spin" /> : <Search className="h-5 w-5" />}
+                    搜索
+                  </button>
+                </div>
+              </div>
+
+              <div className="mt-4 flex flex-wrap gap-2">
+                {QUICK_QUERIES.map((example) => (
+                  <button
+                    key={example}
+                    type="button"
+                    onClick={() => setSearchQuery(example)}
+                    className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-2 text-xs text-white/62 transition-colors hover:bg-white/[0.06]"
+                  >
+                    {example}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {error && (
+              <div className="flex items-start gap-3 rounded-[24px] border border-red-500/18 bg-red-500/8 px-4 py-4 text-sm text-red-200">
+                <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                <span>{error}</span>
+              </div>
+            )}
           </form>
-          
-          {/* 高级搜索选项 */}
-          <div className="mt-4">
-            <div className="flex items-center gap-2">
-              <input 
-                type="checkbox" 
-                id="advanced-search" 
-                checked={advancedSearch}
-                onChange={(e) => setAdvancedSearch(e.target.checked)}
-                className="w-4 h-4"
-              />
-              <label htmlFor="advanced-search" className="text-sm text-gray-400">高级搜索</label>
-            </div>
-          </div>
         </div>
-        
-        {/* 选项卡 */}
-        <div className="flex gap-2 mb-6">
-          {['简单模式', '搜索标题和内容', '按日期排序', '按论坛抓取'].map((tab) => (
-            <button 
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              className={`px-4 py-2 bg-[#25253e] border border-white/10 rounded-lg text-sm font-medium transition-colors ${
-                activeTab === tab ? 'text-white' : 'text-gray-400 hover:text-white'
-              }`}
-            >
-              {tab}
-            </button>
-          ))}
-        </div>
-        
-        {/* 错误信息 */}
-        {error && (
-          <div className="bg-red-500/20 border border-red-500/30 rounded-xl p-4 mb-6 flex items-center gap-3">
-            <AlertCircle className="w-5 h-5 text-red-400" />
-            <span className="text-red-400 text-sm">{error}</span>
-          </div>
-        )}
-        
-        {/* 搜索结果 */}
-        {searchResults.length > 0 ? (
-          <div className="bg-[#25253e] border border-white/10 rounded-2xl p-6 mb-6">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-bold text-white">搜索结果</h2>
-              <span className="text-sm text-gray-400">共 {totalResults} 条结果</span>
-            </div>
-            
+      </div>
+
+      <div className="mt-8 space-y-6">
+        <Panel
+          title={submittedQuery ? `“${submittedQuery}” 的搜索结果` : '搜索结果'}
+          right={<span className="text-sm text-white/48">共 {totalResults} 条</span>}
+        >
+          {searchResults.length === 0 ? (
+            <EmptyState
+              title="先开始一次搜索"
+              text="在上方输入关键词后，这里会显示结果列表。点击“查看完整内容”即可从右侧滑出详情面板。"
+            />
+          ) : (
             <div className="space-y-4">
-              {searchResults.map((result, index) => (
-                <div key={index} className="bg-[#1a1a2e] border border-white/5 rounded-xl p-4 hover:border-accent/50 transition-colors">
-                  <div className="flex flex-col gap-2">
-                    {/* 标题 */}
-                    <div className="flex items-start justify-between">
-                      <h3 className="text-white font-bold text-lg">{result.title || '未命名帖子'}</h3>
-                      <div className="px-3 py-1 bg-accent/20 text-accent rounded-full text-xs font-medium shrink-0">
-                        {result.source || '未知来源'}
-                      </div>
-                    </div>
-
-                    {/* 元信息：源网址 + 作者 */}
-                    <div className="flex flex-wrap items-center gap-4 text-xs text-gray-400">
-                      {/* 源网址 */}
-                      <div className="flex items-center gap-1.5 text-yellow-500/80">
-                        <span className="i-lucide-folder w-3.5 h-3.5">📁</span>
-                        <a 
-                          href={result.url} 
-                          target="_blank" 
-                          rel="noopener noreferrer"
-                          className="hover:underline truncate max-w-[300px]"
-                        >
-                          {result.url || '无链接'}
-                        </a>
-                      </div>
-                      
-                      {/* 作者 */}
-                      {result.author && (
-                        <div className="flex items-center gap-1.5 text-gray-300 bg-white/5 px-2 py-0.5 rounded">
-                          <span className="i-lucide-user w-3.5 h-3.5">👤</span>
-                          <span>{result.author}</span>
+              {searchResults.map((result) => (
+                <div
+                  key={result.id}
+                  className="rounded-[24px] border border-white/8 bg-white/[0.03] p-5 transition-all hover:border-accent/20 hover:bg-white/[0.05]"
+                >
+                  <div className="flex flex-col gap-4">
+                    <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[11px] uppercase tracking-[0.18em] text-white/58">
+                            {result.source || '未知来源'}
+                          </span>
+                          {result.author && (
+                            <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[11px] text-white/58">
+                              作者: {result.author}
+                            </span>
+                          )}
                         </div>
-                      )}
 
-                      {/* 发布时间 */}
-                      <div className="flex items-center gap-1.5 ml-auto">
-                        <Calendar className="w-3.5 h-3.5" />
-                        <span>{result.published_at ? new Date(result.published_at).toLocaleString() : '未知日期'}</span>
+                        <h3 className="mt-3 text-lg font-semibold leading-relaxed text-white">
+                          {result.title || '未命名结果'}
+                        </h3>
+
+                        <p className="mt-3 text-sm leading-7 text-white/56">{getExcerpt(result)}</p>
+                      </div>
+
+                      <div className="flex shrink-0 items-center gap-2 text-xs text-white/48">
+                        <Calendar className="h-4 w-4" />
+                        <span>{formatDate(result.published_at)}</span>
                       </div>
                     </div>
 
-                    {/* 内容摘要 */}
-                    <div className="mt-2 text-sm text-gray-300 leading-relaxed font-mono bg-black/20 p-3 rounded border border-white/5">
-                      <p className="line-clamp-6 whitespace-pre-wrap">{result.content || '无内容'}</p>
-                    </div>
+                    <div className="flex flex-wrap items-center justify-between gap-3 border-t border-white/6 pt-4">
+                      <div className="flex flex-wrap items-center gap-3 text-xs text-white/50">
+                        <span className="inline-flex items-center gap-1.5">
+                          <FileText className="h-4 w-4" />
+                          可查看完整正文
+                        </span>
+                        <span className="inline-flex items-center gap-1.5">
+                          <Globe className="h-4 w-4" />
+                          {(result.source_url || result.url) ? '含来源网站' : '暂无来源网站'}
+                        </span>
+                      </div>
 
-                    {/* 底部操作栏 */}
-                    <div className="flex justify-end items-center mt-2 gap-3 pt-2 border-t border-white/5">
-                      {/* <button className="text-xs text-accent hover:text-accent/80 flex items-center gap-1 transition-colors">
-                        <span className="i-lucide-copy w-3 h-3">📋</span>
-                        查看来源
-                      </button> */}
-                      <button 
-                        className="bg-accent/10 text-accent hover:bg-accent hover:text-white text-xs px-4 py-1.5 rounded transition-all font-medium flex items-center gap-1"
+                      <button
+                        type="button"
                         onClick={() => fetchPostDetails(result)}
+                        className="inline-flex items-center gap-2 rounded-full border border-accent/20 bg-accent/10 px-3 py-1.5 text-xs font-medium text-accent transition-colors hover:bg-accent/15"
                       >
+                        <FileText className="h-3.5 w-3.5" />
                         查看完整内容
                       </button>
                     </div>
@@ -377,224 +550,41 @@ const DarkWeb = () => {
                 </div>
               ))}
             </div>
-            
-            {/* 分页控件 */}
-            {totalResults > pageSize && (
-              <div className="flex items-center justify-center mt-6 gap-2">
+          )}
+        </Panel>
+
+        {searchResults.length > 0 && (
+          <Panel title="分页">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-sm text-white/52">
+                第 {currentPage} / {totalPages} 页
+              </p>
+              <div className="flex items-center gap-3">
                 <button
-                  onClick={() => handlePageChange(currentPage - 1)}
-                  disabled={currentPage === 1}
-                  className="px-4 py-2 bg-[#1a1a2e] border border-white/5 rounded-lg text-sm text-gray-400 disabled:opacity-50 hover:border-accent/50 transition-colors"
+                  type="button"
+                  disabled={currentPage <= 1 || isSearching}
+                  onClick={() => loadPage(currentPage - 1)}
+                  className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-sm text-white/72 transition-colors hover:bg-white/[0.06] disabled:opacity-40"
                 >
+                  <ChevronLeft className="h-4 w-4" />
                   上一页
                 </button>
-                <span className="text-sm text-gray-400">
-                  第 {currentPage} 页，共 {Math.ceil(totalResults / pageSize)} 页
-                </span>
                 <button
-                  onClick={() => handlePageChange(currentPage + 1)}
-                  disabled={currentPage * pageSize >= totalResults}
-                  className="px-4 py-2 bg-[#1a1a2e] border border-white/5 rounded-lg text-sm text-gray-400 disabled:opacity-50 hover:border-accent/50 transition-colors"
+                  type="button"
+                  disabled={currentPage >= totalPages || isSearching}
+                  onClick={() => loadPage(currentPage + 1)}
+                  className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-sm text-white/72 transition-colors hover:bg-white/[0.06] disabled:opacity-40"
                 >
                   下一页
+                  <ChevronRight className="h-4 w-4" />
                 </button>
               </div>
-            )}
-          </div>
-        ) : searchQuery && !isSearching ? (
-          <div className="bg-[#25253e] border border-white/10 rounded-2xl p-12 text-center mb-6">
-            <div className="mb-4">
-              <Shield className="w-12 h-12 text-gray-500 mx-auto" />
             </div>
-            <h2 className="text-xl font-bold text-white mb-2">未找到结果</h2>
-            <p className="text-gray-400">
-              没有找到与 "{searchQuery}" 相关的暗网信息
-            </p>
-          </div>
-        ) : (
-          /* 主要内容区域 */
-          <div className="bg-[#25253e] border border-white/10 rounded-2xl p-12 text-center">
-            <div className="mb-8">
-              <div className="inline-flex items-center justify-center w-16 h-16 bg-accent/20 rounded-full mb-6">
-                <Shield className="w-8 h-8 text-accent" />
-              </div>
-              <h2 className="text-2xl font-bold text-white mb-4">开始暗网监控</h2>
-              <p className="text-gray-400 max-w-2xl mx-auto">
-                输入您的公司名称、域名、IP地址或邮箱，以发现您的资产是否在暗网论坛上被讨论或交易。
-              </p>
-            </div>
-            
-            {/* 示例输入 */}
-            <div className="flex flex-wrap justify-center gap-3">
-              <button 
-                onClick={() => handleExampleClick('walmart.com')}
-                className="px-4 py-2 bg-[#1a1a2e] border border-white/5 rounded-lg text-sm text-gray-300 hover:border-accent/50 transition-colors"
-              >
-                walmart.com
-              </button>
-              <button 
-                onClick={() => handleExampleClick('admin@admin.com')}
-                className="px-4 py-2 bg-[#1a1a2e] border border-white/5 rounded-lg text-sm text-gray-300 hover:border-accent/50 transition-colors"
-              >
-                admin@admin.com
-              </button>
-              <button 
-                onClick={() => handleExampleClick('127.0.0.1')}
-                className="px-4 py-2 bg-[#1a1a2e] border border-white/5 rounded-lg text-sm text-gray-300 hover:border-accent/50 transition-colors"
-              >
-                127.0.0.1
-              </button>
-            </div>
-          </div>
+          </Panel>
         )}
       </div>
 
-      {/* 侧边滑出抽屉 */}
-      {isSidebarOpen && (
-        <div className="fixed inset-0 z-50 flex justify-end">
-          {/* 遮罩层 */}
-          <div 
-            className="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity"
-            onClick={() => setIsSidebarOpen(false)}
-          ></div>
-          
-          {/* 抽屉内容 */}
-          <div 
-            ref={sidebarRef}
-            className="relative w-full max-w-2xl bg-[#1e1e36] border-l border-white/10 shadow-2xl flex flex-col h-full animate-in slide-in-from-right duration-300"
-          >
-            {/* 头部 */}
-            <div className="flex-none flex items-center justify-between p-4 border-b border-white/10 bg-[#1a1a2e]">
-              <div className="flex items-center gap-3">
-                <span className="px-2.5 py-1 bg-red-500/20 text-red-400 text-xs font-bold rounded">暗网</span>
-                <div className="flex items-center gap-1.5 text-gray-300 text-sm">
-                  <Globe className="w-4 h-4" />
-                  {selectedResult?.source || '未知来源'}
-                </div>
-              </div>
-              <button 
-                onClick={() => setIsSidebarOpen(false)}
-                className="p-2 text-gray-400 hover:text-white hover:bg-white/5 rounded-lg transition-colors"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            {/* 标题区 */}
-            <div className="flex-none p-6 border-b border-white/5">
-              <h2 className="text-xl font-bold text-white mb-6">
-                {selectedResult?.title || '未命名帖子'}
-              </h2>
-              
-              <div className="grid grid-cols-2 gap-y-4 text-sm">
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-gray-400">
-                    <span className="i-lucide-user w-4 h-4">👤</span>
-                  </div>
-                  <div>
-                    <div className="text-gray-500 text-xs mb-0.5">作者</div>
-                    <div className="text-gray-200 font-medium">{selectedResult?.author || '匿名'}</div>
-                  </div>
-                </div>
-                
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-gray-400">
-                    <Calendar className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <div className="text-gray-500 text-xs mb-0.5">发布时间</div>
-                    <div className="text-gray-200 font-medium">
-                      {selectedResult?.published_at ? new Date(selectedResult.published_at).toLocaleString() : '未知'}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-gray-400">
-                    <RefreshCw className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <div className="text-gray-500 text-xs mb-0.5">收录时间</div>
-                    <div className="text-gray-200 font-medium">
-                      {selectedResult?.published_at ? new Date(selectedResult.published_at).toLocaleString() : '未知'}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-gray-400">
-                    <Globe className="w-4 h-4" />
-                  </div>
-                  <div className="min-w-0">
-                    <div className="text-gray-500 text-xs mb-0.5">分类</div>
-                    <a 
-                      href={selectedResult?.url} 
-                      target="_blank" 
-                      rel="noopener noreferrer"
-                      className="text-blue-400 hover:text-blue-300 hover:underline font-medium truncate block"
-                    >
-                      {selectedResult?.url || '无链接'}
-                    </a>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* 内容区 (带内部滚动) */}
-            <div className="flex-1 flex flex-col min-h-0 p-6 bg-[#1a1a2e]/50">
-              <div className="flex-none flex items-center justify-between mb-3">
-                <h3 className="text-sm font-bold text-gray-400">内容</h3>
-                <button 
-                  onClick={handleCopyContent}
-                  className="flex items-center gap-1.5 text-xs text-accent hover:text-accent/80 transition-colors disabled:opacity-50"
-                  disabled={isLoadingDetails}
-                >
-                  <Copy className="w-3.5 h-3.5" />
-                  复制
-                </button>
-              </div>
-              <div className="flex-1 overflow-y-auto bg-[#1e1e36] rounded-lg border border-white/5 p-4 custom-scrollbar relative">
-                {isLoadingDetails ? (
-                  <div className="absolute inset-0 flex items-center justify-center bg-[#1e1e36]/80 backdrop-blur-sm">
-                    <div className="flex flex-col items-center gap-2 text-accent">
-                      <Loader2 className="w-6 h-6 animate-spin" />
-                      <span className="text-xs font-medium">加载完整内容中...</span>
-                    </div>
-                  </div>
-                ) : null}
-                <pre className="text-gray-300 text-sm font-mono whitespace-pre-wrap break-words">
-                  {selectedResult?.raw_content || selectedResult?.content || '无内容'}
-                </pre>
-              </div>
-              <div className="flex-none mt-3 text-xs text-gray-500">
-                {(selectedResult?.raw_content || selectedResult?.content || '').length} 个字符 {isLoadingDetails ? '(加载中...)' : '(已加载完整内容)'}
-              </div>
-            </div>
-
-            {/* 底部操作栏 */}
-            <div className="flex-none p-4 border-t border-white/10 bg-[#1e1e36] flex justify-end gap-3">
-              <button 
-                onClick={handleCopyContent}
-                className="flex items-center gap-2 px-6 py-2.5 bg-[#25253e] hover:bg-[#2a2a4a] text-gray-300 border border-white/10 rounded-lg text-sm font-medium transition-colors"
-              >
-                <Copy className="w-4 h-4" />
-                全部复制
-              </button>
-              {selectedResult?.url && (
-                <a 
-                  href={selectedResult.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-sm font-medium transition-colors shadow-lg shadow-blue-500/20"
-                >
-                  查看原始帖子内容
-                  <ExternalLink className="w-4 h-4" />
-                </a>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
+      {drawerOverlay ? createPortal(drawerOverlay, document.body) : null}
     </div>
   );
 };

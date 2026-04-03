@@ -1,14 +1,29 @@
 import axios from 'axios';
 
-const OTX_API_BASE_URL = '/api/otx'; 
+const BASE_URL = import.meta.env.DEV
+  ? import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001'
+  : '';
+const OTX_API_BASE_URL = `${BASE_URL}/api/otx`;
 
 const otxAxios = axios.create({
   baseURL: OTX_API_BASE_URL,
   headers: {
-    'Content-Type': 'application/json',
-    'X-OTX-API-KEY': import.meta.env.VITE_OTX_API_KEY || ''
+    'Content-Type': 'application/json'
   }
 });
+
+const ensureValidPayload = (payload: any, endpoint: string) => {
+  if (typeof payload === 'string' && /<!doctype html>|<html/i.test(payload)) {
+    throw new Error(`Invalid OTX response for ${endpoint}: received HTML instead of JSON`);
+  }
+
+  return payload;
+};
+
+const requestOtx = async (endpoint: string) => {
+  const response = await otxAxios.get(endpoint);
+  return ensureValidPayload(response.data, endpoint);
+};
 
 export const otxApi = {
   // 1.1 IPv4/IPv6 查询
@@ -17,9 +32,7 @@ export const otxApi = {
     const endpoint = `/indicators/${ipVersion}/${ip}/${section}`;
     
     try {
-      const response = await otxAxios.get(endpoint);
-      
-      return response.data;
+      return await requestOtx(endpoint);
     } catch (error: any) {
       // 忽略 404 错误（某些 section 可能不存在数据）
       if (error.response?.status === 404) {
@@ -35,9 +48,7 @@ export const otxApi = {
     const endpoint = `/indicators/domain/${domain}/${section}`;
     
     try {
-      const response = await otxAxios.get(endpoint);
-      
-      return response.data;
+      return await requestOtx(endpoint);
     } catch (error: any) {
       // 忽略 404 错误
       if (error.response?.status === 404) {
@@ -50,20 +61,19 @@ export const otxApi = {
 
   // 1.2 主机名查询
   getHostnameInfo: async (hostname: string, section: string = 'general') => {
-    const response = await otxAxios.get(`/indicators/hostname/${hostname}/${section}`);
-    return response.data;
+    return requestOtx(`/indicators/hostname/${hostname}/${section}`);
   },
 
   // 1.3 URL检测
   getUrlInfo: async (url: string, section: string = 'general') => {
     // 移除 URL 中的协议头 (http:// 或 https://) 和末尾的斜杠，OTX 只需要域名或路径
     let cleanUrl = url.replace(/^https?:\/\//, '').replace(/\/$/, '');
+    const encodedUrl = encodeURIComponent(cleanUrl);
     // URL 必须进行两次 URL 编码，或者只编码特殊字符。OTX API 对 URL 的处理比较特殊。
     // 这里我们先尝试只进行一次编码，但要注意斜杠
     
     try {
-      const response = await otxAxios.get(`/indicators/url/${cleanUrl}/${section}`);
-      return response.data;
+      return await requestOtx(`/indicators/url/${encodedUrl}/${section}`);
     } catch (error: any) {
       // 忽略 404 错误
       if (error.response?.status === 404) {
@@ -78,8 +88,7 @@ export const otxApi = {
     // 确保 CVE ID 格式正确 (大写)
     const formattedCveId = cveId.toUpperCase();
     try {
-      const response = await otxAxios.get(`/indicators/cve/${formattedCveId}/${section}`);
-      return response.data;
+      return await requestOtx(`/indicators/cve/${formattedCveId}/${section}`);
     } catch (error: any) {
       // 忽略 404 错误（某些 section 可能不存在数据）
       if (error.response?.status === 404) {
@@ -91,8 +100,7 @@ export const otxApi = {
 
   // 2.1 实时威胁流
   getActivity: async () => {
-    const response = await otxAxios.get('/pulses/activity');
-    return response.data;
+    return requestOtx('/pulses/activity');
   },
 
   // 2.2 关键词搜索
@@ -103,7 +111,7 @@ export const otxApi = {
         sort
       }
     });
-    return response.data;
+    return ensureValidPayload(response.data, '/search/pulses');
   },
 
   // 3.1 增量事件同步
@@ -113,7 +121,7 @@ export const otxApi = {
       params.since = since;
     }
     const response = await otxAxios.get('/pulses/events', { params });
-    return response.data;
+    return ensureValidPayload(response.data, '/pulses/events');
   },
 
   // 3.2 健康检查 - 验证API密钥和连接状态
@@ -126,7 +134,7 @@ export const otxApi = {
       return {
         success: true,
         message: 'OTX API连接正常',
-        data: response.data
+        data: ensureValidPayload(response.data, '/indicators/IPv4/8.8.8.8/general')
       };
     } catch (error: any) {
       return {

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { ArrowRight, Menu, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 // import ParticleWaves from '../components/ParticleWaves';
@@ -21,6 +21,52 @@ import {
 } from '../components/LandingSections';
 import { leakRadarApi } from '../api/leakRadar';
 import Footer from '../components/layout/Footer';
+
+const homeEase = [0.22, 1, 0.36, 1] as const;
+
+const heroShellVariants = {
+  hidden: {},
+  visible: {
+    transition: {
+      staggerChildren: 0.12,
+      delayChildren: 0.08,
+    },
+  },
+};
+
+const heroItemVariants = {
+  hidden: {
+    opacity: 0,
+    y: 28,
+    scale: 0.985,
+  },
+  visible: {
+    opacity: 1,
+    y: 0,
+    scale: 1,
+    transition: {
+      duration: 0.9,
+      ease: homeEase,
+    },
+  },
+};
+
+const sectionRevealVariants = {
+  hidden: {
+    opacity: 0,
+    y: 40,
+    scale: 0.985,
+  },
+  visible: {
+    opacity: 1,
+    y: 0,
+    scale: 1,
+    transition: {
+      duration: 0.85,
+      ease: homeEase,
+    },
+  },
+};
 
 // 综合数据仪表盘组件
 const DataDashboard: React.FC = () => {
@@ -99,12 +145,12 @@ const DataDashboard: React.FC = () => {
   const CustomTooltip = ({ active, payload }: any) => {
     if (active && payload && payload.length) {
       return (
-        <div className="bg-black/90 border border-accent/30 rounded-lg p-4 text-white shadow-[0_0_20px_rgba(0,224,255,0.2)]">
-          <p className="mb-2 font-mono text-accent">{payload[0].payload.date}</p>
+        <div className="console-panel rounded-lg border-accent/20 p-4 text-white shadow-[0_0_14px_rgba(0,224,255,0.12)]">
+          <p className="font-data mb-2 text-accent">{payload[0].payload.date}</p>
           {payload.map((entry: any, index: number) => (
-            <div key={index} className="flex items-center gap-2 text-sm font-mono my-1">
+            <div key={index} className="font-data my-1 flex items-center gap-2 text-sm">
               <div className="w-2 h-2 rounded-full" style={{ backgroundColor: entry.color }} />
-              <span className="text-gray-400">{entry.name}:</span>
+              <span className="console-subtle">{entry.name}:</span>
               <span className="text-white">{formatYAxis(entry.value)}</span>
             </div>
           ))}
@@ -135,22 +181,17 @@ const DataDashboard: React.FC = () => {
           className="lg:col-span-1 flex flex-col gap-3 sm:gap-4"
         >
           {/* 总数卡片 - 赛博风格 */}
-          <div className="flex-1 bg-black/40 backdrop-blur-xl border border-accent/30 rounded-2xl p-4 sm:p-6 md:p-8 flex flex-col justify-center items-center relative overflow-hidden group hover:border-accent/60 transition-all duration-500">
-            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-accent to-transparent opacity-50" />
-            <div className="absolute -right-10 -top-10 w-32 h-32 bg-accent/20 blur-[60px] rounded-full group-hover:bg-accent/30 transition-all duration-500" />
-            
-            <h3 className="text-gray-400 text-xs sm:text-sm uppercase tracking-[0.2em] mb-3 sm:mb-4">泄露总数</h3>
-            <div className="relative w-full text-center">
-              <p className="text-3xl sm:text-4xl lg:text-5xl xl:text-6xl font-bold font-mono text-transparent bg-clip-text bg-gradient-to-b from-white to-white/60 tracking-tighter break-all">
+          <div className="console-panel flex flex-1 flex-col justify-center rounded-2xl border-accent/20 p-4 sm:p-6 md:p-8">
+            <h3 className="text-label console-subtle mb-3 sm:mb-4 sm:text-sm">{'\u6cc4\u9732\u603b\u6570'}</h3>
+            <div className="flex items-end gap-3">
+              <p className="font-data break-all text-3xl font-semibold tracking-[-0.05em] text-white sm:text-4xl lg:text-5xl xl:text-6xl">
                 {formatNumber(stats.leaks.total)}
               </p>
-              {/* 故障效果装饰 */}
-              <div className="absolute top-0 left-0 w-full h-full opacity-0 group-hover:opacity-20 animate-pulse bg-accent blur-xl" />
+              <span className="text-label console-subtle pb-1">indexed</span>
             </div>
-            <div className="mt-4 sm:mt-6 flex items-center gap-2 text-accent text-[10px] sm:text-xs font-mono bg-accent/10 px-2 sm:px-3 py-1 rounded-full border border-accent/20">
-              <div className="w-2 h-2 bg-accent rounded-full animate-pulse" />
-              SYSTEM ACTIVE
-            </div>
+            <p className="console-muted mt-4 text-sm sm:mt-5">
+              {'\u5408\u5e76 URL:USER:PASS \u4e0e raw lines \u6cc4\u9732\u8bb0\u5f55\uff0c\u7528\u4e8e\u5feb\u901f\u8bc4\u4f30\u66b4\u9732\u9762\u89c4\u6a21\u3002'}
+            </p>
           </div>
 
           {/* 小指标卡片网格 */}
@@ -160,9 +201,12 @@ const DataDashboard: React.FC = () => {
               { label: "This Week", value: stats.leaks.this_week, color: "text-blue-400", border: "border-blue-500/30" },
               { label: "This Month", value: stats.leaks.this_month, color: "text-cyan-400", border: "border-cyan-500/30" }
             ].map((item, idx) => (
-              <div key={idx} className={`bg-black/40 backdrop-blur-md border ${item.border} rounded-xl p-3 sm:p-4 flex items-center justify-between hover:bg-white/5 transition-colors`}>
-                <span className="text-gray-400 text-[10px] sm:text-xs uppercase tracking-wider">{item.label}</span>
-                <span className={`text-lg sm:text-xl font-mono font-bold ${item.color}`}>+{formatNumber(item.value)}</span>
+              <div key={idx} className={`console-panel border ${item.border} flex items-center justify-between rounded-xl p-3 transition-colors hover:bg-white/[0.04] sm:p-4`}>
+                <div>
+                  <span className="text-label console-subtle block sm:text-xs">{item.label}</span>
+                  <span className="console-muted mt-1 block text-[11px]">{'\u65b0\u589e\u6536\u5f55'}</span>
+                </div>
+                <span className={`font-data text-lg font-semibold sm:text-xl ${item.color}`}>+{formatNumber(item.value)}</span>
               </div>
             ))}
           </div>
@@ -174,13 +218,13 @@ const DataDashboard: React.FC = () => {
           whileInView={{ opacity: 1, x: 0 }}
           viewport={{ once: true }}
           transition={{ delay: 0.2 }}
-          className="lg:col-span-2 bg-black/40 backdrop-blur-xl border border-white/10 rounded-2xl p-4 sm:p-6 relative overflow-hidden"
+          className="console-panel relative overflow-hidden rounded-2xl p-4 sm:p-6 lg:col-span-2"
         >
           {/* 装饰性网格背景 */}
           {/* <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.03)_1px,transparent_1px)] bg-[size:20px_20px] pointer-events-none" /> */}
           
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 sm:mb-8 relative z-10 gap-2 sm:gap-4">
-            <h3 className="text-white text-base sm:text-lg font-semibold flex items-center gap-2">
+            <h3 className="font-display flex items-center gap-2 text-base font-semibold text-white sm:text-lg">
               <span className="w-1 h-5 sm:h-6 bg-accent rounded-full" />
               泄露数据增长趋势
             </h3>
@@ -190,7 +234,7 @@ const DataDashboard: React.FC = () => {
                 { name: 'Verified', color: '#ec4899' }, // Pink
                 { name: 'Raw', color: '#06b6d4' } // Cyan
               ].map((item, i) => (
-                <div key={i} className="flex items-center gap-2 text-[10px] sm:text-xs text-gray-400">
+                <div key={i} className="font-data console-subtle flex items-center gap-2 text-[10px] sm:text-xs">
                   <div className="w-2 h-2 rounded-sm" style={{ backgroundColor: item.color }} />
                   {item.name}
                 </div>
@@ -247,6 +291,7 @@ const DataDashboard: React.FC = () => {
 const Home: React.FC = () => {
   const navigate = useNavigate();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const shouldReduceMotion = useReducedMotion();
   // const [currentSection, setCurrentSection] = useState(0);
 
   return (
@@ -255,8 +300,8 @@ const Home: React.FC = () => {
       {/* 移除全局的 LiquidGradientBackground，因为它现在只在第一屏使用 */}
       
       {/* 导航栏 - 固定在顶层，优化响应式设计 */}
-      <div className={`fixed top-0 left-0 w-full z-50 transition-all duration-500 bg-transparent border-transparent`}>
-        <nav className="container mx-auto px-4 sm:px-6 py-2 md:py-3 flex items-center justify-between">
+      <div className="fixed top-0 left-0 w-full z-50 border-transparent bg-gradient-to-b from-[#04070d]/85 via-[#04070d]/45 to-transparent transition-all duration-500">
+        <nav className="container mx-auto flex items-center justify-between px-4 py-3 sm:px-6 md:py-4">
           <div className="flex items-center gap-2">
             <img 
               src="/Lysir-w.png" 
@@ -291,7 +336,7 @@ const Home: React.FC = () => {
             <motion.button
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.98 }}
-              className="glass-button hover:bg-white hover:text-background text-white font-medium px-4 lg:px-6 py-2 lg:py-3 rounded-full flex items-center gap-2 text-sm lg:text-base"
+              className="glass-button flex min-h-11 items-center gap-2 rounded-full px-4 py-2.5 text-sm font-medium text-white hover:bg-white/18 hover:text-white lg:px-6 lg:py-3 lg:text-base"
               onClick={() => navigate('/login')}
             >
               登录
@@ -301,9 +346,11 @@ const Home: React.FC = () => {
 
           {/* 移动端菜单按钮 */}
           <button
-            className="md:hidden text-white p-2"
+            type="button"
+            className="md:hidden min-h-11 min-w-11 text-white p-2"
             onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
             aria-label="Toggle menu"
+            aria-expanded={isMobileMenuOpen}
           >
             <AnimatePresence mode="wait">
               {isMobileMenuOpen ? (
@@ -339,13 +386,13 @@ const Home: React.FC = () => {
               animate={{ opacity: 1, height: 'auto' }}
               exit={{ opacity: 0, height: 0 }}
               transition={{ duration: 0.3 }}
-              className="md:hidden bg-black/95 backdrop-blur-xl border-b border-white/10"
+              className="border-b border-white/10 bg-black/95 backdrop-blur-xl md:hidden"
             >
-              <div className="container mx-auto px-4 py-4 flex flex-col gap-4">
+              <div className="container mx-auto flex flex-col gap-3 px-4 py-4">
                 <motion.button
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
-                  className="text-white/80 hover:text-white transition-colors text-left py-2 text-base"
+                  className="min-h-11 text-white/80 hover:text-white transition-colors text-left py-2 text-base"
                   onClick={() => {
                     setIsMobileMenuOpen(false);
                   }}
@@ -355,7 +402,7 @@ const Home: React.FC = () => {
                 <motion.button
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
-                  className="text-white/80 hover:text-white transition-colors text-left py-2 text-base"
+                  className="min-h-11 text-white/80 hover:text-white transition-colors text-left py-2 text-base"
                   onClick={() => {
                     setIsMobileMenuOpen(false);
                   }}
@@ -365,7 +412,7 @@ const Home: React.FC = () => {
                 <motion.button
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
-                  className="text-white/80 hover:text-white transition-colors text-left py-2 text-base"
+                  className="min-h-11 text-white/80 hover:text-white transition-colors text-left py-2 text-base"
                   onClick={() => {
                     setIsMobileMenuOpen(false);
                   }}
@@ -375,7 +422,7 @@ const Home: React.FC = () => {
                 <motion.button
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
-                  className="glass-button hover:bg-white hover:text-background text-white font-medium px-6 py-3 rounded-full flex items-center justify-center gap-2 text-base w-full"
+                  className="glass-button flex min-h-11 w-full items-center justify-center gap-2 rounded-full px-6 py-3 text-base font-medium text-white hover:bg-white/18 hover:text-white"
                   onClick={() => {
                     navigate('/login');
                     setIsMobileMenuOpen(false);
@@ -391,16 +438,16 @@ const Home: React.FC = () => {
       </div>
 
       {/* 内容包裹器：负责遮挡页脚 */}
-      <div className="relative z-20 mb-[260px] bg-[#080C12]">
+      <div className="relative z-20 mb-[220px] bg-[#080C12] sm:mb-[240px] lg:mb-[260px]">
         {/* 底部阴影，增强视觉效果 */}
         <div className="absolute bottom-0 left-0 w-full h-20 bg-gradient-to-t from-black to-transparent"></div>
           {/* 第一屏：英雄区域 - 优化响应式布局 */}
           <motion.div 
-            className="min-h-screen flex items-center justify-center relative overflow-hidden z-20"
-            initial={{ opacity: 0, filter: "blur(10px)" }}
-            whileInView={{ opacity: 1, filter: "blur(0px)" }}
-            viewport={{ once: false, margin: "-10% 0px -10% 0px" }}
-            transition={{ duration: 0.8 }}
+            className="relative z-20 flex min-h-screen items-center justify-center overflow-hidden pt-24 sm:pt-28"
+            initial={shouldReduceMotion ? false : "hidden"}
+            whileInView={shouldReduceMotion ? undefined : "visible"}
+            viewport={{ once: true, margin: "-8% 0px -8% 0px" }}
+            variants={shouldReduceMotion ? undefined : sectionRevealVariants}
           >
             {/* 背景图片 */}
             <div 
@@ -412,53 +459,88 @@ const Home: React.FC = () => {
             />
             {/* 渐变遮罩，增强底部融合 */}
             <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-transparent to-black/80 z-0 pointer-events-none" />
+            {!shouldReduceMotion && (
+              <>
+                <motion.div
+                  aria-hidden="true"
+                  className="absolute left-[8%] top-[18%] z-0 h-28 w-28 rounded-full bg-accent/12 blur-3xl"
+                  animate={{ y: [-8, 12, -8], opacity: [0.28, 0.45, 0.28] }}
+                  transition={{ duration: 8, repeat: Infinity, ease: 'easeInOut' }}
+                />
+                <motion.div
+                  aria-hidden="true"
+                  className="absolute bottom-[16%] right-[12%] z-0 h-36 w-36 rounded-full bg-cyan-400/10 blur-3xl"
+                  animate={{ y: [10, -10, 10], x: [-6, 10, -6], opacity: [0.2, 0.36, 0.2] }}
+                  transition={{ duration: 10, repeat: Infinity, ease: 'easeInOut' }}
+                />
+              </>
+            )}
             
-            <section className="container mx-auto px-4 sm:px-6 lg:px-8 flex flex-col items-center text-center relative z-10">
+            <section className="container relative z-10 mx-auto flex flex-col items-center px-4 text-center sm:px-6 lg:px-8">
               <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.8, ease: "easeOut" }}
+                initial={shouldReduceMotion ? false : "hidden"}
+                animate={shouldReduceMotion ? undefined : "visible"}
+                variants={shouldReduceMotion ? undefined : heroShellVariants}
                 className="max-w-4xl lg:max-w-5xl xl:max-w-6xl flex flex-col items-center w-full"
               >
-                <img 
+                <motion.img 
                   src="/diewei-w.png" 
                   alt="Diewei Logo" 
-                  className="h-12 sm:h-14 md:h-16 w-auto object-contain mb-4 sm:mb-6 opacity-90" 
+                  variants={shouldReduceMotion ? undefined : heroItemVariants}
+                  className="mb-4 h-10 w-auto object-contain opacity-90 sm:mb-6 sm:h-14 md:h-16" 
                 />
-                <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl xl:text-7xl font-bold text-white mb-4 sm:mb-6 leading-tight px-2">
-                  洞悉数字暗流 <span className="text-accent">智筑安全穹顶</span>
-                </h1>
-                <p className="text-base sm:text-lg md:text-xl lg:text-2xl text-white/80 mb-6 sm:mb-8 md:mb-10 leading-relaxed max-w-3xl lg:max-w-4xl mx-auto px-4">
-                  谍卫｜暗网与互联网泄露情报监测平台，全面守护企业数字资产
-                </p>
-                <div className="flex flex-col sm:flex-row items-center gap-3 sm:gap-4 justify-center w-full px-4">
+                <motion.h1 variants={shouldReduceMotion ? undefined : heroItemVariants} className="font-display mb-4 px-2 text-3xl font-bold leading-[1.06] tracking-[-0.04em] text-white sm:mb-6 sm:text-4xl md:text-5xl lg:text-6xl xl:text-7xl">
+                  {'\u6d1e\u6089\u6570\u5b57\u6697\u6d41'} <span className="text-accent">{'\u667a\u7b51\u5b89\u5168\u7a79\u9876'}</span>
+                </motion.h1>
+                <motion.p variants={shouldReduceMotion ? undefined : heroItemVariants} className="mx-auto mb-6 max-w-3xl px-2 text-sm leading-relaxed text-white/80 sm:mb-8 sm:px-4 sm:text-lg md:mb-10 md:text-xl lg:max-w-4xl lg:text-2xl">
+                  {'\u8c0d\u536b\uff5c\u6697\u7f51\u4e0e\u4e92\u8054\u7f51\u6cc4\u9732\u60c5\u62a5\u76d1\u6d4b\u5e73\u53f0\uff0c\u5168\u9762\u5b88\u62a4\u4f01\u4e1a\u6570\u5b57\u8d44\u4ea7'}
+                </motion.p>
+                <motion.div variants={shouldReduceMotion ? undefined : heroItemVariants} className="flex w-full flex-col items-stretch justify-center gap-3 px-2 sm:flex-row sm:items-center sm:gap-4 sm:px-4">
                   <motion.button
-                    whileHover={{ scale: 1.05, boxShadow: "0 10px 25px -5px rgba(255, 255, 255, 0.2)" }}
-                    whileTap={{ scale: 0.98 }}
-                    className="bg-white/10 backdrop-blur-md border border-white/20 hover:bg-white/20 text-white font-medium px-6 sm:px-8 py-3 sm:py-4 rounded-full flex items-center justify-center gap-2 text-base sm:text-lg w-full sm:w-auto transition-all"
+                    whileHover={shouldReduceMotion ? undefined : { scale: 1.035, y: -2, boxShadow: "0 14px 30px -12px rgba(255, 255, 255, 0.22)" }}
+                    whileTap={shouldReduceMotion ? undefined : { scale: 0.985 }}
+                    className="flex min-h-12 w-full items-center justify-center gap-2 rounded-full border border-white/14 bg-white/[0.08] px-6 py-3 text-base font-medium text-white backdrop-blur-sm transition-all hover:bg-white/[0.12] sm:w-auto sm:px-8 sm:py-4 sm:text-lg"
                     onClick={() => navigate('/login')}
                   >
                     立即开始
                     <ArrowRight className="w-4 sm:w-5 h-4 sm:h-5" />
                   </motion.button>
                   <motion.button
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.98 }}
-                    className="bg-white/10 hover:bg-white/20 text-white font-medium px-6 sm:px-8 py-3 sm:py-4 rounded-full border border-white/20 w-full sm:w-auto"
+                    whileHover={shouldReduceMotion ? undefined : { scale: 1.03, y: -2 }}
+                    whileTap={shouldReduceMotion ? undefined : { scale: 0.985 }}
+                    className="min-h-12 w-full rounded-full border border-white/20 bg-white/10 px-6 py-3 text-base font-medium text-white hover:bg-white/20 sm:w-auto sm:px-8 sm:py-4 sm:text-lg"
                   >
                     了解更多
                   </motion.button>
-                </div>
+                </motion.div>
+                {!shouldReduceMotion && (
+                  <motion.div
+                    variants={heroItemVariants}
+                    className="mt-8 flex items-center gap-3 text-xs uppercase tracking-[0.35em] text-white/40 sm:mt-10"
+                  >
+                    <motion.span
+                      className="block h-px w-14 bg-gradient-to-r from-transparent via-accent/80 to-transparent"
+                      animate={{ opacity: [0.35, 1, 0.35], scaleX: [0.86, 1.08, 0.86] }}
+                      transition={{ duration: 2.8, repeat: Infinity, ease: 'easeInOut' }}
+                    />
+                    Threat Intelligence Flow
+                    <motion.span
+                      className="block h-px w-14 bg-gradient-to-r from-transparent via-accent/80 to-transparent"
+                      animate={{ opacity: [0.35, 1, 0.35], scaleX: [0.86, 1.08, 0.86] }}
+                      transition={{ duration: 2.8, repeat: Infinity, ease: 'easeInOut', delay: 0.4 }}
+                    />
+                  </motion.div>
+                )}
               </motion.div>
             </section>
           </motion.div>
 
           {/* 第二屏：核心服务矩阵 */}
           <motion.div
-            initial={{ opacity: 0, filter: "blur(10px)" }}
-            whileInView={{ opacity: 1, filter: "blur(0px)" }}
-            viewport={{ once: false, margin: "-10% 0px -10% 0px" }}
-            transition={{ duration: 0.8 }}
+            initial={shouldReduceMotion ? false : "hidden"}
+            whileInView={shouldReduceMotion ? undefined : "visible"}
+            viewport={{ once: true, margin: "-8% 0px -8% 0px" }}
+            variants={shouldReduceMotion ? undefined : sectionRevealVariants}
             className="min-h-screen relative"
           >
             <SectionBackground zIndex={0} />
@@ -469,10 +551,10 @@ const Home: React.FC = () => {
 
           {/* 第三屏：核心技术壁垒 */}
           <motion.div
-            initial={{ opacity: 0, filter: "blur(10px)" }}
-            whileInView={{ opacity: 1, filter: "blur(0px)" }}
-            viewport={{ once: false, margin: "-10% 0px -10% 0px" }}
-            transition={{ duration: 0.8 }}
+            initial={shouldReduceMotion ? false : "hidden"}
+            whileInView={shouldReduceMotion ? undefined : "visible"}
+            viewport={{ once: true, margin: "-8% 0px -8% 0px" }}
+            variants={shouldReduceMotion ? undefined : sectionRevealVariants}
             className="min-h-screen relative"
           >
             <SectionBackground zIndex={0} />
@@ -483,11 +565,11 @@ const Home: React.FC = () => {
 
           {/* 第五屏：服务流程 */}
           <motion.div
-            initial={{ opacity: 0, filter: "blur(10px)" }}
-            whileInView={{ opacity: 1, filter: "blur(0px)" }}
-            viewport={{ once: false, margin: "-10% 0px -10% 0px" }}
-            transition={{ duration: 0.8 }}
-            className="min-h-[120vh] relative z-10 overflow-hidden flex flex-col mb-32"
+            initial={shouldReduceMotion ? false : "hidden"}
+            whileInView={shouldReduceMotion ? undefined : "visible"}
+            viewport={{ once: true, margin: "-8% 0px -8% 0px" }}
+            variants={shouldReduceMotion ? undefined : sectionRevealVariants}
+            className="relative z-10 mb-20 flex min-h-[100vh] flex-col overflow-hidden sm:mb-24 lg:mb-32 lg:min-h-[120vh]"
           >
             <div className="relative z-10 flex-1">
               <ServiceProcessSection />
@@ -504,10 +586,10 @@ const Home: React.FC = () => {
           {/* 第七屏：数据统计区域 */}
           <motion.div 
             className="min-h-screen flex items-center justify-center relative z-20"
-            initial={{ opacity: 0, filter: "blur(10px)" }}
-            whileInView={{ opacity: 1, filter: "blur(0px)" }}
-            viewport={{ once: false, margin: "-10% 0px -10% 0px" }}
-            transition={{ duration: 0.8 }}
+            initial={shouldReduceMotion ? false : "hidden"}
+            whileInView={shouldReduceMotion ? undefined : "visible"}
+            viewport={{ once: true, margin: "-8% 0px -8% 0px" }}
+            variants={shouldReduceMotion ? undefined : sectionRevealVariants}
           >
             <section className="container mx-auto px-4 sm:px-6">
               <motion.div
@@ -515,8 +597,8 @@ const Home: React.FC = () => {
                 whileInView={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.6 }}
               >
-                <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-white mb-8 sm:mb-10 md:mb-12 text-center">
-                  已经索引的 <span className="text-accent">泄露总数</span>
+                <h2 className="font-display mb-8 text-center text-2xl font-bold leading-[1.1] tracking-[-0.03em] text-white sm:mb-10 sm:text-3xl md:mb-12 md:text-4xl">
+                  {'\u5df2\u7ecf\u7d22\u5f15\u7684'} <span className="text-accent">{'\u6cc4\u9732\u603b\u6570'}</span>
                 </h2>
                 
                 <DataDashboard />
@@ -526,7 +608,7 @@ const Home: React.FC = () => {
 
           {/* 第八屏：行动召唤与页脚 */}
           <div className="w-full">
-            <section className="w-full relative flex flex-col items-center justify-center py-24 sm:py-32 md:py-40 text-center overflow-hidden">
+            <section className="relative flex w-full flex-col items-center justify-center overflow-hidden py-20 text-center sm:py-28 md:py-32 lg:py-40">
               {/* 背景图片层 */}
               <div className="absolute inset-0 z-0">
                 <img src="/mimi.jpg" alt="Background" className="w-full h-full object-cover" />
@@ -537,18 +619,18 @@ const Home: React.FC = () => {
                 initial={{ opacity: 0, scale: 0.9 }}
                 whileInView={{ opacity: 1, scale: 1 }}
                 transition={{ duration: 0.6 }}
-                className="relative z-10 max-w-4xl mx-auto px-4"
+                className="relative z-10 mx-auto max-w-4xl px-4"
               >
-                <h2 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold text-white mb-4 sm:mb-6 drop-shadow-lg">
+                <h2 className="font-display mb-4 text-2xl font-bold leading-[1.08] tracking-[-0.03em] text-white sm:mb-6 sm:text-3xl md:text-4xl lg:text-5xl">
                   准备好保护您的数据了吗？
                 </h2>
-                <p className="text-base sm:text-lg md:text-xl text-white/90 mb-6 sm:mb-8 md:mb-10 max-w-2xl mx-auto drop-shadow-md">
+                <p className="mx-auto mb-6 max-w-2xl text-sm text-white/88 sm:mb-8 sm:text-lg md:mb-10 md:text-xl">
                   让安全，从被动防御升级为情报驱动的主动防御。
                 </p>
                 <motion.button
                   whileHover={{ scale: 1.05, boxShadow: "0 10px 25px -5px rgba(255, 255, 255, 0.2)" }}
                   whileTap={{ scale: 0.98 }}
-                  className="bg-accent hover:bg-accent/90 text-white font-medium px-6 sm:px-8 md:px-10 py-3 sm:py-4 md:py-5 rounded-full flex items-center justify-center gap-2 text-base sm:text-lg mx-auto w-full sm:w-auto shadow-xl border border-white/10"
+                  className="mx-auto flex min-h-12 w-full items-center justify-center gap-2 rounded-full border border-white/10 bg-accent px-6 py-3 text-base font-medium text-white shadow-xl hover:bg-accent/90 sm:w-auto sm:px-8 sm:py-4 sm:text-lg md:px-10 md:py-5"
                   onClick={() => navigate('/login')}
                 >
                   登录并开始使用
@@ -559,11 +641,11 @@ const Home: React.FC = () => {
           </div>
           
           {/* 页脚遮挡层，确保页脚始终被遮挡，直到滚动到页面底部 */}
-          <div className="h-[260px] w-full bg-[#080C12] relative z-10"></div>
+          <div className="relative z-10 h-[220px] w-full bg-[#080C12] sm:h-[240px] lg:h-[260px]"></div>
       </div>
 
       {/* Parallax Footer */}
-      <div className="fixed bottom-0 left-0 w-full h-[260px] z-0">
+      <div className="fixed bottom-0 left-0 z-0 h-[220px] w-full sm:h-[240px] lg:h-[260px]">
         <Footer />
       </div>
     </div>

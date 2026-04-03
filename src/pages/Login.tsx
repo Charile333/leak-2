@@ -4,7 +4,6 @@ import { ArrowRight, HelpCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 import { useAuth } from '../context/AuthContext';
-// import ParticleWaves from '../components/ParticleWaves';
 
 const Login: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -18,7 +17,6 @@ const Login: React.FC = () => {
   const { loginWithCredentials } = useAuth();
   const navigate = useNavigate();
 
-  // 从localStorage加载记住的邮箱
   useEffect(() => {
     const savedEmail = localStorage.getItem('rememberedEmail');
     if (savedEmail) {
@@ -27,140 +25,125 @@ const Login: React.FC = () => {
     }
   }, []);
 
-  // 邮箱格式验证
-  const validateEmail = (email: string): boolean => {
+  const validateEmail = (value: string): boolean => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    return emailRegex.test(email);
+    return emailRegex.test(value);
   };
 
-  // 表单验证
   const validateForm = (): boolean => {
     let isValid = true;
-    
-    // 重置错误信息
+
     setEmailError('');
     setPasswordError('');
     setError('');
-    
-    // 邮箱验证
+
     if (!email.trim()) {
-      setEmailError('请输入邮箱');
+      setEmailError('\u8bf7\u8f93\u5165\u90ae\u7bb1\u5730\u5740');
       isValid = false;
     } else if (!validateEmail(email)) {
-      setEmailError('请输入有效的邮箱格式');
+      setEmailError('\u90ae\u7bb1\u683c\u5f0f\u4e0d\u6b63\u786e\uff0c\u8bf7\u8f93\u5165\u7c7b\u4f3c name@example.com \u7684\u5730\u5740');
       isValid = false;
     }
-    
-    // 密码验证
+
     if (!password.trim()) {
-      setPasswordError('请输入密码');
+      setPasswordError('\u8bf7\u8f93\u5165\u5bc6\u7801');
       isValid = false;
     }
-    
+
     return isValid;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     setIsLoading(true);
     setError('');
     setSuccess('');
 
     try {
-      // 验证表单
       if (!validateForm()) {
         setIsLoading(false);
         return;
       }
-      
+
       const trimmedEmail = email.trim();
-      
-      // 保存记住的邮箱
+
       if (rememberMe) {
         localStorage.setItem('rememberedEmail', trimmedEmail);
       } else {
         localStorage.removeItem('rememberedEmail');
       }
-      
+
       const result = await loginWithCredentials(trimmedEmail, password);
       if (!result.success) {
-        setError(result.message || '登录失败');
+        setError(result.message || '\u767b\u5f55\u5931\u8d25\uff0c\u8bf7\u68c0\u67e5\u8d26\u53f7\u6216\u5bc6\u7801');
       } else {
-        // 登录成功，手动重定向到仪表板
-        console.log('Login successful, navigating to /dashboard');
+        setSuccess('\u767b\u5f55\u6210\u529f\uff0c\u6b63\u5728\u8fdb\u5165\u5de5\u4f5c\u53f0...');
         navigate('/dashboard');
       }
     } catch (err: any) {
-      setError(err.message || '登录失败，请检查您的输入或网络连接');
+      setError(err.message || '\u767b\u5f55\u5931\u8d25\uff0c\u8bf7\u7a0d\u540e\u91cd\u8bd5');
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden">
-      {/* 背景图片 */}
-      <div 
+    <div className="relative flex min-h-screen items-center justify-center overflow-hidden px-4 py-20 sm:p-6 lg:p-8">
+      <div
         className="absolute inset-0 z-0 bg-cover bg-center bg-no-repeat"
-        style={{ 
+        style={{
           backgroundImage: 'url(/background/login-bg.jpg)',
         }}
       />
-      {/* 黑色遮罩，确保文字可读性 */}
       <div className="absolute inset-0 z-0 bg-black/50" />
-      
-      {/* 粒子波背景 - 可选保留或移除，这里保留作为叠加效果 */}
-      {/* <ParticleWaves /> */}
-      
-      {/* 返回按钮 */}
+
       <motion.div
         initial={{ opacity: 0, x: -20 }}
         animate={{ opacity: 1, x: 0 }}
         transition={{ duration: 0.5 }}
-        className="absolute top-8 left-8 md:top-16 md:left-16 z-20"
+        className="absolute left-4 top-4 z-20 sm:left-6 sm:top-6 md:left-10 md:top-10 lg:left-16 lg:top-16"
       >
         <button
+          type="button"
           onClick={() => window.history.back()}
-          className="flex items-center gap-2 bg-white/[0.05] backdrop-blur-md border border-white/10 rounded-full px-6 py-3 text-sm font-medium text-white hover:bg-white/[0.1] hover:border-white/20 transition-all duration-300 shadow-lg hover:shadow-xl hover:shadow-accent/10"
+          className="font-display flex min-h-11 items-center gap-2 rounded-full border border-white/10 bg-white/[0.05] px-4 py-2.5 text-sm font-medium tracking-[0.06em] text-white shadow-lg backdrop-blur-md transition-all duration-300 hover:border-white/20 hover:bg-white/[0.1] hover:shadow-xl hover:shadow-accent/10 sm:px-6 sm:py-3"
+          aria-label={'\u8fd4\u56de\u4e0a\u4e00\u9875'}
         >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
           </svg>
-          返回
+          {'\u8fd4\u56de\u9996\u9875'}
         </button>
       </motion.div>
-      
-      <div className="flex flex-col items-center justify-center w-full max-w-lg relative z-10">
-        {/* Logo */}
-        <img 
-          src="/diewei-w.png" 
-          alt="Product Logo" 
-          className="h-64 w-64 object-contain" 
-          style={{ position: 'relative', zIndex: 1000 }} 
+
+      <div className="relative z-10 flex w-full max-w-lg flex-col items-center justify-center">
+        <img
+          src="/diewei-w.png"
+          alt="Product Logo"
+          className="h-36 w-36 object-contain sm:h-48 sm:w-48 lg:h-64 lg:w-64"
+          style={{ position: 'relative', zIndex: 1000 }}
         />
 
-        {/* Login Form */}
         <motion.div
-          className="glass-card p-8 border border-white/10 rounded-2xl shadow-xl mx-auto w-full max-w-md mt-[-2rem]"
+          className="glass-card mx-auto mt-[-1rem] w-full max-w-md rounded-[1.75rem] border border-white/10 p-5 shadow-xl shadow-black/20 sm:mt-[-1.5rem] sm:p-6 lg:mt-[-2rem] lg:p-8"
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ delay: 0.5, duration: 0.5 }}
         >
           <form onSubmit={handleSubmit} className="space-y-6">
-            {/* Email Input */}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <label htmlFor="email" className="block text-sm font-medium text-gray-300">
-                  邮箱
+            <div className="space-y-2.5">
+              <div className="flex flex-col items-start justify-between gap-1.5 sm:flex-row sm:items-center">
+                <label htmlFor="email" className="text-label block text-gray-300">
+                  {'\u90ae\u7bb1'}
                 </label>
                 {emailError && (
-                  <motion.div 
-                    className="flex items-center text-xs text-red-400"
+                  <motion.div
+                    className="font-data flex items-center gap-1 text-xs text-red-400"
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                   >
-                    <HelpCircle className="w-3 h-3 mr-1" />
+                    <HelpCircle className="h-3 w-3" />
                     {emailError}
                   </motion.div>
                 )}
@@ -171,8 +154,8 @@ const Login: React.FC = () => {
                   id="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="请输入邮箱地址"
-                  className={`w-full px-4 py-3 bg-white/5 border rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 transition-all ${emailError ? 'border-red-500 focus:ring-red-500' : 'border-white/10 focus:ring-accent'}`}
+                  placeholder={'\u8bf7\u8f93\u5165\u90ae\u7bb1\u5730\u5740'}
+                  className={`w-full rounded-xl border bg-white/5 px-4 py-3.5 text-[15px] text-white transition-all placeholder:text-white/35 focus:outline-none focus:ring-2 ${emailError ? 'border-red-500/70 focus:ring-red-500' : 'border-white/10 focus:ring-accent'}`}
                   disabled={isLoading}
                   initial={{ opacity: 0, x: -20 }}
                   animate={{ opacity: 1, x: 0 }}
@@ -180,20 +163,19 @@ const Login: React.FC = () => {
                 />
               </div>
             </div>
-            
-            {/* Password Input */}
-            <div className="space-y-2 mt-4">
-              <div className="flex items-center justify-between">
-                <label htmlFor="password" className="block text-sm font-medium text-gray-300">
-                  密码
+
+            <div className="mt-4 space-y-2.5">
+              <div className="flex flex-col items-start justify-between gap-1.5 sm:flex-row sm:items-center">
+                <label htmlFor="password" className="text-label block text-gray-300">
+                  {'\u5bc6\u7801'}
                 </label>
                 {passwordError && (
-                  <motion.div 
-                    className="flex items-center text-xs text-red-400"
+                  <motion.div
+                    className="font-data flex items-center gap-1 text-xs text-red-400"
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                   >
-                    <HelpCircle className="w-3 h-3 mr-1" />
+                    <HelpCircle className="h-3 w-3" />
                     {passwordError}
                   </motion.div>
                 )}
@@ -204,8 +186,8 @@ const Login: React.FC = () => {
                   id="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="请输入密码"
-                  className={`w-full px-4 py-3 bg-white/5 border rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 transition-all ${passwordError ? 'border-red-500 focus:ring-red-500' : 'border-white/10 focus:ring-accent'}`}
+                  placeholder={'\u8bf7\u8f93\u5165\u767b\u5f55\u5bc6\u7801'}
+                  className={`w-full rounded-xl border bg-white/5 px-4 py-3.5 text-[15px] text-white transition-all placeholder:text-white/35 focus:outline-none focus:ring-2 ${passwordError ? 'border-red-500/70 focus:ring-red-500' : 'border-white/10 focus:ring-accent'}`}
                   disabled={isLoading}
                   initial={{ opacity: 0, x: -20 }}
                   animate={{ opacity: 1, x: 0 }}
@@ -214,9 +196,8 @@ const Login: React.FC = () => {
               </div>
             </div>
 
-            {/* Remember Me */}
-            <div className="flex items-center text-sm mt-2">
-              <motion.div 
+            <div className="mt-2 flex items-center text-sm">
+              <motion.div
                 className="flex items-center"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
@@ -227,58 +208,57 @@ const Login: React.FC = () => {
                   id="rememberMe"
                   checked={rememberMe}
                   onChange={(e) => setRememberMe(e.target.checked)}
-                  className="w-4 h-4 text-accent bg-white/5 border-white/10 rounded focus:ring-accent"
+                  className="h-5 w-5 rounded border-white/10 bg-white/5 text-accent focus:ring-accent"
                   disabled={isLoading}
                 />
-                <label htmlFor="rememberMe" className="ml-2 text-sm text-gray-400">
-                  记住我
+                <label htmlFor="rememberMe" className="ml-2 text-sm text-gray-400 tracking-[0.02em]">
+                  {'\u8bb0\u4f4f\u90ae\u7bb1'}
                 </label>
               </motion.div>
             </div>
 
-            {/* Global Error Message */}
             {error && (
               <motion.div
                 initial={{ opacity: 0, height: 0, y: -10 }}
                 animate={{ opacity: 1, height: 'auto', y: 0 }}
                 exit={{ opacity: 0, height: 0, y: -10 }}
-                className="p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400 text-sm flex items-center gap-2"
+                aria-live="polite"
+                className="font-data flex items-start gap-2 rounded-xl border border-red-500/20 bg-red-500/10 p-3.5 text-sm text-red-400"
               >
-                <HelpCircle className="w-4 h-4 flex-shrink-0" />
+                <HelpCircle className="h-4 w-4 flex-shrink-0" />
                 <span>{error}</span>
               </motion.div>
             )}
-            
-            {/* Global Success Message */}
+
             {success && (
               <motion.div
                 initial={{ opacity: 0, height: 0, y: -10 }}
                 animate={{ opacity: 1, height: 'auto', y: 0 }}
                 exit={{ opacity: 0, height: 0, y: -10 }}
-                className="p-3 bg-green-500/10 border border-green-500/20 rounded-lg text-green-400 text-sm flex items-center gap-2"
+                aria-live="polite"
+                className="font-data flex items-start gap-2 rounded-xl border border-green-500/20 bg-green-500/10 p-3.5 text-sm text-green-400"
               >
-                <HelpCircle className="w-4 h-4 flex-shrink-0" />
+                <HelpCircle className="h-4 w-4 flex-shrink-0" />
                 <span>{success}</span>
               </motion.div>
             )}
 
-            {/* Login Button */}
             <motion.button
-              whileHover={{ scale: 1.02, boxShadow: "0 10px 25px -5px rgba(109, 40, 217, 0.3)" }}
+              whileHover={{ scale: 1.02, boxShadow: '0 10px 25px -5px rgba(109, 40, 217, 0.3)' }}
               whileTap={{ scale: 0.98 }}
               type="submit"
               disabled={isLoading}
-              className="w-full bg-gradient-to-r from-accent to-accent/80 hover:from-accent/90 hover:to-accent/70 text-white font-medium py-3 px-4 rounded-xl flex items-center justify-center gap-2 transition-all disabled:opacity-70 disabled:cursor-not-allowed disabled:scale-100"
+              className="font-display flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-accent to-accent/80 px-4 py-3.5 text-white tracking-[0.06em] shadow-[0_12px_30px_rgba(109,40,217,0.18)] transition-all hover:from-accent/90 hover:to-accent/70 disabled:scale-100 disabled:cursor-not-allowed disabled:opacity-70"
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.9, duration: 0.4 }}
             >
               {isLoading ? (
-                <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                <div className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent" />
               ) : (
                 <>
-                  登录
-                  <ArrowRight className="w-4 h-4" />
+                  {'\u767b\u5f55'}
+                  <ArrowRight className="h-4 w-4" />
                 </>
               )}
             </motion.button>
