@@ -4,9 +4,13 @@ const BASE_URL = import.meta.env.DEV
   ? import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001'
   : '';
 const OTX_API_BASE_URL = `${BASE_URL}/api/otx`;
+const OTX_REQUEST_TIMEOUT = 45000;
+const OTX_RETRY_DELAY = 1200;
+const OTX_MAX_RETRIES = 2;
 
 const otxAxios = axios.create({
   baseURL: OTX_API_BASE_URL,
+  timeout: OTX_REQUEST_TIMEOUT,
   headers: {
     'Content-Type': 'application/json'
   }
@@ -20,12 +24,48 @@ const ensureValidPayload = (payload: any, endpoint: string) => {
   return payload;
 };
 
-const requestOtx = async (endpoint: string) => {
-  const response = await otxAxios.get(endpoint);
-  return ensureValidPayload(response.data, endpoint);
+const sleep = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms));
+
+const shouldRetryOtxRequest = (error: any) => {
+  const status = error?.response?.status;
+  return (
+    status === 408 ||
+    status === 429 ||
+    status === 500 ||
+    status === 502 ||
+    status === 503 ||
+    status === 504 ||
+    error?.code === 'ECONNABORTED' ||
+    error?.message?.includes('timeout') ||
+    error?.message?.includes('Network Error')
+  );
+};
+
+const requestOtx = async (endpoint: string, retryCount = 0): Promise<any> => {
+  try {
+    const response = await otxAxios.get(endpoint);
+    return ensureValidPayload(response.data, endpoint);
+  } catch (error: any) {
+    if (retryCount < OTX_MAX_RETRIES && shouldRetryOtxRequest(error)) {
+      await sleep(OTX_RETRY_DELAY * (retryCount + 1));
+      return requestOtx(endpoint, retryCount + 1);
+    }
+    throw error;
+  }
 };
 
 export const otxApi = {
+  searchIntel: async (query: string, type: 'ip' | 'domain' | 'url' | 'cve') => {
+    const response = await otxAxios.get('/search', {
+      params: {
+        query,
+        type,
+      },
+    });
+
+    return ensureValidPayload(response.data, '/search');
+  },
+
   // 1.1 IPv4/IPv6 查询
   getIpInfo: async (ip: string, section: string = 'general', isIpv6: boolean = false) => {
     const ipVersion = isIpv6 ? 'IPv6' : 'IPv4';

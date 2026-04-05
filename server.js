@@ -9,6 +9,7 @@ dotenv.config();
 // 创建Express应用
 const app = express();
 const PORT = process.env.PORT || 3001;
+const UPSTREAM_TIMEOUT = 45000;
 
 // 配置CORS
 app.use(cors({
@@ -23,6 +24,9 @@ app.use(express.json());
 let LEAKRADAR_API_KEY = process.env.LEAKRADAR_API_KEY;
 let OTX_API_KEY = process.env.OTX_API_KEY;
 let TRENDRADAR_API_URL = process.env.TRENDRADAR_API_URL; // TrendRadar API 地址
+const OTX_UPSTREAM_URL = 'https://otx.alienvault.com/api/v1';
+const OTX_SEARCH_CACHE_TTL = 10 * 60 * 1000;
+const otxSearchCache = new Map();
 
 // 从.env文件加载密钥
 if (!LEAKRADAR_API_KEY) {
@@ -32,6 +36,483 @@ if (!LEAKRADAR_API_KEY) {
 if (!OTX_API_KEY) {
   OTX_API_KEY = process.env.VITE_OTX_API_KEY;
 }
+
+const getCacheKey = (type, query) => `${type}:${String(query).trim().toLowerCase()}`;
+
+const getCachedOtxSearch = (type, query) => {
+  const cacheKey = getCacheKey(type, query);
+  const cached = otxSearchCache.get(cacheKey);
+  if (!cached) return null;
+  if (cached.expiresAt < Date.now()) {
+    otxSearchCache.delete(cacheKey);
+    return null;
+  }
+  return cached.value;
+};
+
+const setCachedOtxSearch = (type, query, value) => {
+  otxSearchCache.set(getCacheKey(type, query), {
+    value,
+    expiresAt: Date.now() + OTX_SEARCH_CACHE_TTL,
+  });
+};
+
+const isDisplayableValue = (value) => {
+  if (value === undefined || value === null) return false;
+  if (typeof value === 'string') return value.trim() !== '';
+  if (typeof value === 'number') return !Number.isNaN(value);
+  if (typeof value === 'boolean') return true;
+  return false;
+};
+
+const pickFirstValue = (...values) => values.find((value) => isDisplayableValue(value));
+
+const getValueAtPath = (source, path) => {
+  if (!source || typeof source !== 'object') return undefined;
+  return path.split('.').reduce((current, key) => (current && current[key] !== undefined ? current[key] : undefined), source);
+};
+
+const pickFirstPath = (source, paths, fallback) => {
+  const value = pickFirstValue(...paths.map((path) => getValueAtPath(source, path)));
+  return value === undefined ? fallback : value;
+};
+
+const unwrapPayload = (payload) => {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return payload || {};
+  return payload.general || payload.data || payload.result || payload;
+};
+
+const getCollection = (payload, key) => {
+  const collection = pickFirstValue(
+    getValueAtPath(payload, key),
+    getValueAtPath(payload, `data.${key}`),
+    getValueAtPath(payload, `result.${key}`),
+    getValueAtPath(payload, 'data')
+  );
+  return Array.isArray(collection) ? collection : [];
+};
+
+const formatDisplayDate = (value) => {
+  if (!value || typeof value === 'object') return 'N/A';
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? String(value) : date.toISOString().slice(0, 10);
+};
+
+const getTopLevelDomainFromHost = (host) => {
+  if (typeof host !== 'string') return '';
+  const normalizedHost = host.trim().toLowerCase();
+  if (!normalizedHost || !normalizedHost.includes('.')) return '';
+  const parts = normalizedHost.split('.');
+  return parts.slice(-2).join('.');
+};
+
+const getTopLevelDomains = (passiveDns, fallbackHosts = []) => {
+  const tlds = new Set();
+  passiveDns.forEach((record) => {
+    const tld = getTopLevelDomainFromHost(record?.hostname);
+    if (tld) tlds.add(tld);
+  });
+  fallbackHosts.forEach((host) => {
+    const tld = getTopLevelDomainFromHost(host);
+    if (tld) tlds.add(tld);
+  });
+  return Array.from(tlds).slice(0, 8);
+};
+
+const getUnifiedTags = (pulses) => {
+  const tags = new Set();
+  pulses.forEach((pulse) => {
+    if (!Array.isArray(pulse?.tags)) return;
+    pulse.tags.forEach((tag) => {
+      if (typeof tag === 'string' && tag.trim()) tags.add(tag.trim());
+    });
+  });
+  return Array.from(tags).slice(0, 12);
+};
+
+const buildSectionState = (status, message) => ({ status, message });
+
+const getHttpScans = (payload) => {
+  const scans = pickFirstValue(
+    getValueAtPath(payload, 'http_scans'),
+    getValueAtPath(payload, 'data.http_scans'),
+    getValueAtPath(payload, 'result.http_scans'),
+    getValueAtPath(payload, 'data'),
+    payload
+  );
+
+  return Array.isArray(scans) ? scans : [];
+};
+
+const requestOtxSection = async (endpoint) => {
+  try {
+    const response = await axios.get(`${OTX_UPSTREAM_URL}${endpoint}`, {
+      headers: {
+        'X-OTX-API-KEY': OTX_API_KEY,
+        'Content-Type': 'application/json',
+      },
+      timeout: UPSTREAM_TIMEOUT,
+    });
+    return response.data;
+  } catch (error) {
+    if (error.response?.status === 404) {
+      return {};
+    }
+    throw error;
+  }
+};
+
+const buildStructuredOtxResult = async (type, query) => {
+  if (type === 'ip') {
+    const ipVersion = query.includes(':') ? 'IPv6' : 'IPv4';
+    const [generalPayload, passiveDnsPayload, malwarePayload, urlListPayload] = await Promise.all([
+      requestOtxSection(`/indicators/${ipVersion}/${query}/general`),
+      requestOtxSection(`/indicators/${ipVersion}/${query}/passive_dns`),
+      requestOtxSection(`/indicators/${ipVersion}/${query}/malware`),
+      requestOtxSection(`/indicators/${ipVersion}/${query}/url_list`),
+    ]);
+    const general = unwrapPayload(generalPayload);
+    const pulses = Array.isArray(general?.pulse_info?.pulses) ? general.pulse_info.pulses : [];
+    const passiveDns = getCollection(passiveDnsPayload, 'passive_dns');
+    const malware = getCollection(malwarePayload, 'malware');
+    const urlList = getCollection(urlListPayload, 'url_list');
+    return {
+      type,
+      query,
+      indicator: pickFirstPath(general, ['indicator', 'ip', 'address'], query),
+      reputation: pickFirstPath(general, ['reputation', 'reputation_label']),
+      asn: pickFirstPath(general, ['asn', 'asn_info.asn', 'geo.asn', 'as_number']),
+      asn_org: pickFirstPath(general, ['asn_info.name', 'asn_info.organization', 'asn_info.org_name', 'organization', 'org_name']),
+      country: pickFirstPath(general, ['country_name', 'country', 'geo.country_name', 'location.country']),
+      city: pickFirstPath(general, ['city', 'geo.city', 'location.city']),
+      pulse_info: {
+        count: pickFirstPath(general, ['pulse_info.count', 'pulse_count'], pulses.length || 0),
+        pulses,
+      },
+      passive_dns: passiveDns,
+      malware,
+      url_list: urlList,
+      derived: {
+        dns_resolutions: passiveDns.length,
+        top_level_domains: getTopLevelDomains(passiveDns),
+        tags: getUnifiedTags(pulses),
+      },
+      section_states: {
+        pulses: buildSectionState(pulses.length > 0 ? 'success' : 'no_data', pulses.length > 0 ? '已返回关联情报。' : '当前对象没有关联 Pulses。'),
+        passive_dns: buildSectionState(passiveDns.length > 0 ? 'success' : 'no_data', passiveDns.length > 0 ? '已返回 Passive DNS。' : '当前对象没有 Passive DNS 记录。'),
+        url_list: buildSectionState(urlList.length > 0 ? 'success' : 'no_data', urlList.length > 0 ? '已返回关联 URL。' : '当前对象没有关联 URL。'),
+        malware: buildSectionState(malware.length > 0 ? 'success' : 'no_data', malware.length > 0 ? '已返回恶意样本。' : '当前对象没有恶意样本。'),
+      },
+    };
+  }
+
+  if (type === 'domain') {
+    const [generalPayload, passiveDnsPayload, whoisPayload, malwarePayload] = await Promise.all([
+      requestOtxSection(`/indicators/domain/${query}/general`),
+      requestOtxSection(`/indicators/domain/${query}/passive_dns`),
+      requestOtxSection(`/indicators/domain/${query}/whois`),
+      requestOtxSection(`/indicators/domain/${query}/malware`),
+    ]);
+    const general = unwrapPayload(generalPayload);
+    const pulses = Array.isArray(general?.pulse_info?.pulses) ? general.pulse_info.pulses : [];
+    const passiveDns = getCollection(passiveDnsPayload, 'passive_dns');
+    return {
+      type,
+      query,
+      indicator: pickFirstPath(general, ['indicator', 'domain', 'hostname'], query),
+      reputation: pickFirstPath(general, ['reputation', 'reputation_label']),
+      whois: unwrapPayload(whoisPayload) || {},
+      pulse_info: {
+        count: pickFirstPath(general, ['pulse_info.count', 'pulse_count'], pulses.length || 0),
+        pulses,
+      },
+      passive_dns: passiveDns,
+      malware: getCollection(malwarePayload, 'malware'),
+      url_list: [],
+      derived: {
+        dns_resolutions: passiveDns.length,
+        top_level_domains: getTopLevelDomains(passiveDns),
+        tags: getUnifiedTags(pulses),
+      },
+      section_states: {
+        pulses: buildSectionState(pulses.length > 0 ? 'success' : 'no_data', pulses.length > 0 ? '已返回关联情报。' : '当前对象没有关联 Pulses。'),
+        passive_dns: buildSectionState(passiveDns.length > 0 ? 'success' : 'no_data', passiveDns.length > 0 ? '已返回 Passive DNS。' : '当前对象没有 Passive DNS 记录。'),
+        url_list: buildSectionState('not_supported', '域名查询结果页当前不展示 URL 列表。'),
+        malware: buildSectionState(getCollection(malwarePayload, 'malware').length > 0 ? 'success' : 'no_data', getCollection(malwarePayload, 'malware').length > 0 ? '已返回恶意样本。' : '当前对象没有恶意样本。'),
+      },
+    };
+  }
+
+  if (type === 'url') {
+    const encodedQuery = encodeURIComponent(query.replace(/^https?:\/\//, '').replace(/\/$/, ''));
+    const [generalPayload, urlListPayload] = await Promise.all([
+      requestOtxSection(`/indicators/url/${encodedQuery}/general`),
+      requestOtxSection(`/indicators/url/${encodedQuery}/url_list`),
+    ]);
+    const general = unwrapPayload(generalPayload);
+    const pulses = Array.isArray(general?.pulse_info?.pulses) ? general.pulse_info.pulses : [];
+    return {
+      type,
+      query,
+      indicator: pickFirstPath(general, ['indicator', 'url', 'urlworker.url', 'urlworker.result.url'], query),
+      domain: pickFirstPath(general, ['domain', 'hostname', 'urlworker.domain', 'urlworker.result.domain']),
+      ip: pickFirstPath(general, ['ip', 'address', 'urlworker.ip', 'urlworker.result.ip']),
+      reputation: pickFirstPath(general, ['reputation', 'reputation_label']),
+      pulse_info: {
+        count: pickFirstPath(general, ['pulse_info.count', 'pulse_count'], pulses.length || 0),
+        pulses,
+      },
+      passive_dns: [],
+      malware: [],
+      url_list: getCollection(urlListPayload, 'url_list'),
+      derived: {
+        dns_resolutions: 0,
+        top_level_domains: [],
+        tags: getUnifiedTags(pulses),
+      },
+      section_states: {
+        pulses: buildSectionState(pulses.length > 0 ? 'success' : 'no_data', pulses.length > 0 ? '已返回关联情报。' : '当前对象没有关联 Pulses。'),
+        passive_dns: buildSectionState('not_supported', 'URL 查询当前不提供 Passive DNS。'),
+        url_list: buildSectionState(getCollection(urlListPayload, 'url_list').length > 0 ? 'success' : 'no_data', getCollection(urlListPayload, 'url_list').length > 0 ? '已返回关联 URL。' : '当前对象没有关联 URL。'),
+        malware: buildSectionState('not_supported', 'URL 查询当前不提供恶意样本列表。'),
+      },
+    };
+  }
+
+  if (type === 'cve') {
+    const normalizedQuery = String(query).toUpperCase();
+    const [generalPayload, pulsesPayload] = await Promise.all([
+      requestOtxSection(`/indicators/cve/${normalizedQuery}/general`),
+      requestOtxSection(`/indicators/cve/${normalizedQuery}/top_n_pulses`),
+    ]);
+    const general = unwrapPayload(generalPayload);
+    const pulses = getCollection(pulsesPayload, 'top_n_pulses');
+    return {
+      type,
+      query: normalizedQuery,
+      indicator: pickFirstPath(general, ['indicator', 'name', 'id', 'cve'], normalizedQuery),
+      base_score: pickFirstPath(general, ['base_score', 'cvss_score', 'cvss.base_score', 'cvss.score', 'cvss.cvssV3.baseScore', 'cvss3.base_score', 'cvss3.score']),
+      published: formatDisplayDate(pickFirstPath(general, ['published', 'published_date', 'release_date', 'created', 'modified', 'updated'])),
+      description: pickFirstPath(general, ['description', 'details', 'summary'], ''),
+      pulse_info: {
+        count: pickFirstPath(general, ['pulse_info.count', 'pulse_count'], pulses.length || 0),
+        pulses: [],
+      },
+      top_n_pulses: pulses,
+      passive_dns: [],
+      malware: [],
+      url_list: [],
+      derived: {
+        dns_resolutions: 0,
+        top_level_domains: [],
+        tags: getUnifiedTags(pulses),
+      },
+      section_states: {
+        pulses: buildSectionState(pulses.length > 0 ? 'success' : 'no_data', pulses.length > 0 ? '已返回关联情报。' : '当前 CVE 没有关联 Pulses。'),
+        passive_dns: buildSectionState('not_supported', 'CVE 查询不提供 Passive DNS。'),
+        url_list: buildSectionState('not_supported', 'CVE 查询不提供关联 URL。'),
+        malware: buildSectionState('not_supported', 'CVE 查询不提供恶意样本列表。'),
+      },
+    };
+  }
+
+  throw new Error(`Unsupported OTX search type: ${type}`);
+};
+
+const buildStructuredOtxResultV2 = async (type, query) => {
+  if (type === 'ip') {
+    const ipVersion = query.includes(':') ? 'IPv6' : 'IPv4';
+    const [generalPayload, reputationPayload, geoPayload, passiveDnsPayload, malwarePayload, urlListPayload, httpScansPayload] = await Promise.all([
+      requestOtxSection(`/indicators/${ipVersion}/${query}/general`),
+      requestOtxSection(`/indicators/${ipVersion}/${query}/reputation`),
+      requestOtxSection(`/indicators/${ipVersion}/${query}/geo`),
+      requestOtxSection(`/indicators/${ipVersion}/${query}/passive_dns`),
+      requestOtxSection(`/indicators/${ipVersion}/${query}/malware`),
+      requestOtxSection(`/indicators/${ipVersion}/${query}/url_list`),
+      requestOtxSection(`/indicators/${ipVersion}/${query}/http_scans`),
+    ]);
+    const general = unwrapPayload(generalPayload);
+    const reputation = unwrapPayload(reputationPayload);
+    const geo = unwrapPayload(geoPayload);
+    const pulses = Array.isArray(general?.pulse_info?.pulses) ? general.pulse_info.pulses : [];
+    const passiveDns = getCollection(passiveDnsPayload, 'passive_dns');
+    const malware = getCollection(malwarePayload, 'malware');
+    const urlList = getCollection(urlListPayload, 'url_list');
+    const httpScans = getHttpScans(httpScansPayload);
+
+    return {
+      type,
+      query,
+      indicator: pickFirstPath(general, ['indicator', 'ip', 'address'], query),
+      reputation: pickFirstPath(reputation, ['reputation', 'reputation_label', 'score'], pickFirstPath(general, ['reputation', 'reputation_label'])),
+      reputation_details: reputation,
+      asn: pickFirstPath(geo, ['asn', 'as_number'], pickFirstPath(general, ['asn', 'asn_info.asn', 'geo.asn', 'as_number'])),
+      asn_org: pickFirstPath(geo, ['asn_name', 'organization', 'org_name'], pickFirstPath(general, ['asn_info.name', 'asn_info.organization', 'asn_info.org_name', 'organization', 'org_name'])),
+      country: pickFirstPath(geo, ['country_name', 'country'], pickFirstPath(general, ['country_name', 'country', 'geo.country_name', 'location.country'])),
+      city: pickFirstPath(geo, ['city'], pickFirstPath(general, ['city', 'geo.city', 'location.city'])),
+      geo,
+      pulse_info: {
+        count: pickFirstPath(general, ['pulse_info.count', 'pulse_count'], pulses.length || 0),
+        pulses,
+      },
+      passive_dns: passiveDns,
+      malware,
+      url_list: urlList,
+      http_scans: httpScans,
+      derived: {
+        dns_resolutions: passiveDns.length,
+        top_level_domains: getTopLevelDomains(passiveDns),
+        tags: getUnifiedTags(pulses),
+        http_scan_count: httpScans.length,
+      },
+      section_states: {
+        pulses: buildSectionState(pulses.length > 0 ? 'success' : 'no_data', pulses.length > 0 ? 'Linked pulses found.' : 'No linked pulses found.'),
+        passive_dns: buildSectionState(passiveDns.length > 0 ? 'success' : 'no_data', passiveDns.length > 0 ? 'Passive DNS records available.' : 'No Passive DNS records found.'),
+        url_list: buildSectionState(urlList.length > 0 ? 'success' : 'no_data', urlList.length > 0 ? 'Related URLs found.' : 'No related URLs found.'),
+        malware: buildSectionState(malware.length > 0 ? 'success' : 'no_data', malware.length > 0 ? 'Malware samples available.' : 'No malware samples found.'),
+        http_scans: buildSectionState(httpScans.length > 0 ? 'success' : 'no_data', httpScans.length > 0 ? 'HTTP scan records available.' : 'No HTTP scan records found.'),
+      },
+    };
+  }
+
+  if (type === 'domain') {
+    const [generalPayload, geoPayload, passiveDnsPayload, whoisPayload, malwarePayload, urlListPayload, httpScansPayload] = await Promise.all([
+      requestOtxSection(`/indicators/domain/${query}/general`),
+      requestOtxSection(`/indicators/domain/${query}/geo`),
+      requestOtxSection(`/indicators/domain/${query}/passive_dns`),
+      requestOtxSection(`/indicators/domain/${query}/whois`),
+      requestOtxSection(`/indicators/domain/${query}/malware`),
+      requestOtxSection(`/indicators/domain/${query}/url_list`),
+      requestOtxSection(`/indicators/domain/${query}/http_scans`),
+    ]);
+    const general = unwrapPayload(generalPayload);
+    const geo = unwrapPayload(geoPayload);
+    const pulses = Array.isArray(general?.pulse_info?.pulses) ? general.pulse_info.pulses : [];
+    const passiveDns = getCollection(passiveDnsPayload, 'passive_dns');
+    const malware = getCollection(malwarePayload, 'malware');
+    const urlList = getCollection(urlListPayload, 'url_list');
+    const httpScans = getHttpScans(httpScansPayload);
+    const indicator = pickFirstPath(general, ['indicator', 'domain', 'hostname'], query);
+
+    return {
+      type,
+      query,
+      indicator,
+      reputation: pickFirstPath(general, ['reputation', 'reputation_label']),
+      country: pickFirstPath(geo, ['country_name', 'country'], pickFirstPath(general, ['country_name', 'country', 'geo.country_name', 'location.country'])),
+      city: pickFirstPath(geo, ['city'], pickFirstPath(general, ['city', 'geo.city', 'location.city'])),
+      geo,
+      whois: unwrapPayload(whoisPayload) || {},
+      pulse_info: {
+        count: pickFirstPath(general, ['pulse_info.count', 'pulse_count'], pulses.length || 0),
+        pulses,
+      },
+      passive_dns: passiveDns,
+      malware,
+      url_list: urlList,
+      http_scans: httpScans,
+      derived: {
+        dns_resolutions: passiveDns.length,
+        top_level_domains: getTopLevelDomains(passiveDns, [indicator]),
+        tags: getUnifiedTags(pulses),
+        http_scan_count: httpScans.length,
+      },
+      section_states: {
+        pulses: buildSectionState(pulses.length > 0 ? 'success' : 'no_data', pulses.length > 0 ? 'Linked pulses found.' : 'No linked pulses found.'),
+        passive_dns: buildSectionState(passiveDns.length > 0 ? 'success' : 'no_data', passiveDns.length > 0 ? 'Passive DNS records available.' : 'No Passive DNS records found.'),
+        url_list: buildSectionState(urlList.length > 0 ? 'success' : 'no_data', urlList.length > 0 ? 'Related URLs found.' : 'No related URLs found.'),
+        malware: buildSectionState(malware.length > 0 ? 'success' : 'no_data', malware.length > 0 ? 'Malware samples available.' : 'No malware samples found.'),
+        http_scans: buildSectionState(httpScans.length > 0 ? 'success' : 'no_data', httpScans.length > 0 ? 'HTTP scan records available.' : 'No HTTP scan records found.'),
+      },
+    };
+  }
+
+  if (type === 'url') {
+    const sanitizedQuery = query.replace(/^https?:\/\//, '').replace(/\/$/, '');
+    const encodedQuery = encodeURIComponent(sanitizedQuery);
+    const [generalPayload, urlListPayload] = await Promise.all([
+      requestOtxSection(`/indicators/url/${encodedQuery}/general`),
+      requestOtxSection(`/indicators/url/${encodedQuery}/url_list`),
+    ]);
+    const general = unwrapPayload(generalPayload);
+    const pulses = Array.isArray(general?.pulse_info?.pulses) ? general.pulse_info.pulses : [];
+    const urlList = getCollection(urlListPayload, 'url_list');
+    const domain = pickFirstPath(general, ['domain', 'hostname', 'urlworker.domain', 'urlworker.result.domain']);
+
+    return {
+      type,
+      query,
+      indicator: pickFirstPath(general, ['indicator', 'url', 'urlworker.url', 'urlworker.result.url'], query),
+      domain,
+      ip: pickFirstPath(general, ['ip', 'address', 'urlworker.ip', 'urlworker.result.ip']),
+      reputation: pickFirstPath(general, ['reputation', 'reputation_label']),
+      pulse_info: {
+        count: pickFirstPath(general, ['pulse_info.count', 'pulse_count'], pulses.length || 0),
+        pulses,
+      },
+      passive_dns: [],
+      malware: [],
+      url_list: urlList,
+      http_scans: [],
+      derived: {
+        dns_resolutions: 0,
+        top_level_domains: getTopLevelDomains([], [domain || sanitizedQuery]),
+        tags: getUnifiedTags(pulses),
+        http_scan_count: 0,
+      },
+      section_states: {
+        pulses: buildSectionState(pulses.length > 0 ? 'success' : 'no_data', pulses.length > 0 ? 'Linked pulses found.' : 'No linked pulses found.'),
+        passive_dns: buildSectionState('not_supported', 'Passive DNS is not available for URL lookups.'),
+        url_list: buildSectionState(urlList.length > 0 ? 'success' : 'no_data', urlList.length > 0 ? 'Related URLs found.' : 'No related URLs found.'),
+        malware: buildSectionState('not_supported', 'Malware samples are not returned for URL lookups.'),
+        http_scans: buildSectionState('not_supported', 'HTTP scans are not returned for URL lookups.'),
+      },
+    };
+  }
+
+  if (type === 'cve') {
+    const normalizedQuery = String(query).toUpperCase();
+    const [generalPayload, pulsesPayload] = await Promise.all([
+      requestOtxSection(`/indicators/cve/${normalizedQuery}/general`),
+      requestOtxSection(`/indicators/cve/${normalizedQuery}/top_n_pulses`),
+    ]);
+    const general = unwrapPayload(generalPayload);
+    const pulses = getCollection(pulsesPayload, 'top_n_pulses');
+
+    return {
+      type,
+      query: normalizedQuery,
+      indicator: pickFirstPath(general, ['indicator', 'name', 'id', 'cve'], normalizedQuery),
+      base_score: pickFirstPath(general, ['base_score', 'cvss_score', 'cvss.base_score', 'cvss.score', 'cvss.cvssV3.baseScore', 'cvss3.base_score', 'cvss3.score']),
+      published: formatDisplayDate(pickFirstPath(general, ['published', 'published_date', 'release_date', 'created', 'modified', 'updated'])),
+      description: pickFirstPath(general, ['description', 'details', 'summary'], ''),
+      pulse_info: {
+        count: pickFirstPath(general, ['pulse_info.count', 'pulse_count'], pulses.length || 0),
+        pulses: [],
+      },
+      top_n_pulses: pulses,
+      passive_dns: [],
+      malware: [],
+      url_list: [],
+      http_scans: [],
+      derived: {
+        dns_resolutions: 0,
+        top_level_domains: [],
+        tags: getUnifiedTags(pulses),
+        http_scan_count: 0,
+      },
+      section_states: {
+        pulses: buildSectionState(pulses.length > 0 ? 'success' : 'no_data', pulses.length > 0 ? 'Linked pulses found.' : 'No linked pulses found.'),
+        passive_dns: buildSectionState('not_supported', 'Passive DNS is not available for CVE lookups.'),
+        url_list: buildSectionState('not_supported', 'Related URLs are not available for CVE lookups.'),
+        malware: buildSectionState('not_supported', 'Malware samples are not returned for CVE lookups.'),
+        http_scans: buildSectionState('not_supported', 'HTTP scans are not returned for CVE lookups.'),
+      },
+    };
+  }
+
+  throw new Error(`Unsupported OTX search type: ${type}`);
+};
 
 console.log('🔍 环境变量检查：');
 console.log('   LEAKRADAR_API_KEY:', LEAKRADAR_API_KEY ? '已找到' : '未找到');
@@ -73,9 +554,39 @@ async function handleApiRequest(req, res) {
     
     console.log(`[Backend Proxy] ${req.method} ${url}`);
     
+    if (url.startsWith('/api/otx/search')) {
+      const type = String(req.query.type || '').trim().toLowerCase();
+      const query = String(req.query.query || '').trim();
+
+      if (!query || !['ip', 'domain', 'url', 'cve'].includes(type)) {
+        return res.status(400).json({
+          error: 'Invalid Request',
+          message: 'type and query are required',
+        });
+      }
+
+      const cachedResult = getCachedOtxSearch(type, query);
+      if (cachedResult) {
+        return res.status(200).json({
+          source: 'otx',
+          cached: true,
+          data: cachedResult,
+        });
+      }
+
+      const structuredResult = await buildStructuredOtxResultV2(type, query);
+      setCachedOtxSearch(type, query, structuredResult);
+
+      return res.status(200).json({
+        source: 'otx',
+        cached: false,
+        data: structuredResult,
+      });
+    }
+
     // 处理OTX API请求
     if (url.startsWith('/api/otx')) {
-      const upstreamUrl = 'https://otx.alienvault.com/api/v1';
+      const upstreamUrl = OTX_UPSTREAM_URL;
       const targetUrl = `${upstreamUrl}${url.replace(/^\/api\/otx/, '')}`;
       
       console.log(`[Backend Proxy] -> ${targetUrl}`);
@@ -96,6 +607,7 @@ async function handleApiRequest(req, res) {
         url: targetUrl,
         headers,
         data: req.body,
+        timeout: UPSTREAM_TIMEOUT,
         responseType: 'stream'
       });
       
@@ -141,6 +653,7 @@ async function handleApiRequest(req, res) {
         url: targetUrl,
         headers,
         data: req.body,
+        timeout: UPSTREAM_TIMEOUT,
         responseType: 'stream'
       });
       
@@ -188,6 +701,7 @@ async function handleApiRequest(req, res) {
       url: targetUrl,
       headers,
       data: req.body,
+      timeout: UPSTREAM_TIMEOUT,
       responseType: 'stream'
     });
     
@@ -210,6 +724,9 @@ async function handleApiRequest(req, res) {
       message: '无法连接到上游服务器',
       details: error.message
     });
+    if (error.code === 'ECONNABORTED') {
+      return;
+    }
   }
 }
 
