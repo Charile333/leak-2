@@ -2,6 +2,7 @@ import { evaluateCodeLeak, evaluateFileLeak } from './leak-rules.js';
 
 const OTX_UPSTREAM_URL = 'https://otx.alienvault.com/api/v1';
 const OTX_INTERNAL_UPSTREAM_URL = 'https://otx.alienvault.com/otxapi';
+const USE_OTX_INTERNAL_API = process.env.OTX_USE_INTERNAL_API === '1';
 
 const otxSearchCache = globalThis.__otxSearchCache || new Map();
 globalThis.__otxSearchCache = otxSearchCache;
@@ -232,10 +233,20 @@ const requestOtxSection = async (endpoint, options = {}) => {
 
     if (response.status === 404) return {};
     if (!response.ok) {
-      if (graceful) {
-        return { __section_error: 'upstream_error', __status: response.status };
+      let errorDetail = '';
+      try {
+        const rawText = await response.text();
+        if (rawText) {
+          errorDetail = ` - ${rawText.slice(0, 240)}`;
+        }
+      } catch {
+        errorDetail = '';
       }
-      throw new Error(`OTX request failed: ${response.status}`);
+
+      if (graceful) {
+        return { __section_error: 'upstream_error', __status: response.status, __detail: errorDetail };
+      }
+      throw new Error(`OTX request failed: ${response.status}${errorDetail}`);
     }
 
     return response.json();
@@ -253,8 +264,18 @@ const requestOtxSection = async (endpoint, options = {}) => {
 };
 
 const requestOtxCandidates = async (candidates, options = {}) => {
-  const normalizedCandidates = Array.isArray(candidates) ? candidates : [candidates];
+  const normalizedCandidates = (Array.isArray(candidates) ? candidates : [candidates]).filter(
+    (candidate) => USE_OTX_INTERNAL_API || !candidate.internal
+  );
   let lastError = null;
+
+  if (normalizedCandidates.length === 0) {
+    if (options.graceful) {
+      return { __section_error: 'upstream_error' };
+    }
+
+    throw new Error('No OTX candidates available for request');
+  }
 
   for (let index = 0; index < normalizedCandidates.length; index += 1) {
     const candidate = normalizedCandidates[index];
