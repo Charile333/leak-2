@@ -13,9 +13,13 @@
     "preview": "vite preview",
     "server": "node dev-server.js",
     "start": "npm run server",
-    "dev:all": "concurrently \"npm run server\" \"npm run dev\""
+    "dev:all": "concurrently \"npm run server\" \"npm run dev\"",
+    "scan:worker": "node workers/scanner-worker.js",
+    "scan:worker:daemon": "node workers/scanner-worker.js --daemon",
+    "scan:seed": "node workers/seed-scan-tasks.js"
   },
   "dependencies": {
+    "@neondatabase/serverless": "^1.0.2",
     "@react-three/drei": "^10.7.7",
     "@react-three/fiber": "^9.5.0",
     "@react-three/rapier": "^2.2.0",

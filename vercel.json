@@ -9,6 +9,38 @@
       "destination": "/api/code-leak/search.js"
     },
     {
+      "source": "/api/code-leak/assets",
+      "destination": "/api/code-leak/assets.js"
+    },
+    {
+      "source": "/api/code-leak/assets/(.*)",
+      "destination": "/api/code-leak/assets.js?id=$1"
+    },
+    {
+      "source": "/api/file-leak/search",
+      "destination": "/api/file-leak/search.js"
+    },
+    {
+      "source": "/api/file-leak/assets",
+      "destination": "/api/file-leak/assets.js"
+    },
+    {
+      "source": "/api/file-leak/assets/(.*)",
+      "destination": "/api/file-leak/assets.js?id=$1"
+    },
+    {
+      "source": "/api/scheduled-scans/tasks",
+      "destination": "/api/scheduled-scans/tasks.js"
+    },
+    {
+      "source": "/api/scheduled-scans/tasks/(.*)",
+      "destination": "/api/scheduled-scans/tasks.js?id=$1"
+    },
+    {
+      "source": "/api/notifications/webhook",
+      "destination": "/api/notifications/webhook.js"
+    },
+    {
       "source": "/api/auth/login",
       "destination": "/api/auth/login.js"
     },

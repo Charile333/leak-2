@@ -28,6 +28,7 @@ import {
   type CodeLeakSource,
   type CodeLeakStatus,
 } from '../services/codeLeakService';
+import WebhookSettingsButton from '../components/notifications/WebhookSettingsButton';
 
 const severityToneMap: Record<CodeLeakSeverity, string> = {
   critical: 'border-red-500/25 bg-red-500/10 text-red-200',
@@ -337,6 +338,9 @@ const CodeLeak = () => {
             <div className="max-w-3xl">
               <h1 className="text-2xl font-semibold tracking-[-0.04em] text-white sm:text-3xl lg:text-4xl">代码泄露监测</h1>
               <p className="mt-3 max-w-2xl text-sm leading-7 text-white/58 sm:text-base">支持自定义添加监测对象，围绕公司名、域名、邮箱后缀和项目名持续检索真实代码泄露线索。</p>
+              <div className="mt-4">
+                <WebhookSettingsButton />
+              </div>
             </div>
             <div className="grid gap-2 sm:grid-cols-3">
               <StatCard label="监测对象" value={String(assets.length)} hint="支持自定义追加" />

@@ -1,74 +1,79 @@
-export type CodeLeakSeverity = 'critical' | 'high' | 'medium' | 'low';
-export type CodeLeakStatus = 'new' | 'reviewing' | 'confirmed' | 'dismissed';
-export type CodeLeakSource = 'GitHub' | 'GitLab' | 'Gitee' | 'Paste';
-export type CodeLeakExposure = 'secret' | 'config' | 'repository' | 'credential' | 'source';
-export type CodeLeakAssetType = 'company' | 'domain' | 'email_suffix' | 'repository';
+export type FileLeakSeverity = 'critical' | 'high' | 'medium' | 'low';
+export type FileLeakStatus = 'new' | 'reviewing' | 'confirmed' | 'dismissed';
+export type FileLeakSource = 'GitHub' | 'Gitee';
+export type FileLeakExposure = 'document' | 'spreadsheet' | 'dataset' | 'archive' | 'database' | 'backup';
+export type FileLeakAssetType = 'company' | 'domain' | 'email_suffix' | 'document_keyword';
+export type FileLeakSensitivity = 'critical' | 'high' | 'medium';
 
-export interface CodeLeakAsset {
+export interface FileLeakAsset {
   id: string;
   label: string;
-  type: CodeLeakAssetType;
+  type: FileLeakAssetType;
   value: string;
   enabled: boolean;
 }
 
-export interface CodeLeakFinding {
+export interface FileLeakFinding {
   id: string;
   assetId: string;
   assetLabel: string;
-  severity: CodeLeakSeverity;
-  status: CodeLeakStatus;
-  source: CodeLeakSource;
-  exposure: CodeLeakExposure;
+  severity: FileLeakSeverity;
+  status: FileLeakStatus;
+  source: FileLeakSource;
+  exposure: FileLeakExposure;
   title: string;
   repository: string;
   owner: string;
   path: string;
-  branch: string;
   match: string;
   snippet: string;
+  url: string;
+  fileType: string;
+  sensitivity: FileLeakSensitivity;
+  channel: string;
+  sourceSite: string;
   firstSeen: string;
   lastSeen: string;
-  url: string;
   confidence: number;
   matchedRules: string[];
   notes: string[];
 }
 
-export interface CodeLeakSearchFilters {
+export interface FileLeakSearchFilters {
   query?: string;
   assetId?: string;
-  severity?: CodeLeakSeverity | 'all';
-  status?: CodeLeakStatus | 'all';
-  source?: CodeLeakSource | 'all';
+  severity?: FileLeakSeverity | 'all';
+  status?: FileLeakStatus | 'all';
+  source?: FileLeakSource | 'all';
+  sensitivity?: FileLeakSensitivity | 'all';
 }
 
-const STATUS_STORAGE_KEY = 'code-leak-mvp-statuses';
+const STATUS_STORAGE_KEY = 'file-leak-statuses';
 
-export class CodeLeakSearchError extends Error {
+export class FileLeakSearchError extends Error {
   constructor(message: string) {
     super(message);
-    this.name = 'CodeLeakSearchError';
+    this.name = 'FileLeakSearchError';
   }
 }
 
 const readStatusOverrides = () => {
-  if (typeof window === 'undefined') return {} as Record<string, CodeLeakStatus>;
+  if (typeof window === 'undefined') return {} as Record<string, FileLeakStatus>;
 
   try {
     const raw = window.localStorage.getItem(STATUS_STORAGE_KEY);
-    return raw ? (JSON.parse(raw) as Record<string, CodeLeakStatus>) : {};
+    return raw ? (JSON.parse(raw) as Record<string, FileLeakStatus>) : {};
   } catch {
     return {};
   }
 };
 
-const writeStatusOverrides = (statuses: Record<string, CodeLeakStatus>) => {
+const writeStatusOverrides = (statuses: Record<string, FileLeakStatus>) => {
   if (typeof window === 'undefined') return;
   window.localStorage.setItem(STATUS_STORAGE_KEY, JSON.stringify(statuses));
 };
 
-const applyStatuses = (findings: CodeLeakFinding[]) => {
+const applyStatuses = (findings: FileLeakFinding[]) => {
   const statuses = readStatusOverrides();
   return findings.map((finding) => ({
     ...finding,
@@ -97,23 +102,23 @@ const getAuthHeaders = (): Record<string, string> => {
   return email ? { 'X-User-Email': email } : {};
 };
 
-const buildAssetMap = (assets: CodeLeakAsset[]) =>
+const buildAssetMap = (assets: FileLeakAsset[]) =>
   new Map(assets.map((asset) => [asset.value.toLowerCase(), asset]));
 
 const normalizeRemoteFinding = (
-  finding: Partial<CodeLeakFinding> & { assetLabel?: string; match?: string },
-  assetMap: Map<string, CodeLeakAsset>,
-  assets: CodeLeakAsset[]
-): CodeLeakFinding => {
+  finding: Partial<FileLeakFinding> & { assetLabel?: string; match?: string },
+  assetMap: Map<string, FileLeakAsset>,
+  assets: FileLeakAsset[]
+): FileLeakFinding => {
   const fallbackAsset =
     assets[0] ||
     ({
-      id: 'asset-unmatched',
-      label: finding.assetLabel || finding.match || '未匹配对象',
+      id: 'file-asset-unmatched',
+      label: finding.assetLabel || finding.match || '未关联资产',
       value: finding.match || finding.assetLabel || 'unmatched',
       type: 'company',
       enabled: true,
-    } as CodeLeakAsset);
+    } as FileLeakAsset);
 
   const linkedAsset =
     assetMap.get((finding.assetLabel || '').toLowerCase()) ||
@@ -130,20 +135,23 @@ const normalizeRemoteFinding = (
     severity: finding.severity || 'medium',
     status: finding.status || 'new',
     source: finding.source || 'GitHub',
-    exposure: finding.exposure || 'source',
-    title: finding.title || '发现疑似代码泄露线索',
+    exposure: finding.exposure || 'document',
+    title: finding.title || '公共文件暴露候选',
     repository: finding.repository || 'unknown-repository',
     owner: finding.owner || 'unknown-owner',
-    path: finding.path || 'unknown-path',
-    branch: finding.branch || 'main',
+    path: finding.path || 'Unknown path',
     match: finding.match || linkedAsset.value,
-    snippet: finding.snippet || '未返回可预览的命中片段',
+    snippet: finding.snippet || '未返回更多上下文内容。',
+    url: finding.url || '#',
+    fileType: finding.fileType || 'UNKNOWN',
+    sensitivity: finding.sensitivity || 'medium',
+    channel: finding.channel || 'public-source',
+    sourceSite: finding.sourceSite || finding.url || '',
     firstSeen: finding.firstSeen || now,
     lastSeen: finding.lastSeen || finding.firstSeen || now,
-    url: finding.url || '#',
     confidence: typeof finding.confidence === 'number' ? finding.confidence : 0.5,
     matchedRules: Array.isArray(finding.matchedRules) ? finding.matchedRules.filter((item): item is string => typeof item === 'string') : [],
-    notes: Array.isArray(finding.notes) ? finding.notes : ['建议尽快打开来源并确认是否为真实泄露。'],
+    notes: Array.isArray(finding.notes) ? finding.notes : ['需要人工进一步确认文件内容和泄露范围。'],
   };
 };
 
@@ -176,12 +184,12 @@ const requestJson = async <T>(url: string, options: RequestInit = {}) => {
 };
 
 const fetchAssets = async () => {
-  const payload = await requestJson<{ assets?: CodeLeakAsset[] }>('/api/code-leak/assets');
+  const payload = await requestJson<{ assets?: FileLeakAsset[] }>('/api/file-leak/assets');
   return Array.isArray(payload.assets) ? payload.assets : [];
 };
 
-const fetchRemoteFindings = async (assets: CodeLeakAsset[], query?: string) => {
-  const payload = await requestJson<{ findings?: Array<Partial<CodeLeakFinding>> }>('/api/code-leak/search', {
+const fetchRemoteFindings = async (assets: FileLeakAsset[], query?: string) => {
+  const payload = await requestJson<{ findings?: Array<Partial<FileLeakFinding>> }>('/api/file-leak/search', {
     method: 'POST',
     body: JSON.stringify({ assets, query }),
   });
@@ -191,21 +199,18 @@ const fetchRemoteFindings = async (assets: CodeLeakAsset[], query?: string) => {
   return findings.map((finding) => normalizeRemoteFinding(finding, assetMap, assets));
 };
 
-export const codeLeakService = {
-  async getAssets(): Promise<CodeLeakAsset[]> {
-    await new Promise((resolve) => window.setTimeout(resolve, 80));
+export const fileLeakService = {
+  async getAssets(): Promise<FileLeakAsset[]> {
     return fetchAssets();
   },
 
-  async addAsset(input: { label?: string; value: string; type: CodeLeakAssetType }): Promise<CodeLeakAsset[]> {
-    await new Promise((resolve) => window.setTimeout(resolve, 60));
-
+  async addAsset(input: { label?: string; value: string; type: FileLeakAssetType }): Promise<FileLeakAsset[]> {
     const value = input.value.trim();
     if (!value) {
-      throw new Error('监测对象不能为空');
+      throw new Error('监测对象不能为空。');
     }
 
-    const payload = await requestJson<{ assets?: CodeLeakAsset[] }>('/api/code-leak/assets', {
+    const payload = await requestJson<{ assets?: FileLeakAsset[] }>('/api/file-leak/assets', {
       method: 'POST',
       body: JSON.stringify({
         value,
@@ -217,28 +222,25 @@ export const codeLeakService = {
     return Array.isArray(payload.assets) ? payload.assets : [];
   },
 
-  async removeAsset(id: string): Promise<CodeLeakAsset[]> {
-    await new Promise((resolve) => window.setTimeout(resolve, 60));
-
-    const payload = await requestJson<{ assets?: CodeLeakAsset[] }>(`/api/code-leak/assets/${encodeURIComponent(id)}`, {
+  async removeAsset(id: string): Promise<FileLeakAsset[]> {
+    const payload = await requestJson<{ assets?: FileLeakAsset[] }>(`/api/file-leak/assets/${encodeURIComponent(id)}`, {
       method: 'DELETE',
     });
 
     return Array.isArray(payload.assets) ? payload.assets : [];
   },
 
-  async searchFindings(filters: CodeLeakSearchFilters = {}, assetsOverride?: CodeLeakAsset[]): Promise<CodeLeakFinding[]> {
-    await new Promise((resolve) => window.setTimeout(resolve, 120));
-
+  async searchFindings(filters: FileLeakSearchFilters = {}, assetsOverride?: FileLeakAsset[]): Promise<FileLeakFinding[]> {
     const assets = assetsOverride ?? (await fetchAssets());
     const query = filters.query?.trim().toLowerCase();
-    let findings: CodeLeakFinding[] = [];
+
+    let findings: FileLeakFinding[] = [];
 
     try {
       findings = applyStatuses(await fetchRemoteFindings(assets, filters.query));
     } catch (error) {
-      console.error('[codeLeakService] Remote code leak search failed:', error);
-      throw new CodeLeakSearchError('当前无法从真实情报源加载代码泄露结果，请检查后端聚合服务或 API 配置。');
+      console.error('[fileLeakService] Remote file leak search failed:', error);
+      throw new FileLeakSearchError('文件泄露搜索失败，请检查文件泄露接口和令牌配置。');
     }
 
     return findings.filter((finding) => {
@@ -246,6 +248,7 @@ export const codeLeakService = {
       if (filters.severity && filters.severity !== 'all' && finding.severity !== filters.severity) return false;
       if (filters.status && filters.status !== 'all' && finding.status !== filters.status) return false;
       if (filters.source && filters.source !== 'all' && finding.source !== filters.source) return false;
+      if (filters.sensitivity && filters.sensitivity !== 'all' && finding.sensitivity !== filters.sensitivity) return false;
       if (!query) return true;
 
       return [
@@ -256,12 +259,13 @@ export const codeLeakService = {
         finding.match,
         finding.snippet,
         finding.assetLabel,
+        finding.fileType,
+        finding.sourceSite,
       ].some((field) => includesText(field, query));
     });
   },
 
-  async updateFindingStatus(id: string, status: CodeLeakStatus): Promise<void> {
-    await new Promise((resolve) => window.setTimeout(resolve, 80));
+  async updateFindingStatus(id: string, status: FileLeakStatus): Promise<void> {
     const statuses = readStatusOverrides();
     statuses[id] = status;
     writeStatusOverrides(statuses);
