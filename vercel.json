@@ -1,6 +1,14 @@
 {
   "rewrites": [
     {
+      "source": "/api/otx/search",
+      "destination": "/api/otx/search.js"
+    },
+    {
+      "source": "/api/code-leak/search",
+      "destination": "/api/code-leak/search.js"
+    },
+    {
       "source": "/api/auth/login",
       "destination": "/api/auth/login.js"
     },
