@@ -26,3 +26,8 @@ dist-ssr
 *.sln
 *.sw?
 workers/deploy/
+docs/
+deploy-trendradar/
+gsap-javascript-circular-animations-set-s02-n-1/
+parallax-footer-website-fixed-footer/
+TrendRadar/
