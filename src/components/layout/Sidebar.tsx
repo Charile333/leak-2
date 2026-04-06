@@ -15,8 +15,11 @@ import {
 import { cn } from '../../lib/utils';
 import { useAuth } from '../../context/AuthContext';
 
-const dieLogo = '/diewei.png';
+const fullLogo = '/diewei.png';
+const compactLogo = '/diewei2.png';
 const GROUP_DISCOVERY = '\u60c5\u62a5\u68c0\u7d22';
+const DESKTOP_EXPANDED_WIDTH = 256;
+const DESKTOP_COLLAPSED_WIDTH = 88;
 
 const menuGroups = [
   {
@@ -120,69 +123,133 @@ const Sidebar: React.FC<SidebarProps> = ({
   };
 
   const smoothTransition = {
-    duration: 0.35,
-    ease: [0.4, 0, 0.2, 1] as const,
+    duration: 0.32,
+    ease: [0.22, 1, 0.36, 1] as const,
   };
+
+  const sidebarTransition = shouldReduceMotion
+    ? { duration: 0.01 }
+    : { type: 'spring' as const, stiffness: 240, damping: 30, mass: 0.92 };
 
   const navSpring = shouldReduceMotion
     ? { duration: 0.01 }
-    : { type: 'spring' as const, stiffness: 320, damping: 28, mass: 0.75 };
+    : { type: 'spring' as const, stiffness: 260, damping: 26, mass: 0.8 };
+
+  const desktopSidebarWidth = effectiveCollapsed ? DESKTOP_COLLAPSED_WIDTH : DESKTOP_EXPANDED_WIDTH;
+  const mobileSidebarX = isMobileOpen ? 0 : '-104%';
 
   return (
     <motion.aside
       initial={false}
-      animate={{ x: isDesktop ? 0 : isMobileOpen ? 0 : -320 }}
-      transition={smoothTransition}
+      animate={
+        isDesktop
+          ? { width: desktopSidebarWidth, x: 0 }
+          : { x: mobileSidebarX }
+      }
+      transition={sidebarTransition}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
+      style={{ originX: 0 }}
       className={cn(
-        'console-shell fixed left-0 top-0 z-50 flex h-screen flex-col overflow-hidden border-r shadow-2xl backdrop-blur-xl',
-        isDesktop ? (effectiveCollapsed ? 'group/sidebar lg:w-20' : 'group/sidebar lg:w-64') : 'w-[86vw] max-w-[320px]',
+        'console-shell fixed left-0 top-0 z-50 flex h-screen flex-col overflow-hidden border-r shadow-2xl backdrop-blur-xl transform-gpu will-change-transform',
+        isDesktop ? 'group/sidebar' : 'w-[86vw] max-w-[320px]',
         !isDesktop && 'shadow-black/50',
       )}
     >
-      <div className="console-divider relative flex h-28 shrink-0 items-center justify-center overflow-hidden border-b px-4 lg:h-32">
+      <div
+        className={cn(
+          'console-divider relative flex shrink-0 items-center overflow-hidden border-b lg:h-32',
+          effectiveCollapsed ? 'h-24 justify-center px-3' : 'h-28 justify-center px-4',
+        )}
+      >
+        <motion.div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-y-4 right-[-20%] w-28 rounded-full bg-accent/12 blur-3xl"
+          animate={
+            shouldReduceMotion
+              ? undefined
+              : {
+                  opacity: effectiveCollapsed ? 0.18 : 0.54,
+                  x: effectiveCollapsed ? -10 : 0,
+                  scale: effectiveCollapsed ? 0.7 : 1,
+                }
+          }
+          transition={sidebarTransition}
+        />
         <AnimatePresence>
-          {!effectiveCollapsed && (
-            <>
-              {!isDesktop && (
-                <motion.button
-                  type="button"
-                  initial={{ opacity: 0, scale: 0.9 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.9 }}
-                  transition={smoothTransition}
-                  onClick={() => setIsMobileOpen(false)}
-                  className="console-control absolute left-4 top-4 flex h-10 w-10 items-center justify-center rounded-xl"
-                  aria-label={'\u5173\u95ed\u5bfc\u822a'}
-                >
-                  <X className="h-4 w-4" />
-                </motion.button>
-              )}
-
-              {isDesktop && (
-                <motion.button
-                  initial={{ opacity: 0, x: 20 }}
-                  animate={{ opacity: 1, x: 0, rotate: isPinned ? 45 : 0 }}
-                  exit={{ opacity: 0, x: 20 }}
-                  transition={smoothTransition}
-                  onClick={togglePin}
-                  className={cn(
-                    'absolute right-6 top-4 rounded-lg p-2 transition-all duration-300',
-                    isPinned
-                      ? 'console-accent-soft shadow-[0_0_15px_color-mix(in_srgb,var(--accent)_18%,transparent)]'
-                      : 'console-control console-muted',
-                  )}
-                  title={isPinned ? '\u53d6\u6d88\u56fa\u5b9a\u4fa7\u680f' : '\u56fa\u5b9a\u4fa7\u680f'}
-                >
-                  <Pin className="h-4 w-4" />
-                </motion.button>
-              )}
-            </>
+          {!isDesktop && !effectiveCollapsed && (
+            <motion.button
+              type="button"
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              transition={smoothTransition}
+              onClick={() => setIsMobileOpen(false)}
+              className="console-control absolute left-4 top-4 flex h-10 w-10 items-center justify-center rounded-xl"
+              aria-label={'\u5173\u95ed\u5bfc\u822a'}
+            >
+              <X className="h-4 w-4" />
+            </motion.button>
           )}
         </AnimatePresence>
 
-        <img src={dieLogo} alt="Product Logo" className="h-20 w-20 object-contain lg:h-28 lg:w-28" />
+        {isDesktop && (
+          <motion.button
+            initial={false}
+            animate={{
+              opacity: 1,
+              x: 0,
+              y: 0,
+              rotate: isPinned ? 45 : 0,
+              scale: effectiveCollapsed ? 0.92 : 1,
+            }}
+            transition={smoothTransition}
+            onClick={togglePin}
+            className={cn(
+              'absolute z-10 rounded-lg p-2 transition-all duration-300',
+              effectiveCollapsed ? 'right-2.5 top-3' : 'right-6 top-4',
+              isPinned
+                ? 'console-accent-soft shadow-[0_0_15px_color-mix(in_srgb,var(--accent)_18%,transparent)]'
+                : 'console-control console-muted',
+            )}
+            title={isPinned ? '\u53d6\u6d88\u56fa\u5b9a\u4fa7\u680f' : '\u56fa\u5b9a\u4fa7\u680f'}
+          >
+            <Pin className="h-4 w-4" />
+          </motion.button>
+        )}
+
+        <div
+          className={cn(
+            'relative flex items-center justify-center overflow-hidden',
+            effectiveCollapsed ? 'h-14 w-14' : 'h-20 w-[168px] lg:h-24 lg:w-[184px]',
+          )}
+        >
+          <AnimatePresence mode="wait" initial={false}>
+            {effectiveCollapsed ? (
+              <motion.img
+                key="compact-logo"
+                src={compactLogo}
+                alt="Lysirsec Compact Logo"
+                initial={shouldReduceMotion ? false : { opacity: 0, scale: 0.88, y: 6 }}
+                animate={shouldReduceMotion ? undefined : { opacity: 1, scale: 1, y: 0 }}
+                exit={shouldReduceMotion ? undefined : { opacity: 0, scale: 0.92, y: -6 }}
+                transition={smoothTransition}
+                className="h-11 w-11 object-contain lg:h-12 lg:w-12"
+              />
+            ) : (
+              <motion.img
+                key="full-logo"
+                src={fullLogo}
+                alt="Lysirsec Logo"
+                initial={shouldReduceMotion ? false : { opacity: 0, scale: 0.96, y: 8 }}
+                animate={shouldReduceMotion ? undefined : { opacity: 1, scale: 1, y: 0 }}
+                exit={shouldReduceMotion ? undefined : { opacity: 0, scale: 0.98, y: -8 }}
+                transition={smoothTransition}
+                className="h-16 w-auto object-contain lg:h-20"
+              />
+            )}
+          </AnimatePresence>
+        </div>
       </div>
 
       <nav className="custom-scrollbar flex-1 overflow-x-hidden overflow-y-auto px-3 py-3">

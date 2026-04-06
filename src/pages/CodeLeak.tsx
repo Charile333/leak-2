@@ -1,163 +1,487 @@
-import { motion } from 'framer-motion';
-import { 
-  Code, 
-  GitBranch, 
-  Shield, 
-  Search, 
-  AlertTriangle, 
-  Lock, 
-  FileCode, 
-  Eye, 
-  Zap 
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
+import { createPortal } from 'react-dom';
+import {
+  AlertTriangle,
+  Code2,
+  Copy,
+  ExternalLink,
+  Eye,
+  Filter,
+  FolderGit2,
+  GitBranch,
+  Loader2,
+  Plus,
+  Search,
+  ShieldAlert,
+  Trash2,
+  X,
 } from 'lucide-react';
+import { cn } from '../lib/utils';
+import {
+  CodeLeakSearchError,
+  codeLeakService,
+  type CodeLeakAsset,
+  type CodeLeakAssetType,
+  type CodeLeakFinding,
+  type CodeLeakSeverity,
+  type CodeLeakSource,
+  type CodeLeakStatus,
+} from '../services/codeLeakService';
+
+const severityToneMap: Record<CodeLeakSeverity, string> = {
+  critical: 'border-red-500/25 bg-red-500/10 text-red-200',
+  high: 'border-orange-500/25 bg-orange-500/10 text-orange-200',
+  medium: 'border-amber-500/25 bg-amber-500/10 text-amber-200',
+  low: 'border-white/10 bg-white/[0.06] text-white/72',
+};
+
+const severityLabelMap: Record<CodeLeakSeverity, string> = {
+  critical: '严重',
+  high: '高',
+  medium: '中',
+  low: '低',
+};
+
+const statusToneMap: Record<CodeLeakStatus, string> = {
+  new: 'border-red-500/20 bg-red-500/10 text-red-200',
+  reviewing: 'border-accent/20 bg-accent/10 text-accent',
+  confirmed: 'border-emerald-500/20 bg-emerald-500/10 text-emerald-200',
+  dismissed: 'border-white/10 bg-white/[0.06] text-white/62',
+};
+
+const statusLabelMap: Record<CodeLeakStatus, string> = {
+  new: '待处理',
+  reviewing: '研判中',
+  confirmed: '已确认',
+  dismissed: '误报',
+};
+
+const exposureLabelMap: Record<CodeLeakFinding['exposure'], string> = {
+  secret: '密钥暴露',
+  config: '配置泄露',
+  repository: '仓库暴露',
+  credential: '凭据泄露',
+  source: '源码痕迹',
+};
+
+const assetTypeLabelMap: Record<CodeLeakAssetType, string> = {
+  company: '公司名',
+  domain: '域名',
+  email_suffix: '邮箱后缀',
+  repository: '项目名',
+};
+
+const sourceOptions: Array<CodeLeakSource | 'all'> = ['all', 'GitHub', 'GitLab', 'Gitee', 'Paste'];
+const severityOptions: Array<CodeLeakSeverity | 'all'> = ['all', 'critical', 'high', 'medium', 'low'];
+const statusOptions: Array<CodeLeakStatus | 'all'> = ['all', 'new', 'reviewing', 'confirmed', 'dismissed'];
+const assetTypeOptions: CodeLeakAssetType[] = ['company', 'domain', 'email_suffix', 'repository'];
+
+const formatDate = (value: string) => {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleString('zh-CN');
+};
+
+const StatCard = ({ label, value, hint }: { label: string; value: string; hint: string }) => (
+  <div className="rounded-[22px] border border-white/8 bg-white/[0.03] px-4 py-4">
+    <p className="text-[11px] uppercase tracking-[0.22em] text-white/40">{label}</p>
+    <p className="mt-2 text-lg font-semibold text-white">{value}</p>
+    <p className="mt-1 text-xs text-white/45">{hint}</p>
+  </div>
+);
+
+const Panel = ({
+  title,
+  right,
+  children,
+}: {
+  title: string;
+  right?: React.ReactNode;
+  children: React.ReactNode;
+}) => (
+  <section className="overflow-hidden rounded-[28px] border border-white/8 bg-[#11141c]/82 backdrop-blur-2xl">
+    <div className="flex items-center justify-between border-b border-white/6 px-6 py-4">
+      <h2 className="text-base font-semibold text-white">{title}</h2>
+      {right}
+    </div>
+    <div className="px-6 py-6">{children}</div>
+  </section>
+);
 
 const CodeLeak = () => {
-  const features = [
-    {
-      icon: <GitBranch className="w-8 h-8" />,
-      title: '\u4ee3\u7801\u4ed3\u5e93\u76d1\u63a7',
-      description: '\u5b9e\u65f6\u76d1\u63a7 GitHub\u3001Gitee\u3001GitLab \u7b49\u4ee3\u7801\u6258\u7ba1\u5e73\u53f0\uff0c\u6355\u83b7\u654f\u611f\u4ee3\u7801\u6cc4\u9732',
-      color: 'from-accent/20 to-accent/5'
-    },
-    {
-      icon: <Code className="w-8 h-8" />,
-      title: '\u654f\u611f\u4ee3\u7801\u8bc6\u522b',
-      description: '\u4f7f\u7528 AI \u7b97\u6cd5\u8bc6\u522b API \u5bc6\u94a5\u3001\u6570\u636e\u5e93\u8fde\u63a5\u3001\u786c\u7f16\u7801\u5bc6\u7801\u7b49\u654f\u611f\u4fe1\u606f',
-      color: 'from-accent/20 to-accent/5'
-    },
-    {
-      icon: <Shield className="w-8 h-8" />,
-      title: '\u6cc4\u9732\u98ce\u9669\u8bc4\u4f30',
-      description: '\u8bc4\u4f30\u4ee3\u7801\u6cc4\u9732\u98ce\u9669\u7b49\u7ea7\uff0c\u63d0\u4f9b\u4fee\u590d\u5efa\u8bae\u548c\u5b89\u5168\u52a0\u56fa\u65b9\u6848',
-      color: 'from-green-500/20 to-green-500/5'
-    },
-    {
-      icon: <Search className="w-8 h-8" />,
-      title: '\u5386\u53f2\u6cc4\u9732\u8ffd\u8e2a',
-      description: '\u8ffd\u8e2a\u5386\u53f2\u4ee3\u7801\u6cc4\u9732\u4e8b\u4ef6\uff0c\u5206\u6790\u6cc4\u9732\u8d8b\u52bf\u548c\u653b\u51fb\u6a21\u5f0f',
-      color: 'from-orange-500/20 to-orange-500/5'
+  const [assets, setAssets] = useState<CodeLeakAsset[]>([]);
+  const [findings, setFindings] = useState<CodeLeakFinding[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [assetFilter, setAssetFilter] = useState<string>('all');
+  const [sourceFilter, setSourceFilter] = useState<CodeLeakSource | 'all'>('all');
+  const [severityFilter, setSeverityFilter] = useState<CodeLeakSeverity | 'all'>('all');
+  const [statusFilter, setStatusFilter] = useState<CodeLeakStatus | 'all'>('all');
+  const [selectedFinding, setSelectedFinding] = useState<CodeLeakFinding | null>(null);
+  const [newAssetValue, setNewAssetValue] = useState('');
+  const [newAssetType, setNewAssetType] = useState<CodeLeakAssetType>('company');
+  const [assetError, setAssetError] = useState('');
+  const [loadError, setLoadError] = useState('');
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSavingAsset, setIsSavingAsset] = useState(false);
+  const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
+  const drawerRef = useRef<HTMLDivElement>(null);
+
+  const loadData = async (assetList?: CodeLeakAsset[]) => {
+    setIsLoading(true);
+    setLoadError('');
+    try {
+      const nextAssets = assetList ?? (await codeLeakService.getAssets());
+      const nextFindings = await codeLeakService.searchFindings(
+        {
+          query: searchQuery,
+          assetId: assetFilter,
+          source: sourceFilter,
+          severity: severityFilter,
+          status: statusFilter,
+        },
+        nextAssets
+      );
+      setAssets(nextAssets);
+      setFindings(nextFindings);
+    } catch (error) {
+      setFindings([]);
+      setLoadError(
+        error instanceof CodeLeakSearchError
+          ? error.message
+          : '当前无法加载真实代码泄露结果，请稍后重试。'
+      );
+      if (!assetList) {
+        setAssets(await codeLeakService.getAssets());
+      }
+    } finally {
+      setIsLoading(false);
     }
-  ];
+  };
+
+  useEffect(() => {
+    void loadData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchQuery, assetFilter, sourceFilter, severityFilter, statusFilter]);
+
+  useEffect(() => {
+    const onClickOutside = (event: MouseEvent) => {
+      if (drawerRef.current && !drawerRef.current.contains(event.target as Node)) {
+        setSelectedFinding(null);
+      }
+    };
+    const onEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setSelectedFinding(null);
+    };
+    if (!selectedFinding) return;
+    document.body.style.overflow = 'hidden';
+    document.addEventListener('mousedown', onClickOutside);
+    document.addEventListener('keydown', onEscape);
+    return () => {
+      document.body.style.overflow = '';
+      document.removeEventListener('mousedown', onClickOutside);
+      document.removeEventListener('keydown', onEscape);
+    };
+  }, [selectedFinding]);
+
+  const summary = useMemo(() => {
+    const total = findings.length;
+    const highRisk = findings.filter((item) => item.severity === 'critical' || item.severity === 'high').length;
+    const pending = findings.filter((item) => item.status === 'new').length;
+    return { total, highRisk, pending };
+  }, [findings]);
+
+  const handleAddAsset = async () => {
+    const value = newAssetValue.trim();
+    if (!value) {
+      setAssetError('请先输入监测对象');
+      return;
+    }
+    setIsSavingAsset(true);
+    setAssetError('');
+    try {
+      const nextAssets = await codeLeakService.addAsset({ value, type: newAssetType });
+      setNewAssetValue('');
+      if (assetFilter !== 'all') setAssetFilter('all');
+      await loadData(nextAssets);
+    } catch (error) {
+      setAssetError(error instanceof Error ? error.message : '添加失败');
+    } finally {
+      setIsSavingAsset(false);
+    }
+  };
+
+  const handleRemoveAsset = async (id: string) => {
+    setIsSavingAsset(true);
+    setAssetError('');
+    try {
+      const nextAssets = await codeLeakService.removeAsset(id);
+      if (assetFilter === id) setAssetFilter('all');
+      await loadData(nextAssets);
+    } catch (error) {
+      setAssetError(error instanceof Error ? error.message : '删除失败');
+    } finally {
+      setIsSavingAsset(false);
+    }
+  };
+
+  const handleCopySnippet = async () => {
+    if (!selectedFinding) return;
+    await navigator.clipboard.writeText(selectedFinding.snippet);
+  };
+
+  const handleStatusUpdate = async (status: CodeLeakStatus) => {
+    if (!selectedFinding) return;
+    setIsUpdatingStatus(true);
+    await codeLeakService.updateFindingStatus(selectedFinding.id, status);
+    setSelectedFinding({ ...selectedFinding, status });
+    setFindings((current) => current.map((item) => (item.id === selectedFinding.id ? { ...item, status } : item)));
+    setIsUpdatingStatus(false);
+  };
+
+  const drawer = typeof document !== 'undefined' && selectedFinding
+    ? createPortal(
+        <AnimatePresence>
+          <motion.button
+            type="button"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[140] bg-[#04070d]/76 backdrop-blur-sm"
+            onClick={() => setSelectedFinding(null)}
+            aria-label="关闭详情面板"
+          />
+          <motion.aside
+            ref={drawerRef}
+            initial={{ x: '100%' }}
+            animate={{ x: 0 }}
+            exit={{ x: '100%' }}
+            transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
+            className="fixed right-0 top-0 z-[150] h-screen w-full max-w-[620px] border-l border-accent/15 bg-[#0a0f16]/96 backdrop-blur-2xl"
+          >
+            <div className="flex h-full flex-col">
+              <div className="flex items-start justify-between border-b border-accent/10 px-6 py-5">
+                <div className="min-w-0 pr-4">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className={cn('rounded-full border px-2.5 py-1 text-[11px] font-semibold', severityToneMap[selectedFinding.severity])}>{severityLabelMap[selectedFinding.severity]}</span>
+                    <span className={cn('rounded-full border px-2.5 py-1 text-[11px] font-semibold', statusToneMap[selectedFinding.status])}>{statusLabelMap[selectedFinding.status]}</span>
+                    <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[11px] text-white/58">{selectedFinding.source}</span>
+                  </div>
+                  <h2 className="mt-3 text-xl font-semibold leading-relaxed text-white">{selectedFinding.title}</h2>
+                </div>
+                <button type="button" onClick={() => setSelectedFinding(null)} className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-accent/15 bg-accent/10 text-accent/80">
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+              <div className="flex-1 overflow-y-auto px-6 py-6">
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <MetaCard label="监测对象" value={selectedFinding.assetLabel} />
+                  <MetaCard label="命中类型" value={exposureLabelMap[selectedFinding.exposure]} />
+                  <MetaCard label="仓库" value={`${selectedFinding.owner}/${selectedFinding.repository}`} />
+                  <MetaCard label="文件位置" value={`${selectedFinding.branch}:${selectedFinding.path}`} />
+                  <MetaCard label="首次发现" value={formatDate(selectedFinding.firstSeen)} />
+                  <MetaCard label="最近发现" value={formatDate(selectedFinding.lastSeen)} />
+                </div>
+                <div className="mt-5 rounded-[20px] border border-white/8 bg-[#0d1219] px-4 py-4">
+                  <p className="text-[11px] uppercase tracking-[0.22em] text-white/42">命中项</p>
+                  <p className="mt-2 text-sm font-medium text-accent">{selectedFinding.match}</p>
+                </div>
+                <div className="mt-5 rounded-[24px] border border-accent/12 bg-[#0d1219] px-5 py-5">
+                  <div className="mb-3 flex items-center gap-2 text-sm font-medium text-white/86">
+                    <Code2 className="h-4 w-4 text-accent" />
+                    <span>命中片段</span>
+                  </div>
+                  <div className="max-h-[320px] overflow-y-auto rounded-[18px] border border-white/6 bg-black/20 px-4 py-4 font-mono text-sm leading-7 text-white/72">
+                    {selectedFinding.snippet}
+                  </div>
+                  <div className="mt-4 flex flex-wrap gap-3">
+                    <button type="button" onClick={handleCopySnippet} className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-sm text-white/72">
+                      <Copy className="h-4 w-4" />
+                      复制片段
+                    </button>
+                    <a href={selectedFinding.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-full border border-accent/20 bg-accent/10 px-4 py-2 text-sm text-accent">
+                      <ExternalLink className="h-4 w-4" />
+                      打开来源
+                    </a>
+                  </div>
+                </div>
+                <div className="mt-5 rounded-[20px] border border-white/8 bg-white/[0.03] px-4 py-4">
+                  <p className="text-[11px] uppercase tracking-[0.22em] text-white/42">处置状态</p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {(statusOptions.filter((item) => item !== 'all') as CodeLeakStatus[]).map((status) => (
+                      <button
+                        key={status}
+                        type="button"
+                        disabled={isUpdatingStatus}
+                        onClick={() => handleStatusUpdate(status)}
+                        className={cn('rounded-full border px-3 py-2 text-xs font-medium', selectedFinding.status === status ? statusToneMap[status] : 'border-white/10 bg-white/[0.03] text-white/62')}
+                      >
+                        {isUpdatingStatus && selectedFinding.status === status ? '更新中...' : statusLabelMap[status]}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </motion.aside>
+        </AnimatePresence>,
+        document.body
+      )
+    : null;
 
   return (
-    <div className="min-h-[calc(100vh-4rem)] bg-gradient-to-b from-[#0a0a0c] to-[#1a1a2e] animate-in fade-in duration-700">
-      <div className="relative pt-10 pb-16">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="relative overflow-hidden rounded-[2rem] border border-white/10 bg-[#0a0a0c] p-5 shadow-[0_0_100px_rgba(168,85,247,0.05)] backdrop-blur-2xl sm:rounded-[2.5rem] sm:p-8 lg:rounded-[3rem] lg:p-16 xl:p-20">
-            <div className="absolute inset-0 opacity-20">
-              <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(circle_at_top_left,rgba(168,85,247,0.3),transparent_50%),radial-gradient(circle_at_bottom_right,rgba(168,85,247,0.3),transparent_50%)]"></div>
+    <div className="min-h-[calc(100vh-4rem)]">
+      <div className="relative overflow-hidden rounded-[36px] border border-white/8 bg-[#0a0f16] px-5 py-6 shadow-[0_30px_120px_rgba(0,0,0,0.28)] sm:px-8 lg:px-10">
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(168,85,247,0.16),transparent_34%),radial-gradient(circle_at_76%_14%,rgba(168,85,247,0.08),transparent_28%),linear-gradient(180deg,rgba(255,255,255,0.02),transparent_24%)]" />
+        <div className="relative z-10">
+          <div className="grid gap-5 lg:grid-cols-[1.15fr_0.85fr] lg:items-end">
+            <div className="max-w-3xl">
+              <h1 className="text-2xl font-semibold tracking-[-0.04em] text-white sm:text-3xl lg:text-4xl">代码泄露监测</h1>
+              <p className="mt-3 max-w-2xl text-sm leading-7 text-white/58 sm:text-base">支持自定义添加监测对象，围绕公司名、域名、邮箱后缀和项目名持续检索真实代码泄露线索。</p>
             </div>
-
-            <div className="relative z-10">
-              <div className="mb-12 grid gap-8 lg:grid-cols-[minmax(0,1.1fr)_320px] lg:items-start">
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.8 }}
-                  className="text-left"
-                >
-                  <p className="text-label mb-4 text-accent/80">Repository Surveillance</p>
-                  <div className="mb-6 flex items-center gap-4">
-                    <div className="rounded-2xl border border-accent/30 bg-gradient-to-br from-accent/20 to-accent/5 p-4">
-                      <Code className="h-12 w-12 text-accent" />
-                    </div>
-                    <h1 className="text-3xl font-bold text-white sm:text-4xl lg:text-5xl">
-                      {'\u654f\u611f\u4ee3\u7801\u6cc4\u9732\u60c5\u62a5'}
-                    </h1>
-                  </div>
-                  <p className="max-w-3xl text-lg text-gray-400 md:text-xl">
-                    {'\u5b9e\u65f6\u76d1\u63a7\u4ee3\u7801\u6258\u7ba1\u5e73\u53f0\uff0c\u6355\u83b7\u654f\u611f\u4ee3\u7801\u6cc4\u9732\uff0c\u8bc4\u4f30\u5b89\u5168\u98ce\u9669'}
-                  </p>
-                </motion.div>
-
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.8, delay: 0.1 }}
-                  className="rounded-2xl border border-white/10 bg-white/[0.03] p-5"
-                >
-                  <p className="text-label mb-3 text-white/55">{'\u5206\u6790\u89d2\u5ea6'}</p>
-                  <div className="space-y-3 text-sm text-gray-300">
-                    <p>{'\u4ee5\u4ed3\u5e93\u3001\u654f\u611f\u5b57\u6bb5\u548c\u6cc4\u9732\u4e8a\u4e0b\u6587\u4e3a\u4e3b\u7ebf'}</p>
-                    <p>{'\u9002\u5408\u5feb\u901f\u5224\u65ad\u4ee3\u7801\u66b4\u9732\u9762\u548c\u51ed\u636e\u6cc4\u6f0f'}</p>
-                    <p>{'\u5f3a\u8c03\u6e90\u7801\u7ecf\u8fc7\u4e0e\u4fee\u590d\u4f18\u5148\u7ea7'}</p>
-                  </div>
-                </motion.div>
-              </div>
-
-              <div className="mb-10 grid grid-cols-1 gap-4 md:mb-12 md:grid-cols-2 md:gap-6">
-                {features.map((feature, index) => (
-                  <motion.div
-                    key={index}
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.5, delay: index * 0.1 }}
-                    className="bg-gradient-to-br bg-white/[0.03] border border-white/10 rounded-2xl p-6 hover:bg-white/[0.05] transition-all group"
-                  >
-                    <div className="flex items-start gap-4 mb-4">
-                      <div className={`p-3 bg-gradient-to-br ${feature.color} rounded-xl border border-white/10 group-hover:scale-110 transition-transform`}>
-                        {feature.icon}
-                      </div>
-                      <div>
-                        <h3 className="text-lg font-bold text-white mb-2">{feature.title}</h3>
-                        <p className="text-sm text-gray-400 leading-relaxed">{feature.description}</p>
-                      </div>
-                    </div>
-                  </motion.div>
-                ))}
-              </div>
-
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.8, delay: 0.4 }}
-                className="bg-gradient-to-r from-accent/10 to-accent/10 border border-white/10 rounded-2xl p-8"
-              >
-                <div className="flex items-start gap-4 mb-4">
-                  <div className="p-3 bg-yellow-500/20 rounded-xl border border-yellow-500/30">
-                    <AlertTriangle className="w-6 h-6 text-yellow-400" />
-                  </div>
-                  <div>
-                    <h3 className="text-lg font-bold text-white mb-2">{'\u6838\u5fc3\u529f\u80fd'}</h3>
-                    <ul className="space-y-2 text-sm text-gray-300">
-                      <li className="flex items-start gap-2">
-                        <Lock className="w-4 h-4 text-accent mt-0.5 shrink-0" />
-                        <span>{'\u5b9e\u65f6\u76d1\u63a7 GitHub\u3001Gitee\u3001GitLab \u7b49\u4ee3\u7801\u6258\u7ba1\u5e73\u53f0'}</span>
-                      </li>
-                      <li className="flex items-start gap-2">
-                        <Eye className="w-4 h-4 text-accent mt-0.5 shrink-0" />
-                        <span>{'AI \u7b97\u6cd5\u8bc6\u522b API \u5bc6\u94a5\u3001\u6570\u636e\u5e93\u8fde\u63a5\u3001\u786c\u7f16\u7801\u5bc6\u7801'}</span>
-                      </li>
-                      <li className="flex items-start gap-2">
-                        <FileCode className="w-4 h-4 text-green-400 mt-0.5 shrink-0" />
-                        <span>{'\u8bc4\u4f30\u4ee3\u7801\u6cc4\u9732\u98ce\u9669\u7b49\u7ea7\uff0c\u63d0\u4f9b\u4fee\u590d\u5efa\u8bae'}</span>
-                      </li>
-                      <li className="flex items-start gap-2">
-                        <Zap className="w-4 h-4 text-orange-400 mt-0.5 shrink-0" />
-                        <span>{'\u8ffd\u8e2a\u5386\u53f2\u4ee3\u7801\u6cc4\u9732\u4e8b\u4ef6\uff0c\u5206\u6790\u653b\u51fb\u6a21\u5f0f'}</span>
-                      </li>
-                    </ul>
-                  </div>
-                </div>
-              </motion.div>
-
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.8, delay: 0.6 }}
-                className="text-center"
-              >
-                <div className="inline-flex flex-wrap items-center justify-center gap-2 rounded-full border border-accent/30 bg-accent/10 px-4 py-3 sm:px-6">
-                  <div className="w-2 h-2 bg-accent rounded-full animate-pulse"></div>
-                  <span className="text-sm text-gray-300">{'\u529f\u80fd\u5f00\u53d1\u4e2d\uff0c\u656c\u8bf7\u671f\u5f85'}</span>
-                </div>
-              </motion.div>
+            <div className="grid gap-2 sm:grid-cols-3">
+              <StatCard label="监测对象" value={String(assets.length)} hint="支持自定义追加" />
+              <StatCard label="当前发现" value={String(summary.total)} hint="符合当前筛选范围" />
+              <StatCard label="高风险" value={String(summary.highRisk)} hint="严重与高危" />
             </div>
+          </div>
+
+          <div className="mt-6 rounded-[30px] border border-white/8 bg-[#0f141d]/84 p-3 backdrop-blur-2xl">
+            <div className="grid gap-3 xl:grid-cols-[minmax(0,1.3fr)_repeat(4,minmax(0,0.7fr))]">
+              <div className="flex min-w-0 items-center gap-3 rounded-[22px] border border-white/8 bg-white/[0.03] px-4 py-3">
+                <Search className="h-5 w-5 shrink-0 text-accent/80" />
+                <input value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="搜索公司名、仓库、文件路径、密钥命名或命中片段" className="min-w-0 flex-1 bg-transparent text-sm text-white outline-none placeholder:text-white/30 sm:text-base" />
+              </div>
+              <label className="flex items-center gap-2 rounded-[22px] border border-white/8 bg-white/[0.03] px-4 py-3 text-sm text-white/70">
+                <Filter className="h-4 w-4 text-accent/80" />
+                <select value={assetFilter} onChange={(event) => setAssetFilter(event.target.value)} className="w-full bg-transparent text-sm text-white outline-none">
+                  <option value="all" className="bg-[#11141c]">全部对象</option>
+                  {assets.map((asset) => <option key={asset.id} value={asset.id} className="bg-[#11141c]">{asset.label}</option>)}
+                </select>
+              </label>
+              <label className="flex items-center gap-2 rounded-[22px] border border-white/8 bg-white/[0.03] px-4 py-3 text-sm text-white/70">
+                <FolderGit2 className="h-4 w-4 text-accent/80" />
+                <select value={sourceFilter} onChange={(event) => setSourceFilter(event.target.value as CodeLeakSource | 'all')} className="w-full bg-transparent text-sm text-white outline-none">
+                  {sourceOptions.map((item) => <option key={item} value={item} className="bg-[#11141c]">{item === 'all' ? '全部来源' : item}</option>)}
+                </select>
+              </label>
+              <label className="flex items-center gap-2 rounded-[22px] border border-white/8 bg-white/[0.03] px-4 py-3 text-sm text-white/70">
+                <ShieldAlert className="h-4 w-4 text-accent/80" />
+                <select value={severityFilter} onChange={(event) => setSeverityFilter(event.target.value as CodeLeakSeverity | 'all')} className="w-full bg-transparent text-sm text-white outline-none">
+                  {severityOptions.map((item) => <option key={item} value={item} className="bg-[#11141c]">{item === 'all' ? '全部等级' : severityLabelMap[item]}</option>)}
+                </select>
+              </label>
+              <label className="flex items-center gap-2 rounded-[22px] border border-white/8 bg-white/[0.03] px-4 py-3 text-sm text-white/70">
+                <Eye className="h-4 w-4 text-accent/80" />
+                <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as CodeLeakStatus | 'all')} className="w-full bg-transparent text-sm text-white outline-none">
+                  {statusOptions.map((item) => <option key={item} value={item} className="bg-[#11141c]">{item === 'all' ? '全部状态' : statusLabelMap[item]}</option>)}
+                </select>
+              </label>
+            </div>
+            {loadError ? <div className="mt-4 rounded-[22px] border border-red-500/20 bg-red-500/8 px-4 py-3 text-sm leading-6 text-red-100">{loadError}</div> : null}
           </div>
         </div>
       </div>
+
+      <div className="mt-8 grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
+        <section className="overflow-hidden rounded-[28px] border border-white/8 bg-[#11141c]/82 backdrop-blur-2xl">
+          <div className="flex items-center justify-between border-b border-white/6 px-6 py-4">
+            <h2 className="text-base font-semibold text-white">发现列表</h2>
+            <span className="text-sm text-white/48">{isLoading ? '加载中...' : `${findings.length} 条结果`}</span>
+          </div>
+          <div className="px-6 py-6">
+            {isLoading ? (
+              <div className="flex items-center justify-center py-12 text-sm text-white/55"><Loader2 className="mr-3 h-4 w-4 animate-spin text-accent" />正在加载代码泄露结果...</div>
+            ) : findings.length === 0 ? (
+              <div className="rounded-[24px] border border-dashed border-white/10 bg-white/[0.02] px-6 py-10 text-center">
+                <h3 className="text-lg font-semibold text-white">{loadError ? '真实数据当前不可用' : '当前筛选下没有发现'}</h3>
+                <p className="mt-3 text-sm leading-7 text-white/55">{loadError ? '这页已经不再回退到本地模拟数据；请检查开发服务和源站配置后再试。' : '可以切换筛选条件，或先在右侧新增监测对象。'}</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {findings.map((finding) => (
+                  <button key={finding.id} type="button" onClick={() => setSelectedFinding(finding)} className="w-full rounded-[24px] border border-white/8 bg-white/[0.03] p-5 text-left transition-all hover:border-accent/25 hover:bg-white/[0.05]">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className={cn('rounded-full border px-2.5 py-1 text-[11px] font-semibold', severityToneMap[finding.severity])}>{severityLabelMap[finding.severity]}</span>
+                      <span className={cn('rounded-full border px-2.5 py-1 text-[11px] font-semibold', statusToneMap[finding.status])}>{statusLabelMap[finding.status]}</span>
+                      <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[11px] text-white/58">{finding.source}</span>
+                      <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[11px] text-white/58">{finding.assetLabel}</span>
+                    </div>
+                    <h3 className="mt-4 text-lg font-semibold leading-relaxed text-white">{finding.title}</h3>
+                    <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-white/48">
+                      <span className="inline-flex items-center gap-1.5"><GitBranch className="h-3.5 w-3.5" />{finding.owner}/{finding.repository}</span>
+                      <span className="inline-flex items-center gap-1.5"><Code2 className="h-3.5 w-3.5" />{finding.branch}:{finding.path}</span>
+                    </div>
+                    <p className="mt-3 line-clamp-3 font-mono text-sm leading-7 text-white/62">{finding.snippet}</p>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </section>
+
+        <div className="space-y-6">
+          <Panel title="监测对象">
+            <div className="space-y-4">
+              <label className="block space-y-2">
+                <span className="text-sm text-white/68">对象类型</span>
+                <select value={newAssetType} onChange={(event) => setNewAssetType(event.target.value as CodeLeakAssetType)} className="w-full rounded-[18px] border border-white/8 bg-white/[0.03] px-4 py-3 text-sm text-white outline-none">
+                  {assetTypeOptions.map((item) => <option key={item} value={item} className="bg-[#11141c]">{assetTypeLabelMap[item]}</option>)}
+                </select>
+              </label>
+              <label className="block space-y-2">
+                <span className="text-sm text-white/68">对象内容</span>
+                <div className="flex gap-3">
+                  <input value={newAssetValue} onChange={(event) => setNewAssetValue(event.target.value)} placeholder="例如 company.com、@company.com、项目名" className="min-w-0 flex-1 rounded-[18px] border border-white/8 bg-white/[0.03] px-4 py-3 text-sm text-white outline-none placeholder:text-white/28" />
+                  <button type="button" onClick={handleAddAsset} disabled={isSavingAsset} className="inline-flex items-center gap-2 rounded-[18px] border border-accent/20 bg-accent/10 px-4 py-3 text-sm text-accent disabled:opacity-60">
+                    <Plus className="h-4 w-4" />
+                    添加
+                  </button>
+                </div>
+              </label>
+              {assetError ? <div className="rounded-[18px] border border-red-500/20 bg-red-500/8 px-4 py-3 text-sm text-red-100">{assetError}</div> : null}
+              <div className="space-y-3">
+                {assets.map((asset) => (
+                  <div key={asset.id} className="flex items-center justify-between gap-3 rounded-[20px] border border-white/8 bg-white/[0.03] px-4 py-4">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium text-white">{asset.label}</p>
+                      <p className="mt-1 text-xs text-white/45">{assetTypeLabelMap[asset.type]}</p>
+                    </div>
+                    <button type="button" onClick={() => handleRemoveAsset(asset.id)} disabled={isSavingAsset} className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/[0.03] text-white/65 disabled:opacity-60">
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </Panel>
+
+          <Panel title="当前状态">
+            <div className="space-y-3 text-sm leading-7 text-white/62">
+              <div className="rounded-[22px] border border-white/8 bg-white/[0.03] px-4 py-4">
+                <p className="font-medium text-white">真实源模式已启用</p>
+                <p className="mt-2">页面不再使用本地模拟发现兜底。如果当前无结果，请优先检查后端聚合服务和源站配置。</p>
+              </div>
+              <div className="rounded-[22px] border border-white/8 bg-white/[0.03] px-4 py-4">
+                <div className="flex items-start gap-2">
+                  <AlertTriangle className="mt-1 h-4 w-4 shrink-0 text-accent/80" />
+                  <span>确认 `dev-server.js` 已重启；如需 GitHub 代码级搜索，请配置 `GITHUB_TOKEN`。</span>
+                </div>
+              </div>
+            </div>
+          </Panel>
+        </div>
+      </div>
+
+      {drawer}
     </div>
   );
 };
+
+const MetaCard = ({ label, value }: { label: string; value: string }) => (
+  <div className="rounded-[18px] border border-white/8 bg-[#0d1219] px-4 py-3">
+    <p className="text-[11px] uppercase tracking-[0.22em] text-white/42">{label}</p>
+    <p className="mt-2 break-all text-sm leading-6 text-white/82">{value}</p>
+  </div>
+);
 
 export default CodeLeak;

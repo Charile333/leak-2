@@ -11,6 +11,7 @@ interface MainLayoutProps {
 }
 
 const DESKTOP_BREAKPOINT = 1024;
+const PANEL_EASE = [0.22, 1, 0.36, 1] as const;
 
 const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
   const location = useLocation();
@@ -82,10 +83,10 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
         {!isDesktop && isMobileSidebarOpen && (
           <motion.button
             type="button"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
+            initial={shouldReduceMotion ? false : { opacity: 0 }}
+            animate={shouldReduceMotion ? undefined : { opacity: 1 }}
+            exit={shouldReduceMotion ? undefined : { opacity: 0 }}
+            transition={{ duration: 0.28, ease: PANEL_EASE }}
             className="fixed inset-0 z-40 bg-[#04070d]/75 backdrop-blur-sm lg:hidden"
             aria-label="Close navigation"
             onClick={() => setIsMobileSidebarOpen(false)}
@@ -103,7 +104,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
           <motion.div
             initial={shouldReduceMotion ? false : { opacity: 0, y: -12 }}
             animate={shouldReduceMotion ? undefined : { opacity: 1, y: 0 }}
-            transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+            transition={{ duration: 0.45, ease: PANEL_EASE }}
             className="sticky top-0 z-30 border-b border-white/5 bg-[#080c12]/90 backdrop-blur-xl px-4 py-3 pt-[max(0.75rem,env(safe-area-inset-top))] lg:hidden"
           >
             <div className="flex items-center justify-between gap-4">
@@ -114,8 +115,27 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
                 aria-label="Open navigation"
                 whileHover={shouldReduceMotion ? undefined : { scale: 1.04, y: -1 }}
                 whileTap={shouldReduceMotion ? undefined : { scale: 0.96 }}
+                animate={
+                  shouldReduceMotion
+                    ? undefined
+                    : isMobileSidebarOpen
+                      ? { rotate: -8, scale: 0.96 }
+                      : { rotate: 0, scale: 1 }
+                }
+                transition={{ duration: 0.28, ease: PANEL_EASE }}
               >
-                <Menu className="h-5 w-5" />
+                <motion.div
+                  animate={
+                    shouldReduceMotion
+                      ? undefined
+                      : isMobileSidebarOpen
+                        ? { x: -1, opacity: 0.82 }
+                        : { x: 0, opacity: 1 }
+                  }
+                  transition={{ duration: 0.28, ease: PANEL_EASE }}
+                >
+                  <Menu className="h-5 w-5" />
+                </motion.div>
               </motion.button>
               <div className="min-w-0 flex-1 pr-12">
                 <p className="font-data text-[11px] uppercase tracking-[0.28em] text-accent/80">Threat Console</p>
