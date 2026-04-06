@@ -3,6 +3,13 @@ import https from 'https';
 import dotenv from 'dotenv';
 import nodemailer from 'nodemailer';
 import jwt from 'jsonwebtoken';
+import { promises as fs } from 'fs';
+import path from 'path';
+import { neon } from '@neondatabase/serverless';
+import fileLeakAssetsHandler from './api/file-leak/assets.js';
+import fileLeakSearchHandler from './api/file-leak/search.js';
+import webhookConfigHandler from './api/notifications/webhook.js';
+import scheduledScanTasksHandler from './api/scheduled-scans/tasks.js';
 
 // 加载环境变量
 dotenv.config();
@@ -61,12 +68,18 @@ try {
 const OTX_API_KEY = process.env.OTX_API_KEY || process.env.VITE_OTX_API_KEY;
 const TRENDRADAR_API_URL = process.env.TRENDRADAR_API_URL; // TrendRadar API 地址
 const OTX_UPSTREAM_URL = 'https://otx.alienvault.com/api/v1';
+const OTX_INTERNAL_UPSTREAM_URL = 'https://otx.alienvault.com/otxapi';
 const OTX_SEARCH_CACHE_TTL = 10 * 60 * 1000;
+const SECTION_TIMEOUT_MS = 5000;
+const SLOW_SECTION_TIMEOUT_MS = 2500;
 const otxSearchCache = new Map();
 
 // 白名单用户密码配置（开发环境使用）
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN || process.env.VITE_GITHUB_TOKEN || '';
 const GITEE_ACCESS_TOKEN = process.env.GITEE_ACCESS_TOKEN || process.env.VITE_GITEE_ACCESS_TOKEN || '';
+const CODE_LEAK_ASSETS_FILE = path.join(process.cwd(), '.data', 'code-leak-assets.json');
+const DATABASE_URL = process.env.DATABASE_URL || process.env.NEON_DATABASE_URL || '';
+const neonSql = DATABASE_URL ? neon(DATABASE_URL) : null;
 
 const USER_PASSWORDS = {
   'konaa2651@gmail.com': 'password123',
@@ -117,14 +130,49 @@ const unwrapPayload = (payload) => {
   return payload.general || payload.data || payload.result || payload;
 };
 
-const getCollection = (payload, key) => {
-  const collection = pickFirstValue(
+const extractFirstArray = (...candidates) => {
+  for (const candidate of candidates) {
+    if (Array.isArray(candidate)) return candidate;
+    if (!candidate || typeof candidate !== 'object') continue;
+
+    for (const value of Object.values(candidate)) {
+      if (Array.isArray(value)) return value;
+    }
+  }
+
+  return [];
+};
+
+const getCollection = (payload, key) =>
+  extractFirstArray(
     getValueAtPath(payload, key),
     getValueAtPath(payload, `data.${key}`),
     getValueAtPath(payload, `result.${key}`),
-    getValueAtPath(payload, 'data')
+    getValueAtPath(payload, `results.${key}`),
+    getValueAtPath(payload, 'items'),
+    getValueAtPath(payload, 'entries'),
+    getValueAtPath(payload, 'records'),
+    getValueAtPath(payload, 'list'),
+    getValueAtPath(payload, 'data'),
+    getValueAtPath(payload, 'result'),
+    getValueAtPath(payload, 'results')
   );
-  return Array.isArray(collection) ? collection : [];
+
+const getCollectionCount = (payload, key, fallback = 0) => {
+  const count = pickFirstValue(
+    getValueAtPath(payload, 'count'),
+    getValueAtPath(payload, 'full_size'),
+    getValueAtPath(payload, 'actual_size'),
+    getValueAtPath(payload, `data.count`),
+    getValueAtPath(payload, `result.count`)
+  );
+
+  if (typeof count === 'number' && !Number.isNaN(count)) {
+    return count;
+  }
+
+  const collection = getCollection(payload, key);
+  return Array.isArray(collection) ? collection.length : fallback;
 };
 
 const formatDisplayDate = (value) => {
@@ -168,36 +216,100 @@ const getUnifiedTags = (pulses) => {
 const buildSectionState = (status, message) => ({ status, message });
 
 const getHttpScans = (payload) => {
-  const scans = pickFirstValue(
+  const candidates = [
     getValueAtPath(payload, 'http_scans'),
     getValueAtPath(payload, 'data.http_scans'),
     getValueAtPath(payload, 'result.http_scans'),
     getValueAtPath(payload, 'data'),
-    payload
-  );
+    payload,
+  ];
 
-  return Array.isArray(scans) ? scans : [];
-};
-
-async function requestOtxSection(endpoint) {
-  const response = await fetch(`${OTX_UPSTREAM_URL}${endpoint}`, {
-    headers: {
-      'X-OTX-API-KEY': OTX_API_KEY,
-      'Content-Type': 'application/json',
-      'Accept': 'application/json',
-      'User-Agent': 'Lysir-Security-Platform/1.0',
-    },
+  const scans = candidates.find((candidate) => {
+    if (Array.isArray(candidate)) return true;
+    return Boolean(candidate && typeof candidate === 'object');
   });
 
-  if (response.status === 404) {
-    return {};
-  }
+  if (Array.isArray(scans)) return scans;
+  if (!scans || typeof scans !== 'object') return [];
 
-  if (!response.ok) {
-    throw new Error(`OTX request failed: ${response.status}`);
-  }
+  return Object.entries(scans)
+    .filter(([key, value]) => isDisplayableValue(key) && isDisplayableValue(value))
+    .map(([key, value]) => ({
+      key,
+      name: key,
+      value: typeof value === 'object' ? JSON.stringify(value) : String(value),
+    }));
+};
 
-  return response.json();
+async function requestOtxSection(endpoint, options = {}) {
+  const { internal = false, graceful = false, timeoutMs = SECTION_TIMEOUT_MS } = options;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const response = await fetch(`${internal ? OTX_INTERNAL_UPSTREAM_URL : OTX_UPSTREAM_URL}${endpoint}`, {
+      headers: {
+        ...(internal ? {} : { 'X-OTX-API-KEY': OTX_API_KEY }),
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'User-Agent': 'Lysir-Security-Platform/1.0',
+      },
+      signal: controller.signal,
+    });
+
+    if (response.status === 404) {
+      return {};
+    }
+
+    if (!response.ok) {
+      if (graceful) {
+        return { __section_error: 'upstream_error', __status: response.status };
+      }
+      throw new Error(`OTX request failed: ${response.status}`);
+    }
+
+    return response.json();
+  } catch (error) {
+    if (graceful) {
+      if (error?.name === 'AbortError') {
+        return { __section_error: 'timeout' };
+      }
+      return { __section_error: 'upstream_error' };
+    }
+    throw error;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function requestOtxCandidates(candidates, options = {}) {
+  const normalizedCandidates = Array.isArray(candidates) ? candidates : [candidates];
+  let lastError = null;
+  for (let index = 0; index < normalizedCandidates.length; index += 1) {
+    const candidate = normalizedCandidates[index];
+    try {
+      const result = await requestOtxSection(candidate.endpoint, { ...options, internal: candidate.internal });
+      const shouldFallback =
+        candidate.internal &&
+        index < normalizedCandidates.length - 1 &&
+        result &&
+        typeof result === 'object' &&
+        !Array.isArray(result) &&
+        Object.keys(result).length === 0;
+
+      if (shouldFallback) {
+        continue;
+      }
+
+      return result;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  if (options.graceful) {
+    return { __section_error: 'upstream_error' };
+  }
+  throw lastError || new Error('OTX candidate request failed');
 }
 
 async function buildStructuredOtxResult(type, query) {
@@ -237,7 +349,7 @@ async function buildStructuredOtxResult(type, query) {
       },
       section_states: {
         pulses: buildSectionState(pulses.length > 0 ? 'success' : 'no_data', pulses.length > 0 ? '已返回关联情报。' : '当前对象没有关联 Pulses。'),
-        passive_dns: buildSectionState(passiveDns.length > 0 ? 'success' : 'no_data', passiveDns.length > 0 ? '已返回 Passive DNS。' : '当前对象没有 Passive DNS 记录。'),
+        passive_dns: buildSectionState(passiveDns.length > 0 ? 'success' : 'no_data', passiveDns.length > 0 ? '已返回被动 DNS 记录。' : '当前对象没有被动 DNS 记录。'),
         url_list: buildSectionState(urlList.length > 0 ? 'success' : 'no_data', urlList.length > 0 ? '已返回关联 URL。' : '当前对象没有关联 URL。'),
         malware: buildSectionState(malware.length > 0 ? 'success' : 'no_data', malware.length > 0 ? '已返回恶意样本。' : '当前对象没有恶意样本。'),
       },
@@ -275,7 +387,7 @@ async function buildStructuredOtxResult(type, query) {
       },
       section_states: {
         pulses: buildSectionState(pulses.length > 0 ? 'success' : 'no_data', pulses.length > 0 ? '已返回关联情报。' : '当前对象没有关联 Pulses。'),
-        passive_dns: buildSectionState(passiveDns.length > 0 ? 'success' : 'no_data', passiveDns.length > 0 ? '已返回 Passive DNS。' : '当前对象没有 Passive DNS 记录。'),
+        passive_dns: buildSectionState(passiveDns.length > 0 ? 'success' : 'no_data', passiveDns.length > 0 ? '已返回被动 DNS 记录。' : '当前对象没有被动 DNS 记录。'),
         url_list: buildSectionState('not_supported', '域名查询结果页当前不展示 URL 列表。'),
         malware: buildSectionState(malware.length > 0 ? 'success' : 'no_data', malware.length > 0 ? '已返回恶意样本。' : '当前对象没有恶意样本。'),
       },
@@ -312,7 +424,7 @@ async function buildStructuredOtxResult(type, query) {
       },
       section_states: {
         pulses: buildSectionState(pulses.length > 0 ? 'success' : 'no_data', pulses.length > 0 ? '已返回关联情报。' : '当前对象没有关联 Pulses。'),
-        passive_dns: buildSectionState('not_supported', 'URL 查询当前不提供 Passive DNS。'),
+        passive_dns: buildSectionState('not_supported', 'URL 查询当前不提供被动 DNS 记录。'),
         url_list: buildSectionState(urlList.length > 0 ? 'success' : 'no_data', urlList.length > 0 ? '已返回关联 URL。' : '当前对象没有关联 URL。'),
         malware: buildSectionState('not_supported', 'URL 查询当前不提供恶意样本列表。'),
       },
@@ -349,7 +461,7 @@ async function buildStructuredOtxResult(type, query) {
       },
       section_states: {
         pulses: buildSectionState(pulses.length > 0 ? 'success' : 'no_data', pulses.length > 0 ? '已返回关联情报。' : '当前 CVE 没有关联 Pulses。'),
-        passive_dns: buildSectionState('not_supported', 'CVE 查询不提供 Passive DNS。'),
+        passive_dns: buildSectionState('not_supported', 'CVE 查询不提供被动 DNS 记录。'),
         url_list: buildSectionState('not_supported', 'CVE 查询不提供关联 URL。'),
         malware: buildSectionState('not_supported', 'CVE 查询不提供恶意样本列表。'),
       },
@@ -363,13 +475,13 @@ async function buildStructuredOtxResultV2(type, query) {
   if (type === 'ip') {
     const ipVersion = query.includes(':') ? 'IPv6' : 'IPv4';
     const [generalPayload, reputationPayload, geoPayload, passiveDnsPayload, malwarePayload, urlListPayload, httpScansPayload] = await Promise.all([
-      requestOtxSection(`/indicators/${ipVersion}/${query}/general`),
-      requestOtxSection(`/indicators/${ipVersion}/${query}/reputation`),
-      requestOtxSection(`/indicators/${ipVersion}/${query}/geo`),
-      requestOtxSection(`/indicators/${ipVersion}/${query}/passive_dns`),
-      requestOtxSection(`/indicators/${ipVersion}/${query}/malware`),
-      requestOtxSection(`/indicators/${ipVersion}/${query}/url_list`),
-      requestOtxSection(`/indicators/${ipVersion}/${query}/http_scans`),
+      requestOtxCandidates([{ endpoint: `/indicators/ip/general/${query}`, internal: true }, { endpoint: `/indicators/${ipVersion}/${query}/general`, internal: false }]),
+      requestOtxCandidates([{ endpoint: `/indicators/${ipVersion}/reputation/${query}`, internal: true }, { endpoint: `/indicators/${ipVersion}/${query}/reputation`, internal: false }]),
+      requestOtxCandidates([{ endpoint: `/indicators/${ipVersion}/geo/${query}`, internal: true }, { endpoint: `/indicators/${ipVersion}/${query}/geo`, internal: false }]),
+      requestOtxCandidates([{ endpoint: `/indicators/${ipVersion}/passive_dns/${query}`, internal: true }, { endpoint: `/indicators/${ipVersion}/${query}/passive_dns`, internal: false }], { graceful: true, timeoutMs: SLOW_SECTION_TIMEOUT_MS }),
+      requestOtxCandidates([{ endpoint: `/indicators/${ipVersion}/malware/${query}?limit=10&page=1`, internal: true }, { endpoint: `/indicators/${ipVersion}/${query}/malware`, internal: false }], { graceful: true, timeoutMs: SLOW_SECTION_TIMEOUT_MS }),
+      requestOtxCandidates([{ endpoint: `/indicators/${ipVersion}/url_list/${query}`, internal: true }, { endpoint: `/indicators/${ipVersion}/${query}/url_list`, internal: false }]),
+      requestOtxCandidates([{ endpoint: `/indicators/${ipVersion}/http_scans/${query}`, internal: true }, { endpoint: `/indicators/${ipVersion}/${query}/http_scans`, internal: false }], { graceful: true, timeoutMs: SLOW_SECTION_TIMEOUT_MS }),
     ]);
     const general = unwrapPayload(generalPayload);
     const reputation = unwrapPayload(reputationPayload);
@@ -379,6 +491,10 @@ async function buildStructuredOtxResultV2(type, query) {
     const malware = getCollection(malwarePayload, 'malware');
     const urlList = getCollection(urlListPayload, 'url_list');
     const httpScans = getHttpScans(httpScansPayload);
+    const passiveDnsCount = getCollectionCount(passiveDnsPayload, 'passive_dns', passiveDns.length);
+    const malwareCount = getCollectionCount(malwarePayload, 'malware', malware.length);
+    const urlCount = getCollectionCount(urlListPayload, 'url_list', urlList.length);
+    const httpScanCount = getCollectionCount(httpScansPayload, 'http_scans', httpScans.length);
 
     return {
       type,
@@ -400,30 +516,33 @@ async function buildStructuredOtxResultV2(type, query) {
       url_list: urlList,
       http_scans: httpScans,
       derived: {
-        dns_resolutions: passiveDns.length,
+        dns_resolutions: passiveDnsCount,
+        passive_dns_count: passiveDnsCount,
+        malware_count: malwareCount,
+        url_count: urlCount,
         top_level_domains: getTopLevelDomains(passiveDns),
         tags: getUnifiedTags(pulses),
-        http_scan_count: httpScans.length,
+        http_scan_count: httpScanCount,
       },
       section_states: {
-        pulses: buildSectionState(pulses.length > 0 ? 'success' : 'no_data', pulses.length > 0 ? 'Linked pulses found.' : 'No linked pulses found.'),
-        passive_dns: buildSectionState(passiveDns.length > 0 ? 'success' : 'no_data', passiveDns.length > 0 ? 'Passive DNS records available.' : 'No Passive DNS records found.'),
-        url_list: buildSectionState(urlList.length > 0 ? 'success' : 'no_data', urlList.length > 0 ? 'Related URLs found.' : 'No related URLs found.'),
-        malware: buildSectionState(malware.length > 0 ? 'success' : 'no_data', malware.length > 0 ? 'Malware samples available.' : 'No malware samples found.'),
-        http_scans: buildSectionState(httpScans.length > 0 ? 'success' : 'no_data', httpScans.length > 0 ? 'HTTP scan records available.' : 'No HTTP scan records found.'),
+        pulses: buildSectionState(pulses.length > 0 ? 'success' : 'no_data', pulses.length > 0 ? '已找到关联情报。' : '未找到关联情报。'),
+        passive_dns: buildSectionState(passiveDnsCount > 0 ? 'success' : 'no_data', passiveDnsCount > 0 ? '已获取被动 DNS 记录。' : '未找到被动 DNS 记录。'),
+        url_list: buildSectionState(urlList.length > 0 ? 'success' : 'no_data', urlList.length > 0 ? '已找到关联 URL。' : '未找到关联 URL。'),
+        malware: buildSectionState(malwareCount > 0 ? 'success' : 'no_data', malwareCount > 0 ? '已获取恶意样本记录。' : '未找到恶意样本记录。'),
+        http_scans: buildSectionState(httpScanCount > 0 ? 'success' : 'no_data', httpScanCount > 0 ? '已获取 HTTP 扫描记录。' : '未找到 HTTP 扫描记录。'),
       },
     };
   }
 
   if (type === 'domain') {
     const [generalPayload, geoPayload, passiveDnsPayload, whoisPayload, malwarePayload, urlListPayload, httpScansPayload] = await Promise.all([
-      requestOtxSection(`/indicators/domain/${query}/general`),
-      requestOtxSection(`/indicators/domain/${query}/geo`),
-      requestOtxSection(`/indicators/domain/${query}/passive_dns`),
-      requestOtxSection(`/indicators/domain/${query}/whois`),
-      requestOtxSection(`/indicators/domain/${query}/malware`),
-      requestOtxSection(`/indicators/domain/${query}/url_list`),
-      requestOtxSection(`/indicators/domain/${query}/http_scans`),
+      requestOtxCandidates([{ endpoint: `/indicators/domain/general/${query}`, internal: true }, { endpoint: `/indicators/domain/${query}/general`, internal: false }]),
+      requestOtxCandidates([{ endpoint: `/indicators/domain/geo/${query}`, internal: true }, { endpoint: `/indicators/domain/${query}/geo`, internal: false }]),
+      requestOtxCandidates([{ endpoint: `/indicators/domain/passive_dns/${query}`, internal: true }, { endpoint: `/indicators/domain/${query}/passive_dns`, internal: false }], { graceful: true, timeoutMs: SLOW_SECTION_TIMEOUT_MS }),
+      requestOtxCandidates([{ endpoint: `/indicators/domain/whois/${query}`, internal: true }, { endpoint: `/indicators/domain/${query}/whois`, internal: false }]),
+      requestOtxCandidates([{ endpoint: `/indicators/domain/malware/${query}?limit=10&page=1`, internal: true }, { endpoint: `/indicators/domain/${query}/malware`, internal: false }], { graceful: true, timeoutMs: SLOW_SECTION_TIMEOUT_MS }),
+      requestOtxCandidates([{ endpoint: `/indicators/domain/url_list/${query}`, internal: true }, { endpoint: `/indicators/domain/${query}/url_list`, internal: false }]),
+      requestOtxCandidates([{ endpoint: `/indicators/domain/http_scans/${query}`, internal: true }, { endpoint: `/indicators/domain/${query}/http_scans`, internal: false }], { graceful: true, timeoutMs: SLOW_SECTION_TIMEOUT_MS }),
     ]);
     const general = unwrapPayload(generalPayload);
     const geo = unwrapPayload(geoPayload);
@@ -433,6 +552,10 @@ async function buildStructuredOtxResultV2(type, query) {
     const urlList = getCollection(urlListPayload, 'url_list');
     const httpScans = getHttpScans(httpScansPayload);
     const indicator = pickFirstPath(general, ['indicator', 'domain', 'hostname'], query);
+    const passiveDnsCount = getCollectionCount(passiveDnsPayload, 'passive_dns', passiveDns.length);
+    const malwareCount = getCollectionCount(malwarePayload, 'malware', malware.length);
+    const urlCount = getCollectionCount(urlListPayload, 'url_list', urlList.length);
+    const httpScanCount = getCollectionCount(httpScansPayload, 'http_scans', httpScans.length);
 
     return {
       type,
@@ -452,17 +575,20 @@ async function buildStructuredOtxResultV2(type, query) {
       url_list: urlList,
       http_scans: httpScans,
       derived: {
-        dns_resolutions: passiveDns.length,
+        dns_resolutions: passiveDnsCount,
+        passive_dns_count: passiveDnsCount,
+        malware_count: malwareCount,
+        url_count: urlCount,
         top_level_domains: getTopLevelDomains(passiveDns, [indicator]),
         tags: getUnifiedTags(pulses),
-        http_scan_count: httpScans.length,
+        http_scan_count: httpScanCount,
       },
       section_states: {
-        pulses: buildSectionState(pulses.length > 0 ? 'success' : 'no_data', pulses.length > 0 ? 'Linked pulses found.' : 'No linked pulses found.'),
-        passive_dns: buildSectionState(passiveDns.length > 0 ? 'success' : 'no_data', passiveDns.length > 0 ? 'Passive DNS records available.' : 'No Passive DNS records found.'),
-        url_list: buildSectionState(urlList.length > 0 ? 'success' : 'no_data', urlList.length > 0 ? 'Related URLs found.' : 'No related URLs found.'),
-        malware: buildSectionState(malware.length > 0 ? 'success' : 'no_data', malware.length > 0 ? 'Malware samples available.' : 'No malware samples found.'),
-        http_scans: buildSectionState(httpScans.length > 0 ? 'success' : 'no_data', httpScans.length > 0 ? 'HTTP scan records available.' : 'No HTTP scan records found.'),
+        pulses: buildSectionState(pulses.length > 0 ? 'success' : 'no_data', pulses.length > 0 ? '已找到关联情报。' : '未找到关联情报。'),
+        passive_dns: buildSectionState(passiveDnsCount > 0 ? 'success' : 'no_data', passiveDnsCount > 0 ? '已获取被动 DNS 记录。' : '未找到被动 DNS 记录。'),
+        url_list: buildSectionState(urlList.length > 0 ? 'success' : 'no_data', urlList.length > 0 ? '已找到关联 URL。' : '未找到关联 URL。'),
+        malware: buildSectionState(malwareCount > 0 ? 'success' : 'no_data', malwareCount > 0 ? '已获取恶意样本记录。' : '未找到恶意样本记录。'),
+        http_scans: buildSectionState(httpScanCount > 0 ? 'success' : 'no_data', httpScanCount > 0 ? '已获取 HTTP 扫描记录。' : '未找到 HTTP 扫描记录。'),
       },
     };
   }
@@ -471,13 +597,14 @@ async function buildStructuredOtxResultV2(type, query) {
     const sanitizedQuery = query.replace(/^https?:\/\//, '').replace(/\/$/, '');
     const encodedQuery = encodeURIComponent(sanitizedQuery);
     const [generalPayload, urlListPayload] = await Promise.all([
-      requestOtxSection(`/indicators/url/${encodedQuery}/general`),
-      requestOtxSection(`/indicators/url/${encodedQuery}/url_list`),
+      requestOtxCandidates([{ endpoint: `/indicators/url/general/${encodedQuery}`, internal: true }, { endpoint: `/indicators/url/${encodedQuery}/general`, internal: false }]),
+      requestOtxCandidates([{ endpoint: `/indicators/url/url_list/${encodedQuery}`, internal: true }, { endpoint: `/indicators/url/${encodedQuery}/url_list`, internal: false }]),
     ]);
     const general = unwrapPayload(generalPayload);
     const pulses = Array.isArray(general?.pulse_info?.pulses) ? general.pulse_info.pulses : [];
     const urlList = getCollection(urlListPayload, 'url_list');
     const domain = pickFirstPath(general, ['domain', 'hostname', 'urlworker.domain', 'urlworker.result.domain']);
+    const urlCount = getCollectionCount(urlListPayload, 'url_list', urlList.length);
 
     return {
       type,
@@ -496,16 +623,19 @@ async function buildStructuredOtxResultV2(type, query) {
       http_scans: [],
       derived: {
         dns_resolutions: 0,
+        passive_dns_count: 0,
+        malware_count: 0,
+        url_count: urlCount,
         top_level_domains: getTopLevelDomains([], [domain || sanitizedQuery]),
         tags: getUnifiedTags(pulses),
         http_scan_count: 0,
       },
       section_states: {
-        pulses: buildSectionState(pulses.length > 0 ? 'success' : 'no_data', pulses.length > 0 ? 'Linked pulses found.' : 'No linked pulses found.'),
-        passive_dns: buildSectionState('not_supported', 'Passive DNS is not available for URL lookups.'),
-        url_list: buildSectionState(urlList.length > 0 ? 'success' : 'no_data', urlList.length > 0 ? 'Related URLs found.' : 'No related URLs found.'),
-        malware: buildSectionState('not_supported', 'Malware samples are not returned for URL lookups.'),
-        http_scans: buildSectionState('not_supported', 'HTTP scans are not returned for URL lookups.'),
+        pulses: buildSectionState(pulses.length > 0 ? 'success' : 'no_data', pulses.length > 0 ? '已找到关联情报。' : '未找到关联情报。'),
+        passive_dns: buildSectionState('not_supported', 'URL 查询暂不提供被动 DNS 记录。'),
+        url_list: buildSectionState(urlList.length > 0 ? 'success' : 'no_data', urlList.length > 0 ? '已找到关联 URL。' : '未找到关联 URL。'),
+        malware: buildSectionState('not_supported', 'URL 查询暂不提供恶意样本记录。'),
+        http_scans: buildSectionState('not_supported', 'URL 查询暂不提供 HTTP 扫描记录。'),
       },
     };
   }
@@ -513,8 +643,8 @@ async function buildStructuredOtxResultV2(type, query) {
   if (type === 'cve') {
     const normalizedQuery = String(query).toUpperCase();
     const [generalPayload, pulsesPayload] = await Promise.all([
-      requestOtxSection(`/indicators/cve/${normalizedQuery}/general`),
-      requestOtxSection(`/indicators/cve/${normalizedQuery}/top_n_pulses`),
+      requestOtxCandidates([{ endpoint: `/indicators/cve/general/${normalizedQuery}`, internal: true }, { endpoint: `/indicators/cve/${normalizedQuery}/general`, internal: false }]),
+      requestOtxCandidates([{ endpoint: `/indicators/cve/top_n_pulses/${normalizedQuery}`, internal: true }, { endpoint: `/indicators/cve/${normalizedQuery}/top_n_pulses`, internal: false }]),
     ]);
     const general = unwrapPayload(generalPayload);
     const pulses = getCollection(pulsesPayload, 'top_n_pulses');
@@ -537,16 +667,19 @@ async function buildStructuredOtxResultV2(type, query) {
       http_scans: [],
       derived: {
         dns_resolutions: 0,
+        passive_dns_count: 0,
+        malware_count: 0,
+        url_count: 0,
         top_level_domains: [],
         tags: getUnifiedTags(pulses),
         http_scan_count: 0,
       },
       section_states: {
-        pulses: buildSectionState(pulses.length > 0 ? 'success' : 'no_data', pulses.length > 0 ? 'Linked pulses found.' : 'No linked pulses found.'),
-        passive_dns: buildSectionState('not_supported', 'Passive DNS is not available for CVE lookups.'),
-        url_list: buildSectionState('not_supported', 'Related URLs are not available for CVE lookups.'),
-        malware: buildSectionState('not_supported', 'Malware samples are not returned for CVE lookups.'),
-        http_scans: buildSectionState('not_supported', 'HTTP scans are not returned for CVE lookups.'),
+        pulses: buildSectionState(pulses.length > 0 ? 'success' : 'no_data', pulses.length > 0 ? '已找到关联情报。' : '未找到关联情报。'),
+        passive_dns: buildSectionState('not_supported', 'CVE 查询暂不提供被动 DNS 记录。'),
+        url_list: buildSectionState('not_supported', 'CVE 查询暂不提供关联 URL。'),
+        malware: buildSectionState('not_supported', 'CVE 查询暂不提供恶意样本记录。'),
+        http_scans: buildSectionState('not_supported', 'CVE 查询暂不提供 HTTP 扫描记录。'),
       },
     };
   }
@@ -709,10 +842,34 @@ const server = http.createServer((req, res) => {
   // 登录链接验证API已移除，使用密码验证方式
   
   // 只处理/api请求
-  if (url === '/api/code-leak/search') {
-    if (req.method === 'POST') {
-      handleCodeLeakSearch(req, res);
+    if (new URL(req.url, 'http://localhost').pathname.startsWith('/api/code-leak/assets')) {
+      handleCodeLeakAssets(req, res);
       return;
+    }
+
+    if (new URL(req.url, 'http://localhost').pathname.startsWith('/api/file-leak/assets')) {
+      const pathParts = new URL(req.url, 'http://localhost').pathname.split('/').filter(Boolean);
+      req.query = pathParts.length >= 4 ? { id: decodeURIComponent(pathParts[3]) } : {};
+      fileLeakAssetsHandler(req, res);
+      return;
+    }
+
+    if (new URL(req.url, 'http://localhost').pathname.startsWith('/api/scheduled-scans/tasks')) {
+      const pathParts = new URL(req.url, 'http://localhost').pathname.split('/').filter(Boolean);
+      req.query = pathParts.length >= 4 ? { id: decodeURIComponent(pathParts[3]) } : {};
+      scheduledScanTasksHandler(req, res);
+      return;
+    }
+
+    if (new URL(req.url, 'http://localhost').pathname === '/api/notifications/webhook') {
+      webhookConfigHandler(req, res);
+      return;
+    }
+
+    if (new URL(req.url, 'http://localhost').pathname === '/api/code-leak/search') {
+      if (req.method === 'POST') {
+        handleCodeLeakSearch(req, res);
+        return;
     }
 
     res.writeHead(405, { 'Content-Type': 'application/json' });
@@ -723,7 +880,7 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  if (!url.startsWith('/api')) {
+  if (!new URL(req.url, 'http://localhost').pathname.startsWith('/api')) {
     res.writeHead(404, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({
       error: 'Not Found',
@@ -741,10 +898,11 @@ async function handleApiRequest(req, res) {
   try {
     const url = req.url;
 
-    if (url.startsWith('/api/otx/search')) {
+    if (new URL(url, 'http://localhost').pathname.startsWith('/api/otx/search')) {
       const requestUrl = new URL(url, 'http://localhost');
       const type = String(requestUrl.searchParams.get('type') || '').trim().toLowerCase();
       const query = String(requestUrl.searchParams.get('query') || '').trim();
+      const noCache = String(requestUrl.searchParams.get('noCache') || '').trim().toLowerCase() === '1';
 
       if (!query || !['ip', 'domain', 'url', 'cve'].includes(type)) {
         res.writeHead(400, { 'Content-Type': 'application/json' });
@@ -755,7 +913,7 @@ async function handleApiRequest(req, res) {
         return;
       }
 
-      const cachedResult = getCachedOtxSearch(type, query);
+      const cachedResult = noCache ? null : getCachedOtxSearch(type, query);
       if (cachedResult) {
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({
@@ -773,8 +931,28 @@ async function handleApiRequest(req, res) {
       res.end(JSON.stringify({
         source: 'intel',
         cached: false,
+        noCache,
         data: structuredResult
       }));
+      return;
+    }
+
+    if (new URL(url, 'http://localhost').pathname === '/api/file-leak/search') {
+      if (req.method === 'POST') {
+        fileLeakSearchHandler(req, res);
+        return;
+      }
+
+      res.writeHead(405, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({
+        error: 'Method Not Allowed',
+        message: 'Only POST requests are allowed for this endpoint'
+      }));
+      return;
+    }
+
+    if (new URL(url, 'http://localhost').pathname === '/api/notifications/webhook') {
+      webhookConfigHandler(req, res);
       return;
     }
     
@@ -960,6 +1138,195 @@ async function handleApiRequest(req, res) {
 }
 
 // 获取请求体
+async function ensureCodeLeakAssetsStore() {
+  await fs.mkdir(path.dirname(CODE_LEAK_ASSETS_FILE), { recursive: true });
+  try {
+    await fs.access(CODE_LEAK_ASSETS_FILE);
+  } catch {
+    await fs.writeFile(CODE_LEAK_ASSETS_FILE, '{}', 'utf8');
+  }
+}
+
+async function readCodeLeakAssetsStore() {
+  await ensureCodeLeakAssetsStore();
+  try {
+    const raw = await fs.readFile(CODE_LEAK_ASSETS_FILE, 'utf8');
+    const parsed = JSON.parse(raw || '{}');
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+async function writeCodeLeakAssetsStore(store) {
+  await ensureCodeLeakAssetsStore();
+  await fs.writeFile(CODE_LEAK_ASSETS_FILE, JSON.stringify(store, null, 2), 'utf8');
+}
+
+let codeLeakAssetsTableReady = false;
+
+async function ensureCodeLeakAssetsTable() {
+  if (!neonSql || codeLeakAssetsTableReady) return;
+
+  await neonSql`
+    CREATE TABLE IF NOT EXISTS code_leak_assets (
+      id TEXT PRIMARY KEY,
+      user_email TEXT NOT NULL,
+      label TEXT NOT NULL,
+      value TEXT NOT NULL,
+      type TEXT NOT NULL,
+      enabled BOOLEAN NOT NULL DEFAULT TRUE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `;
+
+  await neonSql`
+    CREATE UNIQUE INDEX IF NOT EXISTS code_leak_assets_user_value_idx
+    ON code_leak_assets (user_email, value)
+  `;
+
+  codeLeakAssetsTableReady = true;
+}
+
+async function readCodeLeakAssetsByUser(email) {
+  if (neonSql) {
+    await ensureCodeLeakAssetsTable();
+    const rows = await neonSql`
+      SELECT id, label, value, type, enabled
+      FROM code_leak_assets
+      WHERE user_email = ${email}
+      ORDER BY created_at ASC
+    `;
+    return rows.map((row) => ({
+      id: row.id,
+      label: row.label,
+      value: row.value,
+      type: row.type,
+      enabled: Boolean(row.enabled),
+    }));
+  }
+
+  const store = await readCodeLeakAssetsStore();
+  return Array.isArray(store[email]) ? store[email] : [];
+}
+
+async function writeCodeLeakAssetForUser(email, asset) {
+  if (neonSql) {
+    await ensureCodeLeakAssetsTable();
+    await neonSql`
+      INSERT INTO code_leak_assets (id, user_email, label, value, type, enabled)
+      VALUES (${asset.id}, ${email}, ${asset.label}, ${asset.value}, ${asset.type}, ${asset.enabled})
+      ON CONFLICT (id) DO UPDATE SET
+        label = EXCLUDED.label,
+        value = EXCLUDED.value,
+        type = EXCLUDED.type,
+        enabled = EXCLUDED.enabled,
+        updated_at = NOW()
+    `;
+    return readCodeLeakAssetsByUser(email);
+  }
+
+  const store = await readCodeLeakAssetsStore();
+  const currentAssets = Array.isArray(store[email]) ? store[email] : [];
+  store[email] = [...currentAssets, asset];
+  await writeCodeLeakAssetsStore(store);
+  return store[email];
+}
+
+async function deleteCodeLeakAssetForUser(email, assetId) {
+  if (neonSql) {
+    await ensureCodeLeakAssetsTable();
+    await neonSql`
+      DELETE FROM code_leak_assets
+      WHERE user_email = ${email} AND id = ${assetId}
+    `;
+    return readCodeLeakAssetsByUser(email);
+  }
+
+  const store = await readCodeLeakAssetsStore();
+  const currentAssets = Array.isArray(store[email]) ? store[email] : [];
+  store[email] = currentAssets.filter((asset) => asset.id !== assetId);
+  await writeCodeLeakAssetsStore(store);
+  return store[email];
+}
+
+function getCodeLeakUserEmail(req, parsedBody = null) {
+  const headerEmail = typeof req.headers['x-user-email'] === 'string' ? req.headers['x-user-email'].trim() : '';
+  const bodyEmail = parsedBody && typeof parsedBody.userEmail === 'string' ? parsedBody.userEmail.trim() : '';
+  return (headerEmail || bodyEmail).toLowerCase();
+}
+
+async function handleCodeLeakAssets(req, res) {
+  try {
+    const urlObject = new URL(req.url, 'http://localhost');
+    const pathParts = urlObject.pathname.split('/').filter(Boolean);
+    const rawBody = req.method === 'POST' ? await getRequestBody(req) : '';
+    const parsedBody = rawBody ? JSON.parse(rawBody) : {};
+    const email = getCodeLeakUserEmail(req, parsedBody);
+
+    if (!email) {
+      res.writeHead(401, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Unauthorized', message: '缺少当前登录用户信息。' }));
+      return;
+    }
+
+    const currentAssets = await readCodeLeakAssetsByUser(email);
+
+    if (req.method === 'GET' && pathParts.length === 3) {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ success: true, assets: currentAssets }));
+      return;
+    }
+
+    if (req.method === 'POST' && pathParts.length === 3) {
+      const value = typeof parsedBody.value === 'string' ? parsedBody.value.trim() : '';
+      const label = typeof parsedBody.label === 'string' ? parsedBody.label.trim() : value;
+      const type = typeof parsedBody.type === 'string' ? parsedBody.type : 'company';
+
+      if (!value) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Bad Request', message: '监测对象不能为空。' }));
+        return;
+      }
+
+      const duplicated = currentAssets.some((asset) => String(asset.value || '').toLowerCase() === value.toLowerCase());
+      const newAsset = {
+        id: `asset-${Date.now()}`,
+        label,
+        value,
+        type,
+        enabled: true,
+      };
+
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({
+        success: true,
+        assets: duplicated
+          ? currentAssets
+          : await writeCodeLeakAssetForUser(email, newAsset),
+      }));
+      return;
+    }
+
+    if (req.method === 'DELETE' && pathParts.length === 4) {
+      const assetId = decodeURIComponent(pathParts[3]);
+      const nextAssets = await deleteCodeLeakAssetForUser(email, assetId);
+
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ success: true, assets: nextAssets }));
+      return;
+    }
+
+    res.writeHead(405, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ error: 'Method Not Allowed', message: 'Unsupported assets operation.' }));
+  } catch (error) {
+    console.error('[Dev Server] Code leak assets failed:', error.message);
+    res.writeHead(500, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ error: 'Internal Server Error', message: '监测对象持久化失败。' }));
+  }
+}
+
 async function handleCodeLeakSearch(req, res) {
   try {
     const rawBody = await getRequestBody(req);

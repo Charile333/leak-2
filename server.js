@@ -25,6 +25,7 @@ let LEAKRADAR_API_KEY = process.env.LEAKRADAR_API_KEY;
 let OTX_API_KEY = process.env.OTX_API_KEY;
 let TRENDRADAR_API_URL = process.env.TRENDRADAR_API_URL; // TrendRadar API 地址
 const OTX_UPSTREAM_URL = 'https://otx.alienvault.com/api/v1';
+const OTX_INTERNAL_UPSTREAM_URL = 'https://otx.alienvault.com/otxapi';
 const OTX_SEARCH_CACHE_TTL = 10 * 60 * 1000;
 const otxSearchCache = new Map();
 
@@ -82,15 +83,33 @@ const unwrapPayload = (payload) => {
   return payload.general || payload.data || payload.result || payload;
 };
 
-const getCollection = (payload, key) => {
-  const collection = pickFirstValue(
+const extractFirstArray = (...candidates) => {
+  for (const candidate of candidates) {
+    if (Array.isArray(candidate)) return candidate;
+    if (!candidate || typeof candidate !== 'object') continue;
+
+    for (const value of Object.values(candidate)) {
+      if (Array.isArray(value)) return value;
+    }
+  }
+
+  return [];
+};
+
+const getCollection = (payload, key) =>
+  extractFirstArray(
     getValueAtPath(payload, key),
     getValueAtPath(payload, `data.${key}`),
     getValueAtPath(payload, `result.${key}`),
-    getValueAtPath(payload, 'data')
+    getValueAtPath(payload, `results.${key}`),
+    getValueAtPath(payload, 'items'),
+    getValueAtPath(payload, 'entries'),
+    getValueAtPath(payload, 'records'),
+    getValueAtPath(payload, 'list'),
+    getValueAtPath(payload, 'data'),
+    getValueAtPath(payload, 'result'),
+    getValueAtPath(payload, 'results')
   );
-  return Array.isArray(collection) ? collection : [];
-};
 
 const formatDisplayDate = (value) => {
   if (!value || typeof value === 'object') return 'N/A';
@@ -133,22 +152,37 @@ const getUnifiedTags = (pulses) => {
 const buildSectionState = (status, message) => ({ status, message });
 
 const getHttpScans = (payload) => {
-  const scans = pickFirstValue(
+  const candidates = [
     getValueAtPath(payload, 'http_scans'),
     getValueAtPath(payload, 'data.http_scans'),
     getValueAtPath(payload, 'result.http_scans'),
     getValueAtPath(payload, 'data'),
-    payload
-  );
+    payload,
+  ];
 
-  return Array.isArray(scans) ? scans : [];
+  const scans = candidates.find((candidate) => {
+    if (Array.isArray(candidate)) return true;
+    return Boolean(candidate && typeof candidate === 'object');
+  });
+
+  if (Array.isArray(scans)) return scans;
+  if (!scans || typeof scans !== 'object') return [];
+
+  return Object.entries(scans)
+    .filter(([key, value]) => isDisplayableValue(key) && isDisplayableValue(value))
+    .map(([key, value]) => ({
+      key,
+      name: key,
+      value: typeof value === 'object' ? JSON.stringify(value) : String(value),
+    }));
 };
 
-const requestOtxSection = async (endpoint) => {
+const requestOtxSection = async (endpoint, options = {}) => {
+  const { internal = false } = options;
   try {
-    const response = await axios.get(`${OTX_UPSTREAM_URL}${endpoint}`, {
+    const response = await axios.get(`${internal ? OTX_INTERNAL_UPSTREAM_URL : OTX_UPSTREAM_URL}${endpoint}`, {
       headers: {
-        'X-OTX-API-KEY': OTX_API_KEY,
+        ...(internal ? {} : { 'X-OTX-API-KEY': OTX_API_KEY }),
         'Content-Type': 'application/json',
       },
       timeout: UPSTREAM_TIMEOUT,
@@ -160,6 +194,35 @@ const requestOtxSection = async (endpoint) => {
     }
     throw error;
   }
+};
+
+const requestOtxCandidates = async (candidates) => {
+  const normalizedCandidates = Array.isArray(candidates) ? candidates : [candidates];
+  let lastError = null;
+
+  for (let index = 0; index < normalizedCandidates.length; index += 1) {
+    const candidate = normalizedCandidates[index];
+    try {
+      const result = await requestOtxSection(candidate.endpoint, { internal: candidate.internal });
+      const shouldFallback =
+        candidate.internal &&
+        index < normalizedCandidates.length - 1 &&
+        result &&
+        typeof result === 'object' &&
+        !Array.isArray(result) &&
+        Object.keys(result).length === 0;
+
+      if (shouldFallback) {
+        continue;
+      }
+
+      return result;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  throw lastError || new Error('OTX candidate request failed');
 };
 
 const buildStructuredOtxResult = async (type, query) => {
@@ -199,7 +262,7 @@ const buildStructuredOtxResult = async (type, query) => {
       },
       section_states: {
         pulses: buildSectionState(pulses.length > 0 ? 'success' : 'no_data', pulses.length > 0 ? '已返回关联情报。' : '当前对象没有关联 Pulses。'),
-        passive_dns: buildSectionState(passiveDns.length > 0 ? 'success' : 'no_data', passiveDns.length > 0 ? '已返回 Passive DNS。' : '当前对象没有 Passive DNS 记录。'),
+        passive_dns: buildSectionState(passiveDns.length > 0 ? 'success' : 'no_data', passiveDns.length > 0 ? '已返回被动 DNS 记录。' : '当前对象没有被动 DNS 记录。'),
         url_list: buildSectionState(urlList.length > 0 ? 'success' : 'no_data', urlList.length > 0 ? '已返回关联 URL。' : '当前对象没有关联 URL。'),
         malware: buildSectionState(malware.length > 0 ? 'success' : 'no_data', malware.length > 0 ? '已返回恶意样本。' : '当前对象没有恶意样本。'),
       },
@@ -236,7 +299,7 @@ const buildStructuredOtxResult = async (type, query) => {
       },
       section_states: {
         pulses: buildSectionState(pulses.length > 0 ? 'success' : 'no_data', pulses.length > 0 ? '已返回关联情报。' : '当前对象没有关联 Pulses。'),
-        passive_dns: buildSectionState(passiveDns.length > 0 ? 'success' : 'no_data', passiveDns.length > 0 ? '已返回 Passive DNS。' : '当前对象没有 Passive DNS 记录。'),
+        passive_dns: buildSectionState(passiveDns.length > 0 ? 'success' : 'no_data', passiveDns.length > 0 ? '已返回被动 DNS 记录。' : '当前对象没有被动 DNS 记录。'),
         url_list: buildSectionState('not_supported', '域名查询结果页当前不展示 URL 列表。'),
         malware: buildSectionState(getCollection(malwarePayload, 'malware').length > 0 ? 'success' : 'no_data', getCollection(malwarePayload, 'malware').length > 0 ? '已返回恶意样本。' : '当前对象没有恶意样本。'),
       },
@@ -272,7 +335,7 @@ const buildStructuredOtxResult = async (type, query) => {
       },
       section_states: {
         pulses: buildSectionState(pulses.length > 0 ? 'success' : 'no_data', pulses.length > 0 ? '已返回关联情报。' : '当前对象没有关联 Pulses。'),
-        passive_dns: buildSectionState('not_supported', 'URL 查询当前不提供 Passive DNS。'),
+        passive_dns: buildSectionState('not_supported', 'URL 查询当前不提供被动 DNS 记录。'),
         url_list: buildSectionState(getCollection(urlListPayload, 'url_list').length > 0 ? 'success' : 'no_data', getCollection(urlListPayload, 'url_list').length > 0 ? '已返回关联 URL。' : '当前对象没有关联 URL。'),
         malware: buildSectionState('not_supported', 'URL 查询当前不提供恶意样本列表。'),
       },
@@ -309,7 +372,7 @@ const buildStructuredOtxResult = async (type, query) => {
       },
       section_states: {
         pulses: buildSectionState(pulses.length > 0 ? 'success' : 'no_data', pulses.length > 0 ? '已返回关联情报。' : '当前 CVE 没有关联 Pulses。'),
-        passive_dns: buildSectionState('not_supported', 'CVE 查询不提供 Passive DNS。'),
+        passive_dns: buildSectionState('not_supported', 'CVE 查询不提供被动 DNS 记录。'),
         url_list: buildSectionState('not_supported', 'CVE 查询不提供关联 URL。'),
         malware: buildSectionState('not_supported', 'CVE 查询不提供恶意样本列表。'),
       },
@@ -323,13 +386,13 @@ const buildStructuredOtxResultV2 = async (type, query) => {
   if (type === 'ip') {
     const ipVersion = query.includes(':') ? 'IPv6' : 'IPv4';
     const [generalPayload, reputationPayload, geoPayload, passiveDnsPayload, malwarePayload, urlListPayload, httpScansPayload] = await Promise.all([
-      requestOtxSection(`/indicators/${ipVersion}/${query}/general`),
-      requestOtxSection(`/indicators/${ipVersion}/${query}/reputation`),
-      requestOtxSection(`/indicators/${ipVersion}/${query}/geo`),
-      requestOtxSection(`/indicators/${ipVersion}/${query}/passive_dns`),
-      requestOtxSection(`/indicators/${ipVersion}/${query}/malware`),
-      requestOtxSection(`/indicators/${ipVersion}/${query}/url_list`),
-      requestOtxSection(`/indicators/${ipVersion}/${query}/http_scans`),
+      requestOtxCandidates([{ endpoint: `/indicators/ip/general/${query}`, internal: true }, { endpoint: `/indicators/${ipVersion}/${query}/general`, internal: false }]),
+      requestOtxCandidates([{ endpoint: `/indicators/${ipVersion}/reputation/${query}`, internal: true }, { endpoint: `/indicators/${ipVersion}/${query}/reputation`, internal: false }]),
+      requestOtxCandidates([{ endpoint: `/indicators/${ipVersion}/geo/${query}`, internal: true }, { endpoint: `/indicators/${ipVersion}/${query}/geo`, internal: false }]),
+      requestOtxCandidates([{ endpoint: `/indicators/${ipVersion}/passive_dns/${query}`, internal: true }, { endpoint: `/indicators/${ipVersion}/${query}/passive_dns`, internal: false }]),
+      requestOtxCandidates([{ endpoint: `/indicators/${ipVersion}/malware/${query}?limit=10&page=1`, internal: true }, { endpoint: `/indicators/${ipVersion}/${query}/malware`, internal: false }]),
+      requestOtxCandidates([{ endpoint: `/indicators/${ipVersion}/url_list/${query}`, internal: true }, { endpoint: `/indicators/${ipVersion}/${query}/url_list`, internal: false }]),
+      requestOtxCandidates([{ endpoint: `/indicators/${ipVersion}/http_scans/${query}`, internal: true }, { endpoint: `/indicators/${ipVersion}/${query}/http_scans`, internal: false }]),
     ]);
     const general = unwrapPayload(generalPayload);
     const reputation = unwrapPayload(reputationPayload);
@@ -366,24 +429,24 @@ const buildStructuredOtxResultV2 = async (type, query) => {
         http_scan_count: httpScans.length,
       },
       section_states: {
-        pulses: buildSectionState(pulses.length > 0 ? 'success' : 'no_data', pulses.length > 0 ? 'Linked pulses found.' : 'No linked pulses found.'),
-        passive_dns: buildSectionState(passiveDns.length > 0 ? 'success' : 'no_data', passiveDns.length > 0 ? 'Passive DNS records available.' : 'No Passive DNS records found.'),
-        url_list: buildSectionState(urlList.length > 0 ? 'success' : 'no_data', urlList.length > 0 ? 'Related URLs found.' : 'No related URLs found.'),
-        malware: buildSectionState(malware.length > 0 ? 'success' : 'no_data', malware.length > 0 ? 'Malware samples available.' : 'No malware samples found.'),
-        http_scans: buildSectionState(httpScans.length > 0 ? 'success' : 'no_data', httpScans.length > 0 ? 'HTTP scan records available.' : 'No HTTP scan records found.'),
+        pulses: buildSectionState(pulses.length > 0 ? 'success' : 'no_data', pulses.length > 0 ? '已找到关联情报。' : '未找到关联情报。'),
+        passive_dns: buildSectionState(passiveDnsCount > 0 ? 'success' : 'no_data', passiveDnsCount > 0 ? '已获取被动 DNS 记录。' : '未找到被动 DNS 记录。'),
+        url_list: buildSectionState(urlList.length > 0 ? 'success' : 'no_data', urlList.length > 0 ? '已找到关联 URL。' : '未找到关联 URL。'),
+        malware: buildSectionState(malwareCount > 0 ? 'success' : 'no_data', malwareCount > 0 ? '已获取恶意样本记录。' : '未找到恶意样本记录。'),
+        http_scans: buildSectionState(httpScanCount > 0 ? 'success' : 'no_data', httpScanCount > 0 ? '已获取 HTTP 扫描记录。' : '未找到 HTTP 扫描记录。'),
       },
     };
   }
 
   if (type === 'domain') {
     const [generalPayload, geoPayload, passiveDnsPayload, whoisPayload, malwarePayload, urlListPayload, httpScansPayload] = await Promise.all([
-      requestOtxSection(`/indicators/domain/${query}/general`),
-      requestOtxSection(`/indicators/domain/${query}/geo`),
-      requestOtxSection(`/indicators/domain/${query}/passive_dns`),
-      requestOtxSection(`/indicators/domain/${query}/whois`),
-      requestOtxSection(`/indicators/domain/${query}/malware`),
-      requestOtxSection(`/indicators/domain/${query}/url_list`),
-      requestOtxSection(`/indicators/domain/${query}/http_scans`),
+      requestOtxCandidates([{ endpoint: `/indicators/domain/general/${query}`, internal: true }, { endpoint: `/indicators/domain/${query}/general`, internal: false }]),
+      requestOtxCandidates([{ endpoint: `/indicators/domain/geo/${query}`, internal: true }, { endpoint: `/indicators/domain/${query}/geo`, internal: false }]),
+      requestOtxCandidates([{ endpoint: `/indicators/domain/passive_dns/${query}`, internal: true }, { endpoint: `/indicators/domain/${query}/passive_dns`, internal: false }]),
+      requestOtxCandidates([{ endpoint: `/indicators/domain/whois/${query}`, internal: true }, { endpoint: `/indicators/domain/${query}/whois`, internal: false }]),
+      requestOtxCandidates([{ endpoint: `/indicators/domain/malware/${query}?limit=10&page=1`, internal: true }, { endpoint: `/indicators/domain/${query}/malware`, internal: false }]),
+      requestOtxCandidates([{ endpoint: `/indicators/domain/url_list/${query}`, internal: true }, { endpoint: `/indicators/domain/${query}/url_list`, internal: false }]),
+      requestOtxCandidates([{ endpoint: `/indicators/domain/http_scans/${query}`, internal: true }, { endpoint: `/indicators/domain/${query}/http_scans`, internal: false }]),
     ]);
     const general = unwrapPayload(generalPayload);
     const geo = unwrapPayload(geoPayload);
@@ -418,11 +481,11 @@ const buildStructuredOtxResultV2 = async (type, query) => {
         http_scan_count: httpScans.length,
       },
       section_states: {
-        pulses: buildSectionState(pulses.length > 0 ? 'success' : 'no_data', pulses.length > 0 ? 'Linked pulses found.' : 'No linked pulses found.'),
-        passive_dns: buildSectionState(passiveDns.length > 0 ? 'success' : 'no_data', passiveDns.length > 0 ? 'Passive DNS records available.' : 'No Passive DNS records found.'),
-        url_list: buildSectionState(urlList.length > 0 ? 'success' : 'no_data', urlList.length > 0 ? 'Related URLs found.' : 'No related URLs found.'),
-        malware: buildSectionState(malware.length > 0 ? 'success' : 'no_data', malware.length > 0 ? 'Malware samples available.' : 'No malware samples found.'),
-        http_scans: buildSectionState(httpScans.length > 0 ? 'success' : 'no_data', httpScans.length > 0 ? 'HTTP scan records available.' : 'No HTTP scan records found.'),
+        pulses: buildSectionState(pulses.length > 0 ? 'success' : 'no_data', pulses.length > 0 ? '已找到关联情报。' : '未找到关联情报。'),
+        passive_dns: buildSectionState(passiveDnsCount > 0 ? 'success' : 'no_data', passiveDnsCount > 0 ? '已获取被动 DNS 记录。' : '未找到被动 DNS 记录。'),
+        url_list: buildSectionState(urlList.length > 0 ? 'success' : 'no_data', urlList.length > 0 ? '已找到关联 URL。' : '未找到关联 URL。'),
+        malware: buildSectionState(malwareCount > 0 ? 'success' : 'no_data', malwareCount > 0 ? '已获取恶意样本记录。' : '未找到恶意样本记录。'),
+        http_scans: buildSectionState(httpScanCount > 0 ? 'success' : 'no_data', httpScanCount > 0 ? '已获取 HTTP 扫描记录。' : '未找到 HTTP 扫描记录。'),
       },
     };
   }
@@ -431,8 +494,8 @@ const buildStructuredOtxResultV2 = async (type, query) => {
     const sanitizedQuery = query.replace(/^https?:\/\//, '').replace(/\/$/, '');
     const encodedQuery = encodeURIComponent(sanitizedQuery);
     const [generalPayload, urlListPayload] = await Promise.all([
-      requestOtxSection(`/indicators/url/${encodedQuery}/general`),
-      requestOtxSection(`/indicators/url/${encodedQuery}/url_list`),
+      requestOtxCandidates([{ endpoint: `/indicators/url/general/${encodedQuery}`, internal: true }, { endpoint: `/indicators/url/${encodedQuery}/general`, internal: false }]),
+      requestOtxCandidates([{ endpoint: `/indicators/url/url_list/${encodedQuery}`, internal: true }, { endpoint: `/indicators/url/${encodedQuery}/url_list`, internal: false }]),
     ]);
     const general = unwrapPayload(generalPayload);
     const pulses = Array.isArray(general?.pulse_info?.pulses) ? general.pulse_info.pulses : [];
@@ -461,11 +524,11 @@ const buildStructuredOtxResultV2 = async (type, query) => {
         http_scan_count: 0,
       },
       section_states: {
-        pulses: buildSectionState(pulses.length > 0 ? 'success' : 'no_data', pulses.length > 0 ? 'Linked pulses found.' : 'No linked pulses found.'),
-        passive_dns: buildSectionState('not_supported', 'Passive DNS is not available for URL lookups.'),
-        url_list: buildSectionState(urlList.length > 0 ? 'success' : 'no_data', urlList.length > 0 ? 'Related URLs found.' : 'No related URLs found.'),
-        malware: buildSectionState('not_supported', 'Malware samples are not returned for URL lookups.'),
-        http_scans: buildSectionState('not_supported', 'HTTP scans are not returned for URL lookups.'),
+        pulses: buildSectionState(pulses.length > 0 ? 'success' : 'no_data', pulses.length > 0 ? '已找到关联情报。' : '未找到关联情报。'),
+        passive_dns: buildSectionState('not_supported', 'URL 查询暂不提供被动 DNS 记录。'),
+        url_list: buildSectionState(urlList.length > 0 ? 'success' : 'no_data', urlList.length > 0 ? '已找到关联 URL。' : '未找到关联 URL。'),
+        malware: buildSectionState('not_supported', 'URL 查询暂不提供恶意样本记录。'),
+        http_scans: buildSectionState('not_supported', 'URL 查询暂不提供 HTTP 扫描记录。'),
       },
     };
   }
@@ -473,8 +536,8 @@ const buildStructuredOtxResultV2 = async (type, query) => {
   if (type === 'cve') {
     const normalizedQuery = String(query).toUpperCase();
     const [generalPayload, pulsesPayload] = await Promise.all([
-      requestOtxSection(`/indicators/cve/${normalizedQuery}/general`),
-      requestOtxSection(`/indicators/cve/${normalizedQuery}/top_n_pulses`),
+      requestOtxCandidates([{ endpoint: `/indicators/cve/general/${normalizedQuery}`, internal: true }, { endpoint: `/indicators/cve/${normalizedQuery}/general`, internal: false }]),
+      requestOtxCandidates([{ endpoint: `/indicators/cve/top_n_pulses/${normalizedQuery}`, internal: true }, { endpoint: `/indicators/cve/${normalizedQuery}/top_n_pulses`, internal: false }]),
     ]);
     const general = unwrapPayload(generalPayload);
     const pulses = getCollection(pulsesPayload, 'top_n_pulses');
@@ -502,11 +565,11 @@ const buildStructuredOtxResultV2 = async (type, query) => {
         http_scan_count: 0,
       },
       section_states: {
-        pulses: buildSectionState(pulses.length > 0 ? 'success' : 'no_data', pulses.length > 0 ? 'Linked pulses found.' : 'No linked pulses found.'),
-        passive_dns: buildSectionState('not_supported', 'Passive DNS is not available for CVE lookups.'),
-        url_list: buildSectionState('not_supported', 'Related URLs are not available for CVE lookups.'),
-        malware: buildSectionState('not_supported', 'Malware samples are not returned for CVE lookups.'),
-        http_scans: buildSectionState('not_supported', 'HTTP scans are not returned for CVE lookups.'),
+        pulses: buildSectionState(pulses.length > 0 ? 'success' : 'no_data', pulses.length > 0 ? '已找到关联情报。' : '未找到关联情报。'),
+        passive_dns: buildSectionState('not_supported', 'CVE 查询暂不提供被动 DNS 记录。'),
+        url_list: buildSectionState('not_supported', 'CVE 查询暂不提供关联 URL。'),
+        malware: buildSectionState('not_supported', 'CVE 查询暂不提供恶意样本记录。'),
+        http_scans: buildSectionState('not_supported', 'CVE 查询暂不提供 HTTP 扫描记录。'),
       },
     };
   }
