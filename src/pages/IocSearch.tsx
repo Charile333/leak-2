@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+﻿import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { AlertTriangle, ArrowRight, Bug, Copy, Globe, Link as LinkIcon, Loader2, Radar, Search } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useNavigate, useSearchParams } from 'react-router-dom';
@@ -6,6 +6,8 @@ import { cn } from '../lib/utils';
 import { otxApi } from '../api/otxApi';
 
 type SearchType = 'ip' | 'domain' | 'url' | 'cve';
+type ResultTab = 'analysis' | 'passive-dns' | 'pulses' | 'malware' | 'urls';
+type SectionKey = 'pulses' | 'passive_dns' | 'url_list' | 'malware' | 'http_scans';
 
 type SearchConfig = {
   label: string;
@@ -20,9 +22,9 @@ const SEARCH_TYPES: Record<SearchType, SearchConfig> = {
   cve: { label: 'CVE', icon: Bug, placeholder: '输入 CVE 编号，例如 CVE-2024-3400' },
 };
 
-const MAX_RETRIES = 3;
+const MAX_RETRIES = 1;
 const RETRY_DELAY = 2000;
-const IOC_UNAVAILABLE_MESSAGE = 'IOC情报集功能暂时不可用';
+const IOC_UNAVAILABLE_MESSAGE = 'IOC 情报功能暂时不可用';
 
 const CLOUD_PROVIDER_MATCHERS: Array<{ label: string; pattern: RegExp }> = [
   { label: 'Amazon Web Services', pattern: /\bamazon\b|\baws\b/i },
@@ -37,6 +39,27 @@ const CLOUD_PROVIDER_MATCHERS: Array<{ label: string; pattern: RegExp }> = [
   { label: 'Linode', pattern: /\blinode\b/i },
   { label: 'Vultr', pattern: /\bvultr\b/i },
 ];
+
+const COUNTRY_CODE_MAP: Record<string, string> = {
+  'United States of America': 'US',
+  'United States': 'US',
+  'China': 'CN',
+  'Japan': 'JP',
+  'Australia': 'AU',
+  'Canada': 'CA',
+  'United Kingdom': 'GB',
+  'Germany': 'DE',
+  'France': 'FR',
+  'Singapore': 'SG',
+  'Hong Kong': 'HK',
+  'South Korea': 'KR',
+  'Netherlands': 'NL',
+  'Russia': 'RU',
+  'India': 'IN',
+  'Brazil': 'BR',
+  'Italy': 'IT',
+  'Spain': 'ES',
+};
 
 const isDisplayableValue = (value: any) => {
   if (value === undefined || value === null) return false;
@@ -57,22 +80,6 @@ const getValueAtPath = (source: any, path: string) => {
 const pickFirstPath = (source: any, paths: string[], fallback?: any) => {
   const value = pickFirstValue(...paths.map((path) => getValueAtPath(source, path)));
   return value === undefined ? fallback : value;
-};
-
-const unwrapPayload = (payload: any) => {
-  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return payload || {};
-  return payload.general || payload.data || payload.result || payload;
-};
-
-const getCollection = (payload: any, key: string) => {
-  const collection = pickFirstValue(
-    getValueAtPath(payload, key),
-    getValueAtPath(payload, 'data'),
-    getValueAtPath(payload, `data.${key}`),
-    getValueAtPath(payload, `result.${key}`)
-  );
-
-  return Array.isArray(collection) ? collection : [];
 };
 
 const formatDisplayDate = (value: any) => {
@@ -99,128 +106,22 @@ const detectSearchType = (input: string): SearchType | null => {
 };
 
 const getFriendlyErrorMessage = (error: any) => {
-  if (error.message?.includes('401')) return 'OTX 认证失败，请检查后端配置。';
-  if (error.message?.includes('404')) return '未找到相关情报。';
-  if (error.message?.includes('Empty response') || error.message?.includes('502') || error.message?.includes('503') || error.message?.includes('504') || error.message?.includes('timeout') || error.message?.includes('ETIMEDOUT') || error.message?.includes('ECONNRESET') || error.message?.includes('Network Error')) {
+  if (error.message?.includes('401')) return '情报源认证失败，请检查后端配置。';
+  if (error.message?.includes('404')) return '未找到对应情报结果。';
+  if (
+    error.message?.includes('Empty response') ||
+    error.message?.includes('502') ||
+    error.message?.includes('503') ||
+    error.message?.includes('504') ||
+    error.message?.includes('timeout') ||
+    error.message?.includes('ETIMEDOUT') ||
+    error.message?.includes('ECONNRESET') ||
+    error.message?.includes('Network Error')
+  ) {
     return IOC_UNAVAILABLE_MESSAGE;
   }
-  return error.message || '查询失败，请稍后重试。';
+  return error.message || '检索请求失败，请稍后重试。';
 };
-
-const normalizeIpResult = (generalPayload: any, passiveDnsPayload: any, malwarePayload: any, urlListPayload: any) => {
-  const general = unwrapPayload(generalPayload);
-  const pulseCount = pickFirstPath(general, ['pulse_info.count', 'pulse_info.pulses', 'pulse_count']);
-
-  return {
-    ...general,
-    indicator: pickFirstPath(general, ['indicator', 'ip', 'address']),
-    asn: toDisplayText(pickFirstPath(general, ['asn', 'asn_info.asn', 'geo.asn', 'as_number'])),
-    country: toDisplayText(pickFirstPath(general, ['country_name', 'country', 'geo.country_name', 'location.country'])),
-    city: toDisplayText(pickFirstPath(general, ['city', 'geo.city', 'location.city'])),
-    pulse_info: {
-      ...(general?.pulse_info || {}),
-      ...(pulseCount !== undefined ? { count: pulseCount } : {}),
-    },
-    passive_dns: getCollection(passiveDnsPayload, 'passive_dns'),
-    malware: getCollection(malwarePayload, 'malware'),
-    url_list: getCollection(urlListPayload, 'url_list'),
-    __raw: {
-      general: generalPayload,
-      passive_dns: passiveDnsPayload,
-      malware: malwarePayload,
-      url_list: urlListPayload,
-    },
-  };
-};
-
-const normalizeDomainResult = (generalPayload: any, passiveDnsPayload: any, whoisPayload: any, malwarePayload: any) => {
-  const general = unwrapPayload(generalPayload);
-  const pulseCount = pickFirstPath(general, ['pulse_info.count', 'pulse_info.pulses', 'pulse_count']);
-
-  return {
-    ...general,
-    indicator: pickFirstPath(general, ['indicator', 'domain', 'hostname']),
-    pulse_info: {
-      ...(general?.pulse_info || {}),
-      ...(pulseCount !== undefined ? { count: pulseCount } : {}),
-    },
-    passive_dns: getCollection(passiveDnsPayload, 'passive_dns'),
-    whois: unwrapPayload(whoisPayload) || {},
-    malware: getCollection(malwarePayload, 'malware'),
-    __raw: {
-      general: generalPayload,
-      passive_dns: passiveDnsPayload,
-      whois: whoisPayload,
-      malware: malwarePayload,
-    },
-  };
-};
-
-const normalizeUrlResult = (generalPayload: any, urlListPayload: any) => {
-  const general = unwrapPayload(generalPayload);
-  const pulseCount = pickFirstPath(general, ['pulse_info.count', 'pulse_info.pulses', 'pulse_count']);
-
-  return {
-    ...general,
-    indicator: pickFirstPath(general, ['indicator', 'url', 'urlworker.url', 'urlworker.result.url']),
-    domain: toDisplayText(pickFirstPath(general, ['domain', 'hostname', 'urlworker.domain', 'urlworker.result.domain'])),
-    ip: toDisplayText(pickFirstPath(general, ['ip', 'address', 'urlworker.ip', 'urlworker.result.ip'])),
-    pulse_info: {
-      ...(general?.pulse_info || {}),
-      ...(pulseCount !== undefined ? { count: pulseCount } : {}),
-    },
-    url_list: getCollection(urlListPayload, 'url_list'),
-    __raw: {
-      general: generalPayload,
-      url_list: urlListPayload,
-    },
-  };
-};
-
-const buildCveResult = (generalPayload: any, pulsesPayload: any) => {
-  const general = unwrapPayload(generalPayload);
-  const pulseCount = pickFirstPath(general, ['pulse_info.count', 'pulse_info.pulses', 'pulse_count']);
-
-  return {
-    ...general,
-    indicator: pickFirstPath(general, ['indicator', 'name', 'id', 'cve']),
-    base_score: toDisplayText(
-      pickFirstPath(general, [
-        'base_score',
-        'cvss_score',
-        'cvss.base_score',
-        'cvss.score',
-        'cvss.cvssV3.baseScore',
-        'cvss.cvss_v3.base_score',
-        'cvss3.base_score',
-        'cvss3.score',
-        'cvss_v3.base_score',
-        'cvss_v2.base_score',
-        'severity.cvss_v3',
-        'severity.cvss_v2',
-      ])
-    ),
-    published: formatDisplayDate(pickFirstPath(general, ['published', 'published_date', 'release_date', 'created', 'modified', 'updated'])),
-    description: toDisplayText(pickFirstPath(general, ['description', 'details', 'summary']), ''),
-    pulse_info: {
-      ...(general?.pulse_info || {}),
-      ...(pulseCount !== undefined ? { count: pulseCount } : {}),
-    },
-    top_n_pulses: getCollection(pulsesPayload, 'top_n_pulses'),
-    passive_dns: [],
-    malware: [],
-    url_list: [],
-    __raw: {
-      general: generalPayload,
-      top_n_pulses: pulsesPayload,
-    },
-  };
-};
-
-void normalizeIpResult;
-void normalizeDomainResult;
-void normalizeUrlResult;
-void buildCveResult;
 
 const getRawReputation = (data: any) =>
   toDisplayText(
@@ -242,9 +143,73 @@ const getCloudProvider = (data: any) => {
     ''
   );
 
-  if (!asnText) return 'Unknown';
+  if (!asnText) return '未知';
   const matchedProvider = CLOUD_PROVIDER_MATCHERS.find(({ pattern }) => pattern.test(asnText));
-  return matchedProvider ? matchedProvider.label : 'Non-cloud / not identified';
+  return matchedProvider ? matchedProvider.label : '非云厂商 / 未识别';
+};
+
+const getDetectionSummary = (records: any[]) => {
+  const detectionNames = records
+    .flatMap((record) => {
+      if (!record?.detections || typeof record.detections !== 'object') return [];
+      return Object.values(record.detections).filter((value): value is string => typeof value === 'string' && value.trim() !== '');
+    })
+    .filter(Boolean);
+
+  return detectionNames.length > 0 ? detectionNames[0] : 'N/A';
+};
+
+const getDetectionRatio = (records: any[]) => {
+  if (!Array.isArray(records) || records.length === 0) return 'N/A';
+
+  const firstWithDetections = records.find((record) => record?.detections && typeof record.detections === 'object');
+  if (!firstWithDetections) return 'N/A';
+
+  const entries = Object.values(firstWithDetections.detections);
+  if (entries.length === 0) return 'N/A';
+  const matched = entries.filter((value) => typeof value === 'string' && value.trim() !== '').length;
+  return `${matched} / ${entries.length}`;
+};
+
+const buildExternalResources = (type: SearchType, data: any) => {
+  const resources: Array<{ label: string; href: string }> = [];
+  const indicator = toDisplayText(data?.indicator, '');
+
+  if ((type === 'ip' || type === 'domain') && isDisplayableValue(data?.__raw?.general?.whois)) {
+    resources.push({ label: 'Whois', href: String(data.__raw.general.whois) });
+  }
+
+  if ((type === 'ip' || type === 'domain' || type === 'url') && indicator) {
+    resources.push({ label: 'VirusTotal', href: `https://www.virustotal.com/gui/search/${encodeURIComponent(indicator)}` });
+  }
+
+  if (type === 'url' && indicator) {
+    const href = /^https?:\/\//i.test(indicator) ? indicator : `https://${indicator}`;
+    resources.push({ label: 'Open in browser', href });
+  }
+
+  if (type === 'cve' && indicator) {
+    resources.push({ label: 'NVD', href: `https://nvd.nist.gov/vuln/detail/${encodeURIComponent(indicator)}` });
+    resources.push({ label: 'MITRE', href: `https://www.cve.org/CVERecord?id=${encodeURIComponent(indicator)}` });
+  }
+
+  if (resources.length === 0) return 'N/A';
+
+  return (
+    <div className="flex flex-wrap gap-2">
+      {resources.map((resource) => (
+        <a
+          key={`${resource.label}-${resource.href}`}
+          href={resource.href}
+          target="_blank"
+          rel="noreferrer"
+          className="inline-flex items-center rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 text-xs font-medium text-accent transition-colors hover:border-accent/30 hover:bg-accent/10"
+        >
+          {resource.label}
+        </a>
+      ))}
+    </div>
+  );
 };
 
 const getAsnOrganization = (data: any) =>
@@ -289,41 +254,74 @@ const getUnifiedTags = (pulseEntries: any[]) => {
   return Array.from(tags).slice(0, 12);
 };
 
-const getSectionState = (results: any, key: 'pulses' | 'passive_dns' | 'url_list' | 'malware') =>
-  results?.section_states?.[key] || { status: 'unknown', message: '状态未知。' };
+const countryCodeToFlag = (countryCode?: string) => {
+  if (!countryCode || countryCode.length !== 2) return '';
+  return countryCode
+    .toUpperCase()
+    .split('')
+    .map((char) => String.fromCodePoint(127397 + char.charCodeAt(0)))
+    .join('');
+};
 
-const getSectionDisplayValue = (
-  results: any,
-  key: 'pulses' | 'passive_dns' | 'url_list' | 'malware',
-  count: number
-) => {
+const getCountryFlag = (countryName?: string) => {
+  if (!countryName) return '';
+  const countryCode = COUNTRY_CODE_MAP[countryName.trim()];
+  return countryCodeToFlag(countryCode);
+};
+
+const getSectionState = (results: any, key: SectionKey) =>
+  results?.section_states?.[key] || { status: 'unknown', message: '该模块当前没有可展示状态。' };
+
+const getSectionDisplayValue = (results: any, key: SectionKey, count: number) => {
   const state = getSectionState(results, key);
+  if (state.status === 'timeout') return '!';
   if (state.status === 'not_supported') return '—';
   return count;
 };
 
-const CountMetric = ({ label, value, highlight }: { label: string; value: React.ReactNode; highlight: boolean }) => (
-  <div className="flex min-w-[118px] flex-col gap-2 border-l border-white/8 pl-4 first:border-l-0 first:pl-0">
-    <span className="text-[11px] uppercase tracking-[0.24em] text-white/42">{label}</span>
-    <span className={cn('text-2xl font-semibold tracking-[-0.05em]', highlight ? 'text-accent' : 'text-white')}>
-      {value}
-    </span>
-  </div>
-);
-
-const SummaryColumn = ({ label, value }: { label: string; value: React.ReactNode }) => (
-  <div className="grid gap-3 border-t border-white/8 py-4 first:border-t-0 first:pt-0 md:grid-cols-[140px_1fr] md:items-start">
-    <div className="text-[11px] uppercase tracking-[0.24em] text-white/42">{label}</div>
-    <div className="text-sm leading-7 text-white/88">{value}</div>
-  </div>
-);
+const getSectionListMessage = (state: { status?: string; message?: string }, count: number, singularLabel: string) => {
+  if (state.status === 'success' && count > 0) {
+    return `情报源已统计到 ${count} 条${singularLabel}，但当前返回结果中没有展开详细列表。`;
+  }
+  return state.message;
+};
 
 const SearchShell = ({ children }: { children: React.ReactNode }) => (
   <div className="min-h-[calc(100vh-4rem)] bg-[radial-gradient(circle_at_top,rgba(168,85,247,0.08),transparent_36%),linear-gradient(180deg,rgba(255,255,255,0.02),transparent_18%)]">
-    <div className="mx-auto max-w-[1460px] px-5 py-8 sm:px-8 lg:px-12">{children}</div>
+    <div className="mx-auto max-w-[1480px] px-5 py-8 sm:px-8 lg:px-12">{children}</div>
   </div>
 );
 
+const CountMetric = ({ label, value, highlight, active = false }: { label: string; value: React.ReactNode; highlight: boolean; active?: boolean }) => (
+  <div className={cn('flex min-h-[112px] flex-col justify-between rounded-[24px] border px-5 py-4 transition-colors', active ? 'border-accent/28 bg-accent/[0.08]' : 'border-white/8 bg-white/[0.025]')}>
+    <span className="text-[11px] uppercase tracking-[0.24em] text-white/42">{label}</span>
+    <span className={cn('text-[2rem] font-semibold tracking-[-0.06em]', highlight ? 'text-accent' : 'text-white')}>{value}</span>
+  </div>
+);
+
+const SummaryRow = ({ label, value }: { label: string; value: React.ReactNode }) => (
+  <div className="grid gap-2 py-3 md:grid-cols-[154px_1fr] md:items-start">
+    <div className="text-[11px] uppercase tracking-[0.24em] text-white/40">{label}</div>
+    <div className="text-sm leading-7 text-white/86">{value}</div>
+  </div>
+);
+
+const ResultTabButton = ({ label, count, active, onClick }: { label: string; count?: React.ReactNode; active: boolean; onClick: () => void }) => (
+  <button type="button" onClick={onClick} className={cn('inline-flex items-center gap-3 border-b-2 px-1 pb-4 pt-1 text-sm transition-colors', active ? 'border-accent text-white' : 'border-transparent text-white/52 hover:text-white/82')}>
+    <span>{label}</span>
+    {count !== undefined ? <span className={cn('rounded-full border px-2 py-0.5 text-[11px]', active ? 'border-accent/30 bg-accent/10 text-accent' : 'border-white/10 text-white/42')}>{count}</span> : null}
+  </button>
+);
+
+const Panel = ({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) => (
+  <section className="overflow-hidden rounded-[28px] border border-white/8 bg-[linear-gradient(180deg,rgba(14,19,28,0.96),rgba(8,12,18,0.96))]">
+    <div className="border-b border-white/8 px-6 py-5 sm:px-7">
+      {subtitle ? <p className="text-[11px] uppercase tracking-[0.28em] text-white/38">{subtitle}</p> : null}
+      <h3 className="mt-2 text-[1.65rem] font-semibold tracking-[-0.06em] text-white">{title}</h3>
+    </div>
+    <div className="px-6 py-5 sm:px-7">{children}</div>
+  </section>
+);
 const IocSearch = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -337,10 +335,13 @@ const IocSearch = () => {
   const [error, setError] = useState('');
   const [copied, setCopied] = useState(false);
   const [showResults, setShowResults] = useState(Boolean(queryFromUrl));
+  const [activeTab, setActiveTab] = useState<ResultTab>('analysis');
   const latestSearchIdRef = useRef(0);
   const hasBootstrappedQueryRef = useRef(false);
+  const detailsSectionRef = useRef<HTMLElement | null>(null);
 
   const currentConfig = SEARCH_TYPES[activeSearchType];
+  const Icon = currentConfig.icon;
 
   useEffect(() => {
     setSearchQuery(queryFromUrl);
@@ -357,8 +358,12 @@ const IocSearch = () => {
     if (detectedType) setActiveSearchType(detectedType);
   }, [queryFromUrl]);
 
+  useEffect(() => {
+    setActiveTab('analysis');
+  }, [submittedQuery, activeSearchType]);
+
   const executeSearch = async (query: string, type: SearchType) => {
-    const response = await otxApi.searchIntel(query, type);
+      const response = await otxApi.searchIntel(query, type);
     return response?.data || null;
   };
 
@@ -415,7 +420,7 @@ const IocSearch = () => {
     if (!detectedType) {
       setResults(null);
       setShowResults(false);
-      setError('请输入有效的 IP、域名、URL 或 CVE。');
+      setError('请输入有效的 IP、域名、URL 或 CVE 编号。');
       return;
     }
 
@@ -424,45 +429,168 @@ const IocSearch = () => {
   }, [queryFromUrl, submittedQuery]);
 
   const pulseEntries = useMemo(() => getPulseEntries(activeSearchType, results), [activeSearchType, results]);
-  const topLevelDomains = useMemo(() => getTopLevelDomains(results?.passive_dns || []), [results?.passive_dns]);
+  const passiveDnsEntries = useMemo(() => (Array.isArray(results?.passive_dns) ? results.passive_dns : []), [results?.passive_dns]);
+  const malwareEntries = useMemo(() => (Array.isArray(results?.malware) ? results.malware : []), [results?.malware]);
+  const urlEntries = useMemo(() => (Array.isArray(results?.url_list) ? results.url_list : []), [results?.url_list]);
+  const httpScanEntries = useMemo(() => (Array.isArray(results?.http_scans) ? results.http_scans : []), [results?.http_scans]);
+  const topLevelDomains = useMemo(() => getTopLevelDomains(passiveDnsEntries), [passiveDnsEntries]);
   const unifiedTags = useMemo(() => getUnifiedTags(pulseEntries), [pulseEntries]);
+
   const pulsesState = getSectionState(results, 'pulses');
   const passiveDnsState = getSectionState(results, 'passive_dns');
   const urlListState = getSectionState(results, 'url_list');
   const malwareState = getSectionState(results, 'malware');
-  const displaySummaryColumns = useMemo(() => {
-    if (!results) return [];
+  const httpScansState = getSectionState(results, 'http_scans');
 
-    const dnsResolutions = typeof results?.derived?.dns_resolutions === 'number' ? `${results.derived.dns_resolutions} 条` : '0';
-    const classification = activeSearchType === 'cve' ? 'Vulnerability Intelligence' : `${currentConfig.label} Intelligence`;
+  const counts = useMemo(
+    () => ({
+      pulses: typeof results?.pulse_info?.count === 'number' ? results.pulse_info.count : pulseEntries.length,
+      passiveDns:
+        typeof results?.derived?.passive_dns_count === 'number'
+          ? results.derived.passive_dns_count
+          : typeof results?.derived?.dns_resolutions === 'number'
+            ? results.derived.dns_resolutions
+          : passiveDnsEntries.length,
+      urls:
+        typeof results?.derived?.url_count === 'number'
+          ? results.derived.url_count
+          : Array.isArray(results?.url_list)
+            ? results.url_list.length
+            : urlEntries.length,
+      malware:
+        typeof results?.derived?.malware_count === 'number'
+          ? results.derived.malware_count
+          : typeof results?.malware?.count === 'number'
+          ? results.malware.count
+            : malwareEntries.length,
+    }),
+    [
+      malwareEntries.length,
+      passiveDnsEntries.length,
+      pulseEntries.length,
+      results?.derived?.dns_resolutions,
+      results?.derived?.passive_dns_count,
+      results?.derived?.malware_count,
+      results?.derived?.url_count,
+      results?.malware,
+      results?.pulse_info?.count,
+      results?.url_list,
+      urlEntries.length,
+    ]
+  );
 
-    return [
-      { label: '分类', value: classification },
-      { label: '地点', value: [toDisplayText(results.country, ''), toDisplayText(results.city, '')].filter(Boolean).join(' / ') || 'N/A' },
-      { label: 'ASN', value: activeSearchType === 'ip' ? `${toDisplayText(results.asn)} / ${getAsnOrganization(results)} / ${getCloudProvider(results)}` : 'N/A' },
-      { label: 'DNS Resolutions', value: dnsResolutions },
-      { label: 'Top Level Domains', value: results?.derived?.top_level_domains?.length > 0 ? results.derived.top_level_domains.join(', ') : passiveDnsState.status === 'not_supported' ? 'Not Supported' : 'N/A' },
-      { label: '标签', value: results?.derived?.tags?.length > 0 ? results.derived.tags.join(' / ') : unifiedTags.length > 0 ? unifiedTags.join(' / ') : 'N/A' },
-    ];
-  }, [activeSearchType, currentConfig.label, passiveDnsState.status, results, unifiedTags]);
+  const reverseDns = useMemo(() => toDisplayText(passiveDnsEntries[0]?.hostname, 'N/A'), [passiveDnsEntries]);
+  const dnsResolutions = useMemo(() => {
+    if (typeof results?.derived?.dns_resolutions === 'number') return `${results.derived.dns_resolutions} Domains`;
+    return passiveDnsEntries.length > 0 ? `${passiveDnsEntries.length} Domains` : passiveDnsState.status === 'not_supported' ? 'Not Supported' : '0';
+  }, [passiveDnsEntries.length, passiveDnsState.status, results?.derived?.dns_resolutions]);
 
-  const summaryColumns = useMemo(() => {
-    if (!results) return [];
+  const publishedDate = useMemo(
+    () => toDisplayText(pickFirstValue(results?.published, results?.published_date, results?.release_date, results?.__raw?.general?.published), 'N/A'),
+    [results]
+  );
 
-    const dnsResolutions = typeof results?.derived?.dns_resolutions === 'number' ? `${results.derived.dns_resolutions} 条` : '0';
-    const classification = activeSearchType === 'cve' ? 'Vulnerability Intelligence' : `${currentConfig.label} Intelligence`;
+  const resultTitle = submittedQuery || queryFromUrl;
+  const countryFlag = getCountryFlag(results?.country);
+  const locationDisplay = [toDisplayText(results?.country, ''), toDisplayText(results?.city, '')].filter(Boolean).join(' / ') || 'N/A';
+  const displayTags = results?.derived?.tags?.length > 0 ? results.derived.tags : unifiedTags;
+  const displayTlds = results?.derived?.top_level_domains?.length > 0 ? results.derived.top_level_domains : topLevelDomains;
+  const overviewLeft = [
+    { label: '分类', value: activeSearchType === 'cve' ? '漏洞情报' : `${currentConfig.label} 情报` },
+    { label: '反向解析', value: activeSearchType === 'cve' ? 'N/A' : reverseDns },
+    {
+      label: '地点',
+      value:
+        locationDisplay === 'N/A' ? (
+          'N/A'
+        ) : (
+          <span className="inline-flex items-center gap-2">
+            {countryFlag ? <span aria-hidden="true">{countryFlag}</span> : null}
+            <span>{locationDisplay}</span>
+          </span>
+        ),
+    },
+    { label: 'ASN', value: activeSearchType === 'ip' ? `${toDisplayText(results?.asn)} / ${getAsnOrganization(results)}` : 'N/A' },
+    { label: 'DNS 解析', value: dnsResolutions },
+    { label: '顶级域名', value: displayTlds.length > 0 ? displayTlds.join(', ') : passiveDnsState.status === 'not_supported' ? '暂不支持' : 'N/A' },
+    { label: '关联情报', value: counts.pulses > 0 ? `${counts.pulses} 条` : pulsesState.status === 'not_supported' ? '暂不支持' : '0' },
+    { label: '标签', value: displayTags.length > 0 ? displayTags.join(' / ') : 'N/A' },
+  ];
 
-    return [
-      { label: '分类', value: classification },
-      { label: '地点', value: [toDisplayText(results.country, ''), toDisplayText(results.city, '')].filter(Boolean).join(' / ') || 'N/A' },
-      { label: 'ASN', value: activeSearchType === 'ip' ? `${toDisplayText(results.asn)} / ${getAsnOrganization(results)} / ${getCloudProvider(results)}` : 'N/A' },
-      { label: 'DNS Resolutions', value: dnsResolutions },
-      { label: 'Top Level Domains', value: results?.derived?.top_level_domains?.length > 0 ? results.derived.top_level_domains.join(', ') : passiveDnsState.status === 'not_supported' ? 'Not Supported' : 'N/A' },
-      { label: '标签', value: results?.derived?.tags?.length > 0 ? results.derived.tags.join(' · ') : unifiedTags.length > 0 ? unifiedTags.join(' · ') : 'N/A' },
-    ];
-  }, [activeSearchType, currentConfig.label, results, topLevelDomains, unifiedTags]);
+  const overviewRight =
+    activeSearchType === 'ip'
+      ? [
+          {
+            label: '指标事实',
+            value: [
+              counts.pulses > 0 ? '历史情报轨迹' : null,
+              counts.passiveDns > 0 ? `累计 ${counts.passiveDns} 条 DNS 解析记录` : null,
+              displayTlds.length > 0 ? `${displayTlds.length} 个顶级域名` : null,
+              getCloudProvider(results) !== '非云厂商 / 未识别' ? getCloudProvider(results) : null,
+            ]
+              .filter(Boolean)
+              .join(' / ') || 'N/A',
+          },
+          { label: '杀软命名', value: getDetectionSummary(malwareEntries) },
+          { label: '引擎检出比', value: getDetectionRatio(malwareEntries) },
+          { label: '信誉评分', value: getRawReputation(results) },
+          { label: '外部资源', value: buildExternalResources('ip', results) },
+        ]
+      : activeSearchType === 'domain'
+        ? [
+            {
+              label: '指标事实',
+              value: [
+                counts.pulses > 0 ? '历史情报轨迹' : null,
+                counts.passiveDns > 0 ? `${counts.passiveDns} 条 DNS 解析记录` : null,
+                displayTlds.length > 0 ? `${displayTlds.length} 个顶级域名` : null,
+              ]
+                .filter(Boolean)
+                .join(' / ') || 'N/A',
+            },
+            {
+              label: 'WHOIS 摘要',
+              value: [
+                toDisplayText(results?.whois?.registrar, ''),
+                toDisplayText(results?.whois?.creation_date, ''),
+                toDisplayText(results?.whois?.expiration_date, ''),
+              ]
+                .filter(Boolean)
+                .join(' / ') || 'N/A',
+            },
+            { label: '杀软命名', value: getDetectionSummary(malwareEntries) },
+            { label: '外部资源', value: buildExternalResources('domain', results) },
+          ]
+        : activeSearchType === 'url'
+          ? [
+              {
+                label: '指标事实',
+                value: [
+                  counts.pulses > 0 ? '历史情报轨迹' : null,
+                  counts.urls > 0 ? `${counts.urls} 条关联 URL` : null,
+                  isDisplayableValue(results?.domain) ? `主机 ${toDisplayText(results?.domain)}` : null,
+                ]
+                  .filter(Boolean)
+                  .join(' / ') || 'N/A',
+              },
+              { label: 'HTTP / 安全浏览', value: urlEntries.length > 0 ? `${urlEntries.filter((record: any) => Array.isArray(record?.gsb) && record.gsb.length > 0).length} 条命中风险` : 'N/A' },
+              { label: '解析 IP / 主机', value: [toDisplayText(results?.ip, ''), toDisplayText(results?.domain, '')].filter(Boolean).join(' / ') || 'N/A' },
+              { label: '外部资源', value: buildExternalResources('url', results) },
+            ]
+          : [
+              { label: 'CVSS / 严重性', value: toDisplayText(results?.base_score) },
+              { label: '发布日期 / 更新时间', value: publishedDate },
+              { label: '关联情报', value: String(counts.pulses) },
+              { label: '外部资源', value: buildExternalResources('cve', results) },
+            ];
 
-  void summaryColumns;
+  const tabCounts = {
+    analysis: undefined,
+    'passive-dns': getSectionDisplayValue(results, 'passive_dns', counts.passiveDns),
+    pulses: getSectionDisplayValue(results, 'pulses', counts.pulses),
+    malware: getSectionDisplayValue(results, 'malware', counts.malware),
+    urls: getSectionDisplayValue(results, 'url_list', counts.urls),
+  } as const;
 
   const handleSubmit = (event?: React.FormEvent) => {
     event?.preventDefault();
@@ -471,7 +599,7 @@ const IocSearch = () => {
 
     const detectedType = detectSearchType(query);
     if (!detectedType) {
-      setError('请输入有效的 IP、域名、URL 或 CVE。');
+      setError('请输入有效的 IP、域名、URL 或 CVE 编号。');
       return;
     }
 
@@ -480,10 +608,10 @@ const IocSearch = () => {
   };
 
   const handleCopy = async () => {
-    if (!submittedQuery) return;
+    if (!resultTitle) return;
 
     try {
-      await navigator.clipboard.writeText(submittedQuery);
+      await navigator.clipboard.writeText(resultTitle);
       setCopied(true);
       window.setTimeout(() => setCopied(false), 1800);
     } catch {
@@ -491,7 +619,12 @@ const IocSearch = () => {
     }
   };
 
-  const heroPlaceholder = currentConfig.placeholder;
+  const handleTabChange = (tab: ResultTab) => {
+    setActiveTab(tab);
+    window.requestAnimationFrame(() => {
+      detailsSectionRef.current?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    });
+  };
 
   if (!showResults && !queryFromUrl) {
     return (
@@ -500,55 +633,35 @@ const IocSearch = () => {
           initial={{ opacity: 0, y: 24 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
-          className="relative overflow-hidden rounded-[40px] border border-white/8 bg-[linear-gradient(180deg,rgba(12,18,28,0.95),rgba(9,12,18,0.92))] px-6 py-12 sm:px-10 lg:px-14 lg:py-16"
+          className="relative overflow-hidden rounded-[38px] border border-white/8 bg-[linear-gradient(180deg,rgba(12,18,28,0.96),rgba(8,12,18,0.94))] px-6 py-12 sm:px-10 lg:px-14 lg:py-16"
         >
           <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_12%_18%,rgba(168,85,247,0.12),transparent_28%),radial-gradient(circle_at_88%_0%,rgba(168,85,247,0.08),transparent_26%),linear-gradient(90deg,transparent,rgba(255,255,255,0.02),transparent)]" />
-          <div className="relative mx-auto flex max-w-[980px] flex-col items-start gap-8">
+          <div className="relative mx-auto flex max-w-[1040px] flex-col items-start gap-8">
             <div className="space-y-4">
               <p className="text-[11px] uppercase tracking-[0.34em] text-accent/78">Threat Intelligence Search</p>
               <h1 className="max-w-[760px] text-4xl font-semibold tracking-[-0.08em] text-white sm:text-5xl lg:text-6xl">
-                用一个搜索框，直接进入 IOC 情报结果页。
+                用单一检索入口查看 IOC 的结构化情报脉络
               </h1>
-              <p className="max-w-[680px] text-sm leading-8 text-white/58 sm:text-base">
-                输入 IP、域名、URL 或 CVE。系统将自动识别目标类型，并进入新的结果视图展示结构化情报。
+              <p className="max-w-[700px] text-sm leading-8 text-white/58 sm:text-base">
+                支持 IP、域名、URL 与 CVE 查询。结果页会按分析概览、被动 DNS、关联情报、恶意样本和 URL 关联分层展示，阅读顺序参考主流情报平台的查询页。
               </p>
             </div>
 
             <form onSubmit={handleSubmit} className="w-full">
               <div className="grid gap-4 lg:grid-cols-[1fr_auto]">
-                <label className="group flex min-h-[86px] items-center gap-4 rounded-[28px] border border-white/10 bg-white/[0.03] px-6 transition-colors focus-within:border-accent/30">
+                <label className="group flex min-h-[84px] items-center gap-4 rounded-[26px] border border-white/10 bg-white/[0.03] px-6 transition-colors focus-within:border-accent/30">
                   <Search className="h-5 w-5 shrink-0 text-accent/82" />
-                  <input
-                    value={searchQuery}
-                    onChange={(event) => {
-                      const value = event.target.value;
-                      setSearchQuery(value);
-                      const detectedType = detectSearchType(value);
-                      if (detectedType) setActiveSearchType(detectedType);
-                    }}
-                    placeholder={heroPlaceholder}
-                    className="min-w-0 flex-1 bg-transparent text-lg text-white outline-none placeholder:text-white/26"
-                  />
-                  <span className="hidden rounded-full border border-white/10 px-3 py-1 text-[11px] uppercase tracking-[0.22em] text-white/45 md:inline-flex">
-                    {currentConfig.label}
-                  </span>
+                  <input value={searchQuery} onChange={(event) => { const value = event.target.value; setSearchQuery(value); const detectedType = detectSearchType(value); if (detectedType) setActiveSearchType(detectedType); }} placeholder={currentConfig.placeholder} className="min-w-0 flex-1 bg-transparent text-lg text-white outline-none placeholder:text-white/26" />
+                  <span className="hidden rounded-full border border-white/10 px-3 py-1 text-[11px] uppercase tracking-[0.22em] text-white/45 md:inline-flex">{currentConfig.label}</span>
                 </label>
-                <button
-                  type="submit"
-                  className="inline-flex min-h-[86px] items-center justify-center gap-3 rounded-[28px] bg-accent px-8 text-sm font-semibold text-white transition-colors hover:bg-accent/90"
-                >
+                <button type="submit" className="inline-flex min-h-[84px] items-center justify-center gap-3 rounded-[26px] bg-accent px-8 text-sm font-semibold text-white transition-colors hover:bg-accent/90">
                   开始检索
                   <ArrowRight className="h-4 w-4" />
                 </button>
               </div>
             </form>
 
-            {error && (
-              <div className="flex items-start gap-3 rounded-[22px] border border-red-500/18 bg-red-500/8 px-5 py-4 text-sm text-red-200">
-                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-                <span>{error}</span>
-              </div>
-            )}
+            {error ? <div className="flex items-start gap-3 rounded-[22px] border border-red-500/18 bg-red-500/8 px-5 py-4 text-sm text-red-200"><AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" /><span>{error}</span></div> : null}
           </div>
         </motion.section>
       </SearchShell>
@@ -558,200 +671,314 @@ const IocSearch = () => {
   return (
     <SearchShell>
       <div className="space-y-6">
-        <motion.section
-          initial={{ opacity: 0, y: 18 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.42, ease: [0.22, 1, 0.36, 1] }}
-          className="grid gap-5 xl:grid-cols-[360px_1fr]"
-        >
-          <div className="overflow-hidden rounded-[34px] border border-white/8 bg-[linear-gradient(180deg,rgba(15,20,29,0.96),rgba(10,13,19,0.94))] p-6">
-            <div className="flex items-start justify-between gap-4">
-              <div className="space-y-3">
-                <p className="text-[11px] uppercase tracking-[0.34em] text-white/38">Query</p>
-                <h2 className="break-all text-2xl font-semibold tracking-[-0.06em] text-white">{submittedQuery || queryFromUrl}</h2>
-                <p className="text-sm text-white/48">Overview</p>
+        <motion.section initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.42, ease: [0.22, 1, 0.36, 1] }} className="sticky top-3 z-20 pb-4">
+          <div className="overflow-hidden rounded-[26px] border border-white/8 bg-[linear-gradient(180deg,rgba(28,34,46,0.96),rgba(20,25,35,0.96))] shadow-[0_18px_50px_rgba(0,0,0,0.28)]">
+            <div className="flex flex-col gap-5 px-5 py-5 sm:px-6 lg:flex-row lg:items-center lg:justify-between lg:gap-8">
+              <div className="flex min-w-0 items-start justify-between gap-4 lg:flex-1">
+                <div className="min-w-0">
+                  <div className="inline-flex items-center gap-2 text-[11px] uppercase tracking-[0.24em] text-white/42">
+                    <Icon className="h-3.5 w-3.5 text-accent/82" />
+                    {currentConfig.label}
+                  </div>
+                  <div className="mt-2 flex flex-wrap items-center gap-3">
+                    <h2 className="break-all text-[1.9rem] font-semibold tracking-[-0.06em] text-white sm:text-[2.15rem]">{resultTitle}</h2>
+                    <button type="button" onClick={handleCopy} className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full border border-white/12 bg-white/[0.04] px-3 text-xs font-medium text-white/76 transition-colors hover:border-accent/25 hover:text-white">
+                      <Copy className="h-3.5 w-3.5" />
+                      {copied ? '已复制' : '复制'}
+                    </button>
+                  </div>
+                </div>
               </div>
-              <button
-                type="button"
-                onClick={handleCopy}
-                className="inline-flex h-11 items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-4 text-sm text-white/76 transition-colors hover:border-accent/25 hover:text-white"
-              >
-                <Copy className="h-4 w-4" />
-                {copied ? '已复制' : '复制'}
-              </button>
-            </div>
-          </div>
 
-          <form
-            onSubmit={handleSubmit}
-            className="overflow-hidden rounded-[34px] border border-white/8 bg-[linear-gradient(180deg,rgba(15,20,29,0.96),rgba(10,13,19,0.94))] p-4 sm:p-5"
-          >
-            <div className="flex min-h-[92px] items-center gap-4 rounded-[28px] border border-white/10 bg-white/[0.03] px-5">
-              <Search className="h-5 w-5 shrink-0 text-accent/82" />
-              <input
-                value={searchQuery}
-                onChange={(event) => {
-                  const value = event.target.value;
-                  setSearchQuery(value);
-                  const detectedType = detectSearchType(value);
-                  if (detectedType) setActiveSearchType(detectedType);
-                }}
-                placeholder={currentConfig.placeholder}
-                className="min-w-0 flex-1 bg-transparent text-base text-white outline-none placeholder:text-white/28 sm:text-lg"
-              />
-              <span className="hidden rounded-full border border-white/10 px-3 py-1 text-[11px] uppercase tracking-[0.22em] text-white/45 md:inline-flex">
-                {currentConfig.label}
-              </span>
-              <button
-                type="submit"
-                disabled={loading}
-                className="inline-flex h-12 shrink-0 items-center gap-2 rounded-full bg-accent px-5 text-sm font-semibold text-white transition-colors hover:bg-accent/90 disabled:opacity-70"
-              >
-                {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                搜索
-              </button>
+              <form onSubmit={handleSubmit} className="lg:w-auto lg:flex-none">
+                <div className="flex items-center gap-3 rounded-full border border-white/10 bg-[#f4f6fa]/6 px-3 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+                  <div className="flex min-w-0 items-center gap-3 rounded-full bg-[#1a202b] px-4 py-3 sm:min-w-[440px] lg:min-w-[520px]">
+                    <Search className="h-4.5 w-4.5 shrink-0 text-accent/90" />
+                    <input value={searchQuery} onChange={(event) => { const value = event.target.value; setSearchQuery(value); const detectedType = detectSearchType(value); if (detectedType) setActiveSearchType(detectedType); }} placeholder={currentConfig.placeholder} className="min-w-0 flex-1 bg-transparent text-sm text-white outline-none placeholder:text-white/28 sm:text-base" />
+                    <span className="hidden rounded-full border border-white/10 px-3 py-1 text-[10px] uppercase tracking-[0.22em] text-white/45 md:inline-flex">{currentConfig.label}</span>
+                  </div>
+                  <button type="submit" disabled={loading} className="inline-flex h-11 shrink-0 items-center gap-2 rounded-full bg-accent px-5 text-sm font-semibold text-white transition-colors hover:bg-accent/90 disabled:opacity-70">
+                    {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                    检索
+                  </button>
+                </div>
+              </form>
             </div>
-          </form>
+
+          </div>
         </motion.section>
 
-        {error && (
-          <div className="flex items-start gap-3 rounded-[22px] border border-red-500/18 bg-red-500/8 px-5 py-4 text-sm text-red-200">
-            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-            <span>{error}</span>
-          </div>
-        )}
+        {error ? <div className="flex items-start gap-3 rounded-[22px] border border-red-500/18 bg-red-500/8 px-5 py-4 text-sm text-red-200"><AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" /><span>{error}</span></div> : null}
 
-        {loading && !results ? (
-          <div className="flex min-h-[320px] items-center justify-center rounded-[36px] border border-white/8 bg-[#0d1219]/90">
-            <div className="flex items-center gap-3 text-sm text-white/62">
-              <Loader2 className="h-5 w-5 animate-spin text-accent" />
-              正在加载情报结果
-            </div>
-          </div>
-        ) : results ? (
+        {loading && !results ? <div className="flex min-h-[320px] items-center justify-center rounded-[28px] border border-white/8 bg-[#0d1219]/90"><div className="flex items-center gap-3 text-sm text-white/62"><Loader2 className="h-5 w-5 animate-spin text-accent" />正在加载情报结果</div></div> : null}
+        {results ? (
           <>
-            <motion.section
-              initial={{ opacity: 0, y: 16 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1], delay: 0.04 }}
-              className="overflow-hidden rounded-[36px] border border-white/8 bg-[linear-gradient(180deg,rgba(14,19,28,0.96),rgba(8,12,18,0.96))] px-6 py-6 sm:px-8"
-            >
-              <div className="flex flex-wrap gap-5">
-                <CountMetric label="Pulses" value={getSectionDisplayValue(results, 'pulses', pulseEntries.length)} highlight={pulsesState.status === 'success' && pulseEntries.length > 0} />
-                <CountMetric label="被动 DNS" value={getSectionDisplayValue(results, 'passive_dns', results.passive_dns?.length ?? 0)} highlight={passiveDnsState.status === 'success' && (results.passive_dns?.length ?? 0) > 0} />
-                <CountMetric label="URLs" value={getSectionDisplayValue(results, 'url_list', results.url_list?.length ?? 0)} highlight={urlListState.status === 'success' && (results.url_list?.length ?? 0) > 0} />
-                <CountMetric label="Malware" value={getSectionDisplayValue(results, 'malware', results.malware?.length ?? 0)} highlight={malwareState.status === 'success' && (results.malware?.length ?? 0) > 0} />
+            <motion.section initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1], delay: 0.04 }} className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+              <CountMetric label="情报" value={tabCounts.pulses} highlight={pulsesState.status === 'success' && counts.pulses > 0} active={activeTab === 'pulses'} />
+              <CountMetric label="被动 DNS" value={tabCounts['passive-dns']} highlight={passiveDnsState.status === 'success' && counts.passiveDns > 0} active={activeTab === 'passive-dns'} />
+              <CountMetric label="关联 URL" value={tabCounts.urls} highlight={urlListState.status === 'success' && counts.urls > 0} active={activeTab === 'urls'} />
+              <CountMetric label="恶意样本" value={tabCounts.malware} highlight={malwareState.status === 'success' && counts.malware > 0} active={activeTab === 'malware'} />
+            </motion.section>
+
+            <motion.section initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1], delay: 0.08 }} className="overflow-hidden rounded-[28px] border border-white/8 bg-[linear-gradient(180deg,rgba(17,22,31,0.98),rgba(10,14,20,0.98))]">
+              <div className="border-b border-white/8 px-6 py-5 sm:px-7">
+                <p className="text-[11px] uppercase tracking-[0.3em] text-white/38">分析概览</p>
+                <div className="mt-3">
+                  <div className="space-y-2">
+                    <h3 className="text-[1.95rem] font-semibold tracking-[-0.07em] text-white">分析概览</h3>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid gap-0 xl:grid-cols-[1fr_0.84fr]">
+                <div className="px-6 py-5 sm:px-7">{overviewLeft.map((item) => <SummaryRow key={item.label} label={item.label} value={item.value} />)}</div>
+                <div className="border-t border-white/8 px-6 py-5 xl:border-l xl:border-t-0 sm:px-7">{overviewRight.map((item) => <SummaryRow key={item.label} label={item.label} value={item.value} />)}</div>
               </div>
             </motion.section>
 
-            <motion.section
-              initial={{ opacity: 0, y: 16 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1], delay: 0.08 }}
-              className="overflow-hidden rounded-[36px] border border-white/8 bg-[linear-gradient(180deg,rgba(14,19,28,0.96),rgba(8,12,18,0.96))] px-6 py-6 sm:px-8"
-            >
-              <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <p className="text-[11px] uppercase tracking-[0.34em] text-white/38">Analysis Overview</p>
-                  <h3 className="mt-2 text-2xl font-semibold tracking-[-0.06em] text-white">分析概述</h3>
-                </div>
-                <div className="rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-xs text-white/56">
-                  Reputation: <span className="text-white/86">{getRawReputation(results)}</span>
+            <motion.section initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1], delay: 0.12 }} className="overflow-hidden rounded-[28px] border border-white/8 bg-[linear-gradient(180deg,rgba(14,19,28,0.96),rgba(8,12,18,0.96))]">
+              <div className="border-b border-white/8 px-6 pt-6 sm:px-7">
+                <div className="flex flex-wrap gap-5 overflow-x-auto">
+                  <ResultTabButton label="分析" active={activeTab === 'analysis'} onClick={() => handleTabChange('analysis')} />
+                  <ResultTabButton label="被动 DNS" count={tabCounts['passive-dns']} active={activeTab === 'passive-dns'} onClick={() => handleTabChange('passive-dns')} />
+                  <ResultTabButton label="关联情报" count={tabCounts.pulses} active={activeTab === 'pulses'} onClick={() => handleTabChange('pulses')} />
+                  <ResultTabButton label="恶意样本" count={tabCounts.malware} active={activeTab === 'malware'} onClick={() => handleTabChange('malware')} />
+                  <ResultTabButton label="关联 URL" count={tabCounts.urls} active={activeTab === 'urls'} onClick={() => handleTabChange('urls')} />
                 </div>
               </div>
 
-              <div className="grid gap-x-10 gap-y-3 xl:grid-cols-2">
-                {displaySummaryColumns.map((item) => (
-                  <SummaryColumn key={item.label} label={item.label} value={item.value} />
-                ))}
-              </div>
-            </motion.section>
-
-            <motion.section
-              initial={{ opacity: 0, y: 16 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1], delay: 0.12 }}
-              className="grid gap-6 xl:grid-cols-[0.94fr_1.06fr]"
-            >
-              <div className="overflow-hidden rounded-[36px] border border-white/8 bg-[linear-gradient(180deg,rgba(14,19,28,0.96),rgba(8,12,18,0.96))]">
-                <div className="border-b border-white/8 px-6 py-5 sm:px-8">
-                  <p className="text-[11px] uppercase tracking-[0.34em] text-white/38">Passive DNS</p>
-                  <h3 className="mt-2 text-2xl font-semibold tracking-[-0.06em] text-white">被动 DNS</h3>
-                </div>
-                <div className="max-h-[920px] overflow-auto px-6 py-5 sm:px-8">
-                  {results.passive_dns?.length > 0 ? (
-                    <div className="space-y-3">
-                      {results.passive_dns.map((record: any, index: number) => (
-                        <div key={`${record?.hostname || 'pdns'}-${index}`} className="grid gap-3 border-b border-white/6 py-4 last:border-b-0">
-                          <div className="text-sm font-semibold text-white/88">{toDisplayText(record?.hostname)}</div>
-                          <div className="grid gap-2 text-sm text-white/58 sm:grid-cols-3">
-                            <span>Type: {toDisplayText(record?.type)}</span>
-                            <span>First Seen: {toDisplayText(record?.first)}</span>
-                            <span>Last Seen: {toDisplayText(record?.last)}</span>
+              <div ref={detailsSectionRef as React.RefObject<HTMLDivElement>} className="px-6 py-6 sm:px-7">
+                {activeTab === 'analysis' ? (
+                  <div className="space-y-6">
+                    <Panel title="被动 DNS" subtitle="分析">
+                      {passiveDnsEntries.length > 0 ? (
+                        <div className="overflow-hidden rounded-[22px] border border-white/8">
+                          <div className="hidden grid-cols-[1.5fr_110px_1.1fr_1fr_1fr_1.1fr_0.9fr] gap-4 border-b border-white/8 bg-white/[0.02] px-4 py-3 text-[11px] uppercase tracking-[0.18em] text-white/38 xl:grid">
+                            <span>主机名</span><span>类型</span><span>地址</span><span>首次发现</span><span>最近出现</span><span>ASN</span><span>国家/地区</span>
+                          </div>
+                          <div className="divide-y divide-white/6">
+                            {passiveDnsEntries.slice(0, 8).map((record: any, index: number) => (
+                              <div key={`${record?.hostname || 'analysis-pdns'}-${index}`} className="px-4 py-4">
+                                <div className="hidden grid-cols-[1.5fr_110px_1.1fr_1fr_1fr_1.1fr_0.9fr] gap-4 xl:grid">
+                                  <span className="break-all text-sm text-accent">{toDisplayText(record?.hostname)}</span>
+                                  <span className="text-sm text-white/72">{toDisplayText(record?.type || record?.record_type)}</span>
+                                  <span className="break-all text-sm text-white/72">{toDisplayText(record?.address || results?.indicator)}</span>
+                                  <span className="text-sm text-white/56">{toDisplayText(record?.first)}</span>
+                                  <span className="text-sm text-white/56">{toDisplayText(record?.last)}</span>
+                                  <span className="text-sm text-white/72">{toDisplayText(record?.asn)}</span>
+                                  <span className="text-sm text-white/72">{toDisplayText(record?.country || record?.country_name || record?.flag_title)}</span>
+                                </div>
+                                <div className="grid gap-2 xl:hidden">
+                                  <div className="break-all text-sm font-medium text-accent">{toDisplayText(record?.hostname)}</div>
+                                  <div className="grid gap-2 text-sm text-white/58 sm:grid-cols-2">
+                                    <span>类型：{toDisplayText(record?.type || record?.record_type)}</span>
+                                    <span>地址：{toDisplayText(record?.address || results?.indicator)}</span>
+                                    <span>首次发现：{toDisplayText(record?.first)}</span>
+                                    <span>最近出现：{toDisplayText(record?.last)}</span>
+                                    <span>ASN：{toDisplayText(record?.asn)}</span>
+                                    <span>国家/地区：{toDisplayText(record?.country || record?.country_name || record?.flag_title)}</span>
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
                           </div>
                         </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="rounded-[24px] border border-dashed border-white/10 px-5 py-8 text-sm text-white/52">
-                      {passiveDnsState.message}
-                    </div>
-                  )}
-                </div>
-              </div>
+                      ) : <div className="rounded-[22px] border border-dashed border-white/10 px-5 py-8 text-sm text-white/52">{getSectionListMessage(passiveDnsState, counts.passiveDns, '被动 DNS 记录')}</div>}
+                    </Panel>
 
-              <div className="overflow-hidden rounded-[36px] border border-white/8 bg-[linear-gradient(180deg,rgba(14,19,28,0.96),rgba(8,12,18,0.96))]">
-                <div className="border-b border-white/8 px-6 py-5 sm:px-8">
-                  <p className="text-[11px] uppercase tracking-[0.34em] text-white/38">Pulses</p>
-                  <h3 className="mt-2 text-2xl font-semibold tracking-[-0.06em] text-white">关联情报详细</h3>
-                </div>
-                <div className="max-h-[920px] overflow-auto px-6 py-5 sm:px-8">
-                  {pulseEntries.length > 0 ? (
+                    <Panel title="关联 URL" subtitle="URL">
+                      {urlEntries.length > 0 ? (
+                        <div className="overflow-hidden rounded-[22px] border border-white/8">
+                          <div className="hidden grid-cols-[120px_1.8fr_1.35fr_120px_110px_130px] gap-4 border-b border-white/8 bg-white/[0.02] px-4 py-3 text-[11px] uppercase tracking-[0.18em] text-white/38 xl:grid">
+                            <span>检测日期</span><span>URL</span><span>主机名</span><span>响应码</span><span>IP</span><span>安全浏览</span>
+                          </div>
+                          <div className="divide-y divide-white/6">
+                            {urlEntries.map((record: any, index: number) => (
+                              <div key={`${record?.url || record?.hostname || 'analysis-url'}-${index}`} className="px-4 py-4">
+                                <div className="hidden grid-cols-[120px_1.8fr_1.35fr_120px_110px_130px] gap-4 xl:grid">
+                                  <span className="text-sm text-white/56">{toDisplayText(record?.date)}</span>
+                                  <span className="break-all text-sm text-accent">{toDisplayText(record?.url || record?.indicator)}</span>
+                                  <span className="break-all text-sm text-white/72">{toDisplayText(record?.hostname)}</span>
+                                  <span className="text-sm text-white/72">{toDisplayText(record?.httpcode || record?.result?.urlworker?.http_code, 'N/A')}</span>
+                                  <span className="text-sm text-white/72">{toDisplayText(record?.ip || record?.result?.urlworker?.ip)}</span>
+                                  <span className="text-sm text-white/56">{Array.isArray(record?.gsb) && record.gsb.length > 0 ? '已命中' : '未命中'}</span>
+                                </div>
+                                <div className="grid gap-2 xl:hidden">
+                                  <div className="break-all text-sm font-medium text-accent">{toDisplayText(record?.url || record?.indicator)}</div>
+                                  <div className="grid gap-2 text-sm text-white/58 sm:grid-cols-2">
+                                    <span>日期：{toDisplayText(record?.date)}</span>
+                                    <span>主机名：{toDisplayText(record?.hostname)}</span>
+                                    <span>响应码：{toDisplayText(record?.httpcode || record?.result?.urlworker?.http_code, 'N/A')}</span>
+                                    <span>IP：{toDisplayText(record?.ip || record?.result?.urlworker?.ip)}</span>
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ) : <div className="rounded-[22px] border border-dashed border-white/10 px-5 py-8 text-sm text-white/52">{getSectionListMessage(urlListState, counts.urls, '关联 URL')}</div>}
+                    </Panel>
+
+                    <Panel title="关联文件" subtitle="文件">
+                      {malwareEntries.length > 0 ? (
+                        <div className="overflow-hidden rounded-[22px] border border-white/8">
+                          <div className="hidden grid-cols-[120px_1.9fr_1fr_1fr_1.2fr] gap-4 border-b border-white/8 bg-white/[0.02] px-4 py-3 text-[11px] uppercase tracking-[0.18em] text-white/38 xl:grid">
+                            <span>日期</span><span>哈希</span><span>Avast</span><span>AVG</span><span>ClamAV / 微软防护</span>
+                          </div>
+                          <div className="divide-y divide-white/6">
+                            {malwareEntries.map((record: any, index: number) => {
+                              const primaryHash = toDisplayText(record?.sha256 || record?.hash || record?.sha1 || record?.md5, 'N/A');
+                              return (
+                                <div key={`${record?.sha256 || record?.hash || record?.md5 || 'analysis-malware'}-${index}`} className="px-4 py-4">
+                                  <div className="hidden grid-cols-[120px_1.9fr_1fr_1fr_1.2fr] gap-4 xl:grid">
+                                    <span className="text-sm text-white/56">{toDisplayText(record?.date)}</span>
+                                    <span className="break-all text-sm text-accent">{primaryHash}</span>
+                                    <span className="text-sm text-white/72">{toDisplayText(record?.detections?.avast, 'N/A')}</span>
+                                    <span className="text-sm text-white/72">{toDisplayText(record?.detections?.avg, 'N/A')}</span>
+                                    <span className="text-sm text-white/72">{[record?.detections?.clamav, record?.detections?.msdefender].filter(Boolean).join(' / ') || 'N/A'}</span>
+                                  </div>
+                                  <div className="grid gap-2 xl:hidden">
+                                    <div className="break-all text-sm font-medium text-accent">{primaryHash}</div>
+                                    <div className="grid gap-2 text-sm text-white/58 sm:grid-cols-2">
+                                      <span>日期：{toDisplayText(record?.date)}</span>
+                                      <span>Avast：{toDisplayText(record?.detections?.avast, 'N/A')}</span>
+                                      <span>AVG：{toDisplayText(record?.detections?.avg, 'N/A')}</span>
+                                      <span>ClamAV / Defender：{[record?.detections?.clamav, record?.detections?.msdefender].filter(Boolean).join(' / ') || 'N/A'}</span>
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ) : <div className="rounded-[22px] border border-dashed border-white/10 px-5 py-8 text-sm text-white/52">{getSectionListMessage(malwareState, counts.malware, '恶意样本')}</div>}
+                    </Panel>
+
+                    <Panel title="HTTP 扫描" subtitle="HTTP 扫描">
+                      {httpScanEntries.length > 0 ? (
+                        <div className="overflow-hidden rounded-[22px] border border-white/8">
+                          <div className="hidden grid-cols-[180px_1fr] gap-4 border-b border-white/8 bg-white/[0.02] px-4 py-3 text-[11px] uppercase tracking-[0.18em] text-white/38 xl:grid">
+                            <span>记录项</span><span>内容</span>
+                          </div>
+                          <div className="divide-y divide-white/6">
+                            {httpScanEntries.map((record: any, index: number) => (
+                              <div key={`${record?.key || record?.name || 'http-scan'}-${index}`} className="px-4 py-4">
+                                <div className="hidden grid-cols-[180px_1fr] gap-4 xl:grid">
+                                  <span className="text-sm text-white/72">{toDisplayText(record?.name || record?.key, '未命名扫描项')}</span>
+                                  <span className="text-sm leading-6 text-white/56">{toDisplayText(record?.value, 'N/A')}</span>
+                                </div>
+                                <div className="grid gap-2 xl:hidden">
+                                  <div className="text-sm font-medium text-white/84">{toDisplayText(record?.name || record?.key, '未命名扫描项')}</div>
+                                  <div className="text-sm leading-6 text-white/56">{toDisplayText(record?.value, 'N/A')}</div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ) : <div className="rounded-[22px] border border-dashed border-white/10 px-5 py-8 text-sm text-white/52">{getSectionListMessage(httpScansState, results?.derived?.http_scan_count ?? httpScanEntries.length, 'HTTP 扫描记录')}</div>}
+                    </Panel>
+                  </div>
+                ) : null}
+                {activeTab === 'passive-dns' ? (
+                  passiveDnsEntries.length > 0 ? (
+                    <div className="overflow-hidden rounded-[22px] border border-white/8">
+                      <div className="hidden grid-cols-[120px_1.4fr_120px_1.1fr_1fr_1fr_1.2fr_0.9fr] gap-4 border-b border-white/8 bg-white/[0.02] px-4 py-3 text-[11px] uppercase tracking-[0.18em] text-white/38 xl:grid">
+                        <span>状态</span><span>主机名</span><span>类型</span><span>地址</span><span>首次发现</span><span>最近出现</span><span>ASN</span><span>国家/地区</span>
+                      </div>
+                      <div className="divide-y divide-white/6">
+                        {passiveDnsEntries.map((record: any, index: number) => (
+                          <div key={`${record?.hostname || 'pdns'}-${index}`} className="px-4 py-4">
+                            <div className="hidden grid-cols-[120px_1.4fr_120px_1.1fr_1fr_1fr_1.2fr_0.9fr] gap-4 xl:grid">
+                              <span className="text-sm text-white/56">{toDisplayText(record?.status, '未知')}</span>
+                              <span className="break-all text-sm text-accent">{toDisplayText(record?.hostname)}</span>
+                              <span className="text-sm text-white/72">{toDisplayText(record?.type)}</span>
+                              <span className="break-all text-sm text-white/72">{toDisplayText(record?.address || record?.indicator || results?.indicator)}</span>
+                              <span className="text-sm text-white/56">{toDisplayText(record?.first)}</span>
+                              <span className="text-sm text-white/56">{toDisplayText(record?.last)}</span>
+                              <span className="text-sm text-white/72">{toDisplayText(record?.asn)}</span>
+                              <span className="text-sm text-white/72">{toDisplayText(record?.country || record?.country_name)}</span>
+                            </div>
+                            <div className="grid gap-2 xl:hidden">
+                              <div className="flex items-center justify-between gap-3"><div className="break-all text-sm font-medium text-accent">{toDisplayText(record?.hostname)}</div><span className="text-xs uppercase tracking-[0.18em] text-white/42">{toDisplayText(record?.status, '未知')}</span></div>
+                              <div className="grid gap-2 text-sm text-white/58 sm:grid-cols-2">
+                                <span>类型：{toDisplayText(record?.type)}</span>
+                                <span>地址：{toDisplayText(record?.address || record?.indicator || results?.indicator)}</span>
+                                <span>首次发现：{toDisplayText(record?.first)}</span>
+                                <span>最近出现：{toDisplayText(record?.last)}</span>
+                                <span>ASN：{toDisplayText(record?.asn)}</span>
+                                <span>国家/地区：{toDisplayText(record?.country || record?.country_name)}</span>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : <div className="rounded-[22px] border border-dashed border-white/10 px-5 py-8 text-sm text-white/52">{getSectionListMessage(passiveDnsState, counts.passiveDns, '被动 DNS 记录')}</div>
+                ) : null}
+
+                {activeTab === 'pulses' ? (
+                  pulseEntries.length > 0 ? (
                     <div className="space-y-5">
                       {pulseEntries.map((pulse: any, index: number) => {
                         const tags = Array.isArray(pulse?.tags) ? pulse.tags.filter((tag: any) => isDisplayableValue(tag)) : [];
-
                         return (
-                          <article key={`${pulse?.id || pulse?.name || 'pulse'}-${index}`} className="border-b border-white/6 pb-5 last:border-b-0 last:pb-0">
-                            <div className="flex flex-wrap items-start justify-between gap-3">
+                          <article key={`${pulse?.id || pulse?.name || 'pulse'}-${index}`} className="rounded-[22px] border border-white/8 bg-white/[0.025] p-5">
+                            <div className="flex flex-wrap items-start justify-between gap-4">
                               <div className="min-w-0 flex-1">
-                                <h4 className="text-lg font-semibold tracking-[-0.04em] text-white">
-                                  {toDisplayText(pulse?.name, '未命名情报')}
-                                </h4>
-                                <p className="mt-3 text-sm leading-7 text-white/66">
-                                  {toDisplayText(pulse?.description, '暂无描述')}
-                                </p>
+                                <h4 className="text-lg font-semibold tracking-[-0.04em] text-white">{toDisplayText(pulse?.name, '未命名情报')}</h4>
+                                <p className="mt-3 text-sm leading-7 text-white/64">{toDisplayText(pulse?.description, '暂无描述')}</p>
                               </div>
-                              <span className="rounded-full border border-white/10 px-3 py-1 text-[11px] uppercase tracking-[0.22em] text-white/50">
-                                {toDisplayText(pulse?.TLP, 'TLP N/A')}
-                              </span>
+                              <span className="rounded-full border border-white/10 px-3 py-1 text-[11px] uppercase tracking-[0.22em] text-white/50">{toDisplayText(pulse?.TLP, 'TLP 未知')}</span>
                             </div>
-
-                            <div className="mt-4 grid gap-3 text-sm text-white/58 sm:grid-cols-3">
-                              <span>Author: {toDisplayText(pulse?.author?.username || pulse?.author_name, '未知来源')}</span>
-                              <span>Modified: {formatDisplayDate(pulse?.modified)}</span>
-                              <span>Indicators: {toDisplayText(pulse?.indicator_count)}</span>
+                            <div className="mt-4 grid gap-3 text-sm text-white/58 md:grid-cols-3">
+                              <span>作者：{toDisplayText(pulse?.author?.username || pulse?.author_name, '未知来源')}</span>
+                              <span>更新时间：{formatDisplayDate(pulse?.modified)}</span>
+                              <span>指标数量：{toDisplayText(pulse?.indicator_count)}</span>
                             </div>
-
-                            {tags.length > 0 && (
-                              <div className="mt-4 flex flex-wrap gap-2">
-                                {tags.map((tag: string, tagIndex: number) => (
-                                  <span key={`${tag}-${tagIndex}`} className="rounded-full border border-accent/15 bg-accent/10 px-3 py-1 text-xs text-accent">
-                                    {tag}
-                                  </span>
-                                ))}
-                              </div>
-                            )}
+                            {tags.length > 0 ? <div className="mt-4 flex flex-wrap gap-2">{tags.map((tag: string, tagIndex: number) => <span key={`${tag}-${tagIndex}`} className="rounded-full border border-accent/15 bg-accent/10 px-3 py-1 text-xs text-accent">{tag}</span>)}</div> : null}
                           </article>
                         );
                       })}
                     </div>
-                  ) : (
-                    <div className="rounded-[24px] border border-dashed border-white/10 px-5 py-8 text-sm text-white/52">
-                      {pulsesState.message}
+                  ) : <div className="rounded-[22px] border border-dashed border-white/10 px-5 py-8 text-sm text-white/52">{pulsesState.message}</div>
+                ) : null}
+
+                {activeTab === 'malware' ? (
+                  malwareEntries.length > 0 ? (
+                    <div className="space-y-4">
+                      {malwareEntries.map((record: any, index: number) => {
+                        const primaryHash = toDisplayText(record?.sha256 || record?.hash || record?.sha1 || record?.md5, 'N/A');
+                        return (
+                        <div key={`${record?.sha256 || record?.hash || record?.md5 || record?.name || 'malware'}-${index}`} className="rounded-[22px] border border-white/8 bg-white/[0.025] p-5">
+                          <div className="text-base font-semibold text-white/88">{toDisplayText(record?.name || record?.family || record?.hash, '未命名样本')}</div>
+                          <div className="mt-4 grid gap-3 text-sm text-white/58 md:grid-cols-3">
+                            <span>家族：{toDisplayText(record?.family)}</span>
+                            <span>哈希：{primaryHash}</span>
+                            <span>日期：{toDisplayText(record?.date)}</span>
+                          </div>
+                          {record?.detections ? <div className="mt-4 text-sm text-white/52">检出结果：{Object.entries(record.detections).filter(([, value]) => Boolean(value)).map(([engine, value]) => `${engine}: ${value}`).join(' · ') || 'N/A'}</div> : null}
+                        </div>
+                      )})}
                     </div>
-                  )}
-                </div>
+                  ) : <div className="rounded-[22px] border border-dashed border-white/10 px-5 py-8 text-sm text-white/52">{getSectionListMessage(malwareState, counts.malware, '恶意样本')}</div>
+                ) : null}
+
+                {activeTab === 'urls' ? (
+                  urlEntries.length > 0 ? (
+                    <div className="space-y-4">
+                      {urlEntries.map((record: any, index: number) => (
+                        <div key={`${record?.url || record?.hostname || 'url'}-${index}`} className="rounded-[22px] border border-white/8 bg-white/[0.025] p-5">
+                          <div className="break-all text-sm font-semibold text-accent">{toDisplayText(record?.url || record?.hostname || record?.indicator)}</div>
+                          <div className="mt-4 grid gap-3 text-sm text-white/58 md:grid-cols-3">
+                            <span>域名：{toDisplayText(record?.domain)}</span>
+                            <span>主机名：{toDisplayText(record?.hostname)}</span>
+                            <span>IP：{toDisplayText(record?.ip)}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : <div className="rounded-[22px] border border-dashed border-white/10 px-5 py-8 text-sm text-white/52">{getSectionListMessage(urlListState, counts.urls, '关联 URL')}</div>
+                ) : null}
               </div>
             </motion.section>
           </>

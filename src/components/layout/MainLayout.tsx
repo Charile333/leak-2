@@ -16,6 +16,7 @@ const PANEL_EASE = [0.22, 1, 0.36, 1] as const;
 const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
   const location = useLocation();
   const shouldReduceMotion = useReducedMotion();
+  const shouldHideDesktopHeader = location.pathname === '/dns';
   const [isPinned, setIsPinned] = React.useState(() => {
     const saved = localStorage.getItem('sidebarPinned');
     return saved ? JSON.parse(saved) : false;
@@ -145,7 +146,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
           </motion.div>
         )}
 
-        <Header />
+        {!shouldHideDesktopHeader ? <Header /> : null}
         <main className="flex-1 overflow-y-auto px-4 pb-6 pt-4 sm:px-6 sm:pb-8 lg:p-8">
           <AnimatePresence mode="wait">
             <motion.div

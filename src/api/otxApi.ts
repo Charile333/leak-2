@@ -55,11 +55,12 @@ const requestOtx = async (endpoint: string, retryCount = 0): Promise<any> => {
 };
 
 export const otxApi = {
-  searchIntel: async (query: string, type: 'ip' | 'domain' | 'url' | 'cve') => {
+  searchIntel: async (query: string, type: 'ip' | 'domain' | 'url' | 'cve', options?: { noCache?: boolean }) => {
     const response = await otxAxios.get('/search', {
       params: {
         query,
         type,
+        ...(options?.noCache ? { noCache: '1' } : {}),
       },
     });
 

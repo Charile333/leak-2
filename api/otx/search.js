@@ -23,6 +23,7 @@ export default async function handler(req, res) {
   try {
     const type = String(req.query.type || '').trim().toLowerCase();
     const query = String(req.query.query || '').trim();
+    const noCache = String(req.query.noCache || '').trim().toLowerCase() === '1';
 
     if (!query || !['ip', 'domain', 'url', 'cve'].includes(type)) {
       return sendJson(res, 400, {
@@ -31,7 +32,7 @@ export default async function handler(req, res) {
       });
     }
 
-    const cached = getCachedOtxSearch(type, query);
+    const cached = noCache ? null : getCachedOtxSearch(type, query);
     if (cached) {
       return sendJson(res, 200, {
         source: 'intel',
@@ -46,6 +47,7 @@ export default async function handler(req, res) {
     return sendJson(res, 200, {
       source: 'intel',
       cached: false,
+      noCache,
       data,
     });
   } catch (error) {
