@@ -326,12 +326,12 @@ const toDisplayText = (value, fallback = 'N/A') => {
 
 const formatSeverityLabel = (severity) => {
   const normalized = String(severity || '').toLowerCase();
-  if (normalized === 'critical') return '涓ラ噸';
-  if (normalized === 'high') return '楂樺嵄';
-  if (normalized === 'medium') return '涓嵄';
-  if (normalized === 'low') return '浣庡嵄';
-  if (normalized === 'safe') return '瀹夊叏';
-  return toDisplayText(severity, '鏈煡');
+  if (normalized === 'critical') return '严重';
+  if (normalized === 'high') return '高危';
+  if (normalized === 'medium') return '中危';
+  if (normalized === 'low') return '低危';
+  if (normalized === 'safe') return '安全';
+  return toDisplayText(severity, '未知');
 };
 
 const buildRobotSummary = (eventName, payload) => {
