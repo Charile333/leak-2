@@ -5,10 +5,6 @@
       "destination": "/api/otx/search.js"
     },
     {
-      "source": "/api/otx/cve-feed",
-      "destination": "/api/otx/cve-feed.js"
-    },
-    {
       "source": "/api/code-leak/search",
       "destination": "/api/code-leak/search.js"
     },

@@ -100,7 +100,7 @@ export const monitorService = {
   },
 
   async getCvePreview(): Promise<CveIntelPreviewItem[]> {
-    const payload = await requestJson<{ items?: CveIntelPreviewItem[] }>('/api/otx/cve-feed?limit=6&window=7d');
+    const payload = await requestJson<{ items?: CveIntelPreviewItem[] }>('/api/otx/search?mode=cve-feed&limit=6&window=7d');
     return Array.isArray(payload.items) ? payload.items : [];
   },
 };

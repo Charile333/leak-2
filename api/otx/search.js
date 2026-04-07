@@ -1,10 +1,43 @@
 import {
   applyCors,
+  buildLatestCveIntelFeed,
   buildStructuredOtxResult,
   getCachedOtxSearch,
   sendJson,
   setCachedOtxSearch,
 } from '../_lib/intel.js';
+import { getCveIntelUserEmail, listCveIntelAssets } from '../_lib/cve-intel-assets.js';
+
+const normalizeForMatch = (value) =>
+  String(value || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9.+#/_-]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+const buildCveHaystack = (item) =>
+  normalizeForMatch([
+    item?.cveId,
+    item?.title,
+    item?.summary,
+    item?.cwe,
+    ...(Array.isArray(item?.tags) ? item.tags : []),
+    ...(Array.isArray(item?.references) ? item.references : []),
+    ...(Array.isArray(item?.sourceTags) ? item.sourceTags : []),
+  ].join(' '));
+
+const filterItemsByAssets = (items, assets) => {
+  if (!Array.isArray(assets) || assets.length === 0) return items;
+
+  return items.filter((item) => {
+    const haystack = buildCveHaystack(item);
+    return assets.some((asset) => {
+      if (!asset || asset.enabled === false) return false;
+      const needle = normalizeForMatch(asset.value);
+      return needle.length >= 2 && haystack.includes(needle);
+    });
+  });
+};
 
 export default async function handler(req, res) {
   applyCors(res);
@@ -21,6 +54,36 @@ export default async function handler(req, res) {
   }
 
   try {
+    const mode = String(req.query.mode || '').trim().toLowerCase();
+
+    if (mode === 'cve-feed') {
+      const limit = Number(req.query.limit) || 12;
+      const window = String(req.query.window || '7d');
+      const noCache = String(req.query.noCache || '').trim().toLowerCase() === '1';
+      const userEmail = getCveIntelUserEmail(req);
+
+      const data = await buildLatestCveIntelFeed({
+        limit,
+        window,
+        noCache,
+      });
+
+      const assets = userEmail ? await listCveIntelAssets(userEmail) : [];
+      const filteredItems = filterItemsByAssets(Array.isArray(data.items) ? data.items : [], assets);
+
+      return sendJson(res, 200, {
+        success: true,
+        ...data,
+        items: filteredItems,
+        meta: {
+          ...(data.meta || {}),
+          matchedAssetCount: Array.isArray(assets) ? assets.length : 0,
+          totalSignals: filteredItems.length,
+          recommendedCount: filteredItems.filter((item) => item.pushRecommended).length,
+        },
+      });
+    }
+
     const type = String(req.query.type || '').trim().toLowerCase();
     const query = String(req.query.query || '').trim();
     const noCache = String(req.query.noCache || '').trim().toLowerCase() === '1';
