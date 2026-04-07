@@ -9,6 +9,7 @@ type SearchType = 'ip' | 'domain' | 'url' | 'cve';
 type ResultTab = 'analysis' | 'passive-dns' | 'pulses' | 'malware' | 'urls';
 type SectionKey = 'pulses' | 'passive_dns' | 'url_list' | 'malware' | 'http_scans';
 type LoadableSectionKey = 'passive_dns' | 'url_list' | 'malware';
+type SectionLoadStatus = 'idle' | 'loading' | 'ready' | 'error' | 'not_supported';
 
 type SearchConfig = {
   label: string;
@@ -338,6 +339,23 @@ const getSectionListMessage = (state: { status?: string; message?: string }, cou
   return state.message;
 };
 
+const getSupportedLoadableSections = (type: SearchType): LoadableSectionKey[] => {
+  if (type === 'ip' || type === 'domain') return ['passive_dns', 'url_list', 'malware'];
+  if (type === 'url') return ['url_list'];
+  return [];
+};
+
+const createSectionStatusMap = (type: SearchType, status: SectionLoadStatus): Record<LoadableSectionKey, SectionLoadStatus> => ({
+  passive_dns: getSupportedLoadableSections(type).includes('passive_dns') ? status : 'not_supported',
+  url_list: getSupportedLoadableSections(type).includes('url_list') ? status : 'not_supported',
+  malware: getSupportedLoadableSections(type).includes('malware') ? status : 'not_supported',
+});
+
+const getTotalPages = (total: number, pageSize: number) => {
+  if (!total || total <= 0) return 1;
+  return Math.max(1, Math.ceil(total / pageSize));
+};
+
 const SearchShell = ({ children }: { children: React.ReactNode }) => (
   <div className="min-h-[calc(100vh-4rem)] bg-[radial-gradient(circle_at_top,rgba(168,85,247,0.08),transparent_36%),linear-gradient(180deg,rgba(255,255,255,0.02),transparent_18%)]">
     <div className="mx-auto max-w-[1480px] px-5 py-8 sm:px-8 lg:px-12">{children}</div>
@@ -382,6 +400,61 @@ const SectionLoadingState = ({ label }: { label: string }) => (
   </div>
 );
 
+const PaginationControls = ({
+  currentPage,
+  totalPages,
+  onChange,
+  loading = false,
+}: {
+  currentPage: number;
+  totalPages: number;
+  onChange: (page: number) => void;
+  loading?: boolean;
+}) => {
+  if (totalPages <= 1 && !loading) return null;
+
+  const pages = Array.from({ length: Math.min(totalPages, 5) }, (_, index) => {
+    const start = Math.max(1, Math.min(currentPage - 2, totalPages - 4));
+    return start + index;
+  }).filter((page) => page >= 1 && page <= totalPages);
+
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <button
+        type="button"
+        onClick={() => onChange(Math.max(1, currentPage - 1))}
+        disabled={currentPage <= 1 || loading}
+        className="rounded-full border border-white/10 px-3 py-1.5 text-xs text-white/70 disabled:opacity-40"
+      >
+        上一页
+      </button>
+      {pages.map((page) => (
+        <button
+          key={page}
+          type="button"
+          onClick={() => onChange(page)}
+          disabled={loading && page !== currentPage}
+          className={cn(
+            'rounded-full border px-3 py-1.5 text-xs transition-colors',
+            page === currentPage ? 'border-accent/30 bg-accent/10 text-accent' : 'border-white/10 text-white/70'
+          )}
+        >
+          {page}
+        </button>
+      ))}
+      <button
+        type="button"
+        onClick={() => onChange(Math.min(totalPages, currentPage + 1))}
+        disabled={currentPage >= totalPages || loading}
+        className="rounded-full border border-white/10 px-3 py-1.5 text-xs text-white/70 disabled:opacity-40"
+      >
+        下一页
+      </button>
+      {loading ? <Loader2 className="h-4 w-4 animate-spin text-accent" /> : null}
+    </div>
+  );
+};
+
 const IocSearch = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -401,8 +474,13 @@ const IocSearch = () => {
     url_list: 1,
     malware: 1,
   });
+  const [sectionViewPages, setSectionViewPages] = useState<Record<LoadableSectionKey, number>>({
+    passive_dns: 1,
+    url_list: 1,
+    malware: 1,
+  });
   const [sectionOverrides, setSectionOverrides] = useState<Partial<Record<LoadableSectionKey, any[]>>>({});
-  const [loadingMoreSection, setLoadingMoreSection] = useState<LoadableSectionKey | null>(null);
+  const [sectionStatus, setSectionStatus] = useState<Record<LoadableSectionKey, SectionLoadStatus>>(createSectionStatusMap(activeSearchType, 'idle'));
   const latestSearchIdRef = useRef(0);
   const hasBootstrappedQueryRef = useRef(false);
   const detailsSectionRef = useRef<HTMLElement | null>(null);
@@ -436,12 +514,17 @@ const IocSearch = () => {
       url_list: 1,
       malware: 1,
     });
+    setSectionViewPages({
+      passive_dns: 1,
+      url_list: 1,
+      malware: 1,
+    });
     setSectionOverrides({});
-    setLoadingMoreSection(null);
+    setSectionStatus(createSectionStatusMap(activeSearchType, 'idle'));
   }, [submittedQuery, activeSearchType]);
 
   const executeSearch = async (query: string, type: SearchType) => {
-      const response = await otxApi.searchIntel(query, type);
+      const response = await otxApi.searchIntel(query, type, { coreOnly: true });
     return response?.data || null;
   };
 
@@ -461,6 +544,15 @@ const IocSearch = () => {
       setSubmittedQuery(query);
       setActiveSearchType(type);
       setShowResults(true);
+      setSectionOverrides({});
+      setSectionPages({ passive_dns: 1, url_list: 1, malware: 1 });
+      setSectionViewPages({ passive_dns: 1, url_list: 1, malware: 1 });
+      setSectionStatus(createSectionStatusMap(type, 'loading'));
+
+      const indicator = String(data?.indicator || query).trim();
+      getSupportedLoadableSections(type).forEach((sectionKey) => {
+        void fetchSectionPage(indicator, type, sectionKey, 1);
+      });
     } catch (searchError: any) {
       const shouldRetry =
         (
@@ -487,6 +579,41 @@ const IocSearch = () => {
       setError(getFriendlyErrorMessage(searchError));
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchSectionPage = async (
+    indicator: string,
+    type: SearchType,
+    sectionKey: LoadableSectionKey,
+    page: number
+  ) => {
+    setSectionStatus((current) => ({ ...current, [sectionKey]: 'loading' }));
+
+    try {
+      const params = { page, limit: OTX_SECTION_PAGE_SIZE };
+      let payload: any = {};
+
+      if (type === 'ip') {
+        payload = await otxApi.getIpInfo(indicator, sectionKey, indicator.includes(':'), params);
+      } else if (type === 'domain') {
+        payload = await otxApi.getDomainInfo(indicator, sectionKey, params);
+      } else if (type === 'url') {
+        payload = await otxApi.getUrlInfo(indicator, sectionKey, params);
+      } else {
+        payload = await otxApi.getCveInfo(indicator, sectionKey, params);
+      }
+
+      const nextItems = getCollection(payload, sectionKey);
+      setSectionOverrides((current) => ({
+        ...current,
+        [sectionKey]: dedupeCollection(nextItems),
+      }));
+      setSectionPages((current) => ({ ...current, [sectionKey]: page }));
+      setSectionViewPages((current) => ({ ...current, [sectionKey]: page }));
+      setSectionStatus((current) => ({ ...current, [sectionKey]: 'ready' }));
+    } catch {
+      setSectionStatus((current) => ({ ...current, [sectionKey]: 'error' }));
     }
   };
 
@@ -678,77 +805,20 @@ const IocSearch = () => {
     malware: getSectionDisplayValue(results, 'malware', counts.malware),
     urls: getSectionDisplayValue(results, 'url_list', counts.urls),
   } as const;
-  const passiveDnsIsLoading = loading || loadingMoreSection === 'passive_dns';
+  const passiveDnsIsLoading = loading || sectionStatus.passive_dns === 'loading';
+  const passiveDnsTotalPages = getTotalPages(counts.passiveDns, OTX_SECTION_PAGE_SIZE);
+  const malwareTotalPages = getTotalPages(counts.malware, OTX_SECTION_PAGE_SIZE);
+  const urlTotalPages = getTotalPages(counts.urls, OTX_SECTION_PAGE_SIZE);
+  const pagedPassiveDnsEntries = passiveDnsEntries;
+  const pagedMalwareEntries = malwareEntries;
+  const pagedUrlEntries = urlEntries;
 
-  const canLoadMore = (sectionKey: LoadableSectionKey) => {
-    if (loading || loadingMoreSection === sectionKey) return false;
+  const handleSectionPageChange = (sectionKey: LoadableSectionKey, page: number) => {
+    const normalizedPage = Math.max(1, page);
+    setSectionViewPages((current) => ({ ...current, [sectionKey]: normalizedPage }));
 
-    const total =
-      sectionKey === 'passive_dns'
-        ? counts.passiveDns
-        : sectionKey === 'url_list'
-          ? counts.urls
-          : counts.malware;
-
-    const currentLength =
-      sectionKey === 'passive_dns'
-        ? passiveDnsEntries.length
-        : sectionKey === 'url_list'
-          ? urlEntries.length
-          : malwareEntries.length;
-
-    return total > currentLength;
-  };
-
-  const loadMoreSection = async (sectionKey: LoadableSectionKey) => {
-    if (!results?.indicator || loadingMoreSection) return;
-
-    const nextPage = (sectionPages[sectionKey] || 1) + 1;
-    setLoadingMoreSection(sectionKey);
-
-    try {
-      const params = { page: nextPage, limit: OTX_SECTION_PAGE_SIZE };
-      let payload: any = {};
-
-      if (activeSearchType === 'ip') {
-        payload = await otxApi.getIpInfo(results.indicator, sectionKey, results.indicator.includes(':'), params);
-      } else if (activeSearchType === 'domain') {
-        payload = await otxApi.getDomainInfo(results.indicator, sectionKey, params);
-      } else if (activeSearchType === 'url') {
-        payload = await otxApi.getUrlInfo(results.indicator, sectionKey, params);
-      } else {
-        payload = await otxApi.getCveInfo(results.indicator, sectionKey, params);
-      }
-
-      const nextItems = getCollection(payload, sectionKey);
-      if (!Array.isArray(nextItems) || nextItems.length === 0) return;
-
-      setSectionOverrides((current) => {
-        const previous =
-          current[sectionKey] ??
-          (sectionKey === 'passive_dns'
-            ? Array.isArray(results?.passive_dns)
-              ? results.passive_dns
-              : []
-            : sectionKey === 'url_list'
-              ? Array.isArray(results?.url_list)
-                ? results.url_list
-                : []
-              : Array.isArray(results?.malware)
-                ? results.malware
-                : []);
-
-        return {
-          ...current,
-          [sectionKey]: dedupeCollection([...previous, ...nextItems]),
-        };
-      });
-      setSectionPages((current) => ({ ...current, [sectionKey]: nextPage }));
-    } catch (loadError: any) {
-      setError(getFriendlyErrorMessage(loadError));
-    } finally {
-      setLoadingMoreSection(null);
-    }
+    if (!results?.indicator || normalizedPage === sectionPages[sectionKey]) return;
+    void fetchSectionPage(String(results.indicator), activeSearchType, sectionKey, normalizedPage);
   };
 
   const handleSubmit = (event?: React.FormEvent) => {
@@ -952,19 +1022,6 @@ const IocSearch = () => {
                               ))}
                             </div>
                           </div>
-                          {canLoadMore('passive_dns') ? (
-                            <div className="mt-4">
-                              <button
-                                type="button"
-                                onClick={() => void loadMoreSection('passive_dns')}
-                                disabled={loadingMoreSection === 'passive_dns'}
-                                className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-sm text-white/78 transition-colors hover:border-accent/30 hover:bg-accent/10 disabled:opacity-60"
-                              >
-                                {loadingMoreSection === 'passive_dns' ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                                加载更多 Passive DNS
-                              </button>
-                            </div>
-                          ) : null}
                         </>
                       ) : passiveDnsIsLoading ? <SectionLoadingState label="被动 DNS" /> : <div className="rounded-[22px] border border-dashed border-white/10 px-5 py-8 text-sm text-white/52">{getSectionListMessage(passiveDnsState, counts.passiveDns, '被动 DNS 记录')}</div>}
                     </Panel>
@@ -1000,21 +1057,8 @@ const IocSearch = () => {
                             ))}
                           </div>
                           </div>
-                          {canLoadMore('url_list') ? (
-                            <div className="mt-4">
-                              <button
-                                type="button"
-                                onClick={() => void loadMoreSection('url_list')}
-                                disabled={loadingMoreSection === 'url_list'}
-                                className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-sm text-white/78 transition-colors hover:border-accent/30 hover:bg-accent/10 disabled:opacity-60"
-                              >
-                                {loadingMoreSection === 'url_list' ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                                加载更多 URL
-                              </button>
-                            </div>
-                          ) : null}
                         </>
-                      ) : <div className="rounded-[22px] border border-dashed border-white/10 px-5 py-8 text-sm text-white/52">{getSectionListMessage(urlListState, counts.urls, '关联 URL')}</div>}
+                      ) : sectionStatus.url_list === 'loading' ? <SectionLoadingState label="关联 URL" /> : <div className="rounded-[22px] border border-dashed border-white/10 px-5 py-8 text-sm text-white/52">{getSectionListMessage(urlListState, counts.urls, '关联 URL')}</div>}
                     </Panel>
 
                     <Panel title="关联文件" subtitle="文件">
@@ -1050,21 +1094,8 @@ const IocSearch = () => {
                             })}
                           </div>
                           </div>
-                          {canLoadMore('malware') ? (
-                            <div className="mt-4">
-                              <button
-                                type="button"
-                                onClick={() => void loadMoreSection('malware')}
-                                disabled={loadingMoreSection === 'malware'}
-                                className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-sm text-white/78 transition-colors hover:border-accent/30 hover:bg-accent/10 disabled:opacity-60"
-                              >
-                                {loadingMoreSection === 'malware' ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                                加载更多恶意样本
-                              </button>
-                            </div>
-                          ) : null}
                         </>
-                      ) : <div className="rounded-[22px] border border-dashed border-white/10 px-5 py-8 text-sm text-white/52">{getSectionListMessage(malwareState, counts.malware, '恶意样本')}</div>}
+                      ) : sectionStatus.malware === 'loading' ? <SectionLoadingState label="恶意样本" /> : <div className="rounded-[22px] border border-dashed border-white/10 px-5 py-8 text-sm text-white/52">{getSectionListMessage(malwareState, counts.malware, '恶意样本')}</div>}
                     </Panel>
 
                     <Panel title="HTTP 扫描" subtitle="HTTP 扫描">
@@ -1100,7 +1131,7 @@ const IocSearch = () => {
                           <span>状态</span><span>主机名</span><span>类型</span><span>地址</span><span>首次发现</span><span>最近出现</span><span>ASN</span><span>国家/地区</span>
                         </div>
                         <div className="divide-y divide-white/6">
-                          {passiveDnsEntries.map((record: any, index: number) => (
+                          {pagedPassiveDnsEntries.map((record: any, index: number) => (
                             <div key={`${record?.hostname || 'pdns'}-${index}`} className="px-4 py-4">
                               <div className="hidden grid-cols-[120px_1.4fr_120px_1.1fr_1fr_1fr_1.2fr_0.9fr] gap-4 xl:grid">
                                 <span className="text-sm text-white/56">{toDisplayText(record?.status, '未知')}</span>
@@ -1127,17 +1158,12 @@ const IocSearch = () => {
                           ))}
                         </div>
                       </div>
-                      {canLoadMore('passive_dns') ? (
-                        <button
-                          type="button"
-                          onClick={() => void loadMoreSection('passive_dns')}
-                          disabled={loadingMoreSection === 'passive_dns'}
-                          className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-sm text-white/78 transition-colors hover:border-accent/30 hover:bg-accent/10 disabled:opacity-60"
-                        >
-                          {loadingMoreSection === 'passive_dns' ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                          加载更多 Passive DNS
-                        </button>
-                      ) : null}
+                      <PaginationControls
+                        currentPage={sectionViewPages.passive_dns}
+                        totalPages={passiveDnsTotalPages}
+                        loading={sectionStatus.passive_dns === 'loading'}
+                        onChange={(page) => handleSectionPageChange('passive_dns', page)}
+                      />
                     </div>
                   ) : passiveDnsIsLoading ? <SectionLoadingState label="被动 DNS" /> : <div className="rounded-[22px] border border-dashed border-white/10 px-5 py-8 text-sm text-white/52">{getSectionListMessage(passiveDnsState, counts.passiveDns, '被动 DNS 记录')}</div>
                 ) : null}
@@ -1172,7 +1198,7 @@ const IocSearch = () => {
                 {activeTab === 'malware' ? (
                   malwareEntries.length > 0 ? (
                     <div className="space-y-4">
-                      {malwareEntries.map((record: any, index: number) => {
+                        {pagedMalwareEntries.map((record: any, index: number) => {
                         const primaryHash = toDisplayText(record?.sha256 || record?.hash || record?.sha1 || record?.md5, 'N/A');
                         return (
                         <div key={`${record?.sha256 || record?.hash || record?.md5 || record?.name || 'malware'}-${index}`} className="rounded-[22px] border border-white/8 bg-white/[0.025] p-5">
@@ -1185,25 +1211,20 @@ const IocSearch = () => {
                           {record?.detections ? <div className="mt-4 text-sm text-white/52">检出结果：{Object.entries(record.detections).filter(([, value]) => Boolean(value)).map(([engine, value]) => `${engine}: ${value}`).join(' · ') || 'N/A'}</div> : null}
                         </div>
                       )})}
-                      {canLoadMore('malware') ? (
-                        <button
-                          type="button"
-                          onClick={() => void loadMoreSection('malware')}
-                          disabled={loadingMoreSection === 'malware'}
-                          className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-sm text-white/78 transition-colors hover:border-accent/30 hover:bg-accent/10 disabled:opacity-60"
-                        >
-                          {loadingMoreSection === 'malware' ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                          加载更多恶意样本
-                        </button>
-                      ) : null}
+                      <PaginationControls
+                        currentPage={sectionViewPages.malware}
+                        totalPages={malwareTotalPages}
+                        loading={sectionStatus.malware === 'loading'}
+                        onChange={(page) => handleSectionPageChange('malware', page)}
+                      />
                     </div>
-                  ) : <div className="rounded-[22px] border border-dashed border-white/10 px-5 py-8 text-sm text-white/52">{getSectionListMessage(malwareState, counts.malware, '恶意样本')}</div>
+                  ) : sectionStatus.malware === 'loading' ? <SectionLoadingState label="恶意样本" /> : <div className="rounded-[22px] border border-dashed border-white/10 px-5 py-8 text-sm text-white/52">{getSectionListMessage(malwareState, counts.malware, '恶意样本')}</div>
                 ) : null}
 
                 {activeTab === 'urls' ? (
                   urlEntries.length > 0 ? (
                     <div className="space-y-4">
-                      {urlEntries.map((record: any, index: number) => (
+                        {pagedUrlEntries.map((record: any, index: number) => (
                         <div key={`${record?.url || record?.hostname || 'url'}-${index}`} className="rounded-[22px] border border-white/8 bg-white/[0.025] p-5">
                           <div className="break-all text-sm font-semibold text-accent">{toDisplayText(record?.url || record?.hostname || record?.indicator)}</div>
                           <div className="mt-4 grid gap-3 text-sm text-white/58 md:grid-cols-3">
@@ -1213,19 +1234,14 @@ const IocSearch = () => {
                           </div>
                         </div>
                       ))}
-                      {canLoadMore('url_list') ? (
-                        <button
-                          type="button"
-                          onClick={() => void loadMoreSection('url_list')}
-                          disabled={loadingMoreSection === 'url_list'}
-                          className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-sm text-white/78 transition-colors hover:border-accent/30 hover:bg-accent/10 disabled:opacity-60"
-                        >
-                          {loadingMoreSection === 'url_list' ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                          加载更多 URL
-                        </button>
-                      ) : null}
+                      <PaginationControls
+                        currentPage={sectionViewPages.url_list}
+                        totalPages={urlTotalPages}
+                        loading={sectionStatus.url_list === 'loading'}
+                        onChange={(page) => handleSectionPageChange('url_list', page)}
+                      />
                     </div>
-                  ) : <div className="rounded-[22px] border border-dashed border-white/10 px-5 py-8 text-sm text-white/52">{getSectionListMessage(urlListState, counts.urls, '关联 URL')}</div>
+                  ) : sectionStatus.url_list === 'loading' ? <SectionLoadingState label="关联 URL" /> : <div className="rounded-[22px] border border-dashed border-white/10 px-5 py-8 text-sm text-white/52">{getSectionListMessage(urlListState, counts.urls, '关联 URL')}</div>
                 ) : null}
               </div>
             </motion.section>

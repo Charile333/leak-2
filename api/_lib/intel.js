@@ -316,17 +316,18 @@ const requestOtxCandidates = async (candidates, options = {}) => {
   throw lastError || new Error('OTX candidate request failed');
 };
 
-export const buildStructuredOtxResult = async (type, query) => {
+export const buildStructuredOtxResult = async (type, query, options = {}) => {
+  const { coreOnly = false } = options;
   if (type === 'ip') {
     const ipVersion = query.includes(':') ? 'IPv6' : 'IPv4';
     const [generalPayload, reputationPayload, geoPayload, passiveDnsPayload, malwarePayload, urlListPayload, httpScansPayload] = await Promise.all([
       requestOtxCandidates([{ endpoint: `/indicators/ip/general/${query}`, internal: true }, { endpoint: `/indicators/${ipVersion}/${query}/general`, internal: false }]),
       requestOtxCandidates([{ endpoint: `/indicators/${ipVersion}/reputation/${query}`, internal: true }, { endpoint: `/indicators/${ipVersion}/${query}/reputation`, internal: false }], { graceful: true, timeoutMs: OPTIONAL_SECTION_TIMEOUT_MS }),
       requestOtxCandidates([{ endpoint: `/indicators/${ipVersion}/geo/${query}`, internal: true }, { endpoint: `/indicators/${ipVersion}/${query}/geo`, internal: false }], { graceful: true, timeoutMs: OPTIONAL_SECTION_TIMEOUT_MS }),
-      requestOtxCandidates([{ endpoint: `/indicators/${ipVersion}/passive_dns/${query}`, internal: true }, { endpoint: `/indicators/${ipVersion}/${query}/passive_dns`, internal: false }], { graceful: true, timeoutMs: SLOW_SECTION_TIMEOUT_MS }),
-      requestOtxCandidates([{ endpoint: `/indicators/${ipVersion}/malware/${query}?limit=10&page=1`, internal: true }, { endpoint: `/indicators/${ipVersion}/${query}/malware`, internal: false }], { graceful: true, timeoutMs: SLOW_SECTION_TIMEOUT_MS }),
-      requestOtxCandidates([{ endpoint: `/indicators/${ipVersion}/url_list/${query}`, internal: true }, { endpoint: `/indicators/${ipVersion}/${query}/url_list`, internal: false }], { graceful: true, timeoutMs: OPTIONAL_SECTION_TIMEOUT_MS }),
-      requestOtxCandidates([{ endpoint: `/indicators/${ipVersion}/http_scans/${query}`, internal: true }, { endpoint: `/indicators/${ipVersion}/${query}/http_scans`, internal: false }], { graceful: true, timeoutMs: SLOW_SECTION_TIMEOUT_MS }),
+        coreOnly ? Promise.resolve({}) : requestOtxCandidates([{ endpoint: `/indicators/${ipVersion}/passive_dns/${query}`, internal: true }, { endpoint: `/indicators/${ipVersion}/${query}/passive_dns`, internal: false }], { graceful: true, timeoutMs: SLOW_SECTION_TIMEOUT_MS }),
+        coreOnly ? Promise.resolve({}) : requestOtxCandidates([{ endpoint: `/indicators/${ipVersion}/malware/${query}?limit=10&page=1`, internal: true }, { endpoint: `/indicators/${ipVersion}/${query}/malware`, internal: false }], { graceful: true, timeoutMs: SLOW_SECTION_TIMEOUT_MS }),
+        coreOnly ? Promise.resolve({}) : requestOtxCandidates([{ endpoint: `/indicators/${ipVersion}/url_list/${query}`, internal: true }, { endpoint: `/indicators/${ipVersion}/${query}/url_list`, internal: false }], { graceful: true, timeoutMs: OPTIONAL_SECTION_TIMEOUT_MS }),
+        coreOnly ? Promise.resolve({}) : requestOtxCandidates([{ endpoint: `/indicators/${ipVersion}/http_scans/${query}`, internal: true }, { endpoint: `/indicators/${ipVersion}/${query}/http_scans`, internal: false }], { graceful: true, timeoutMs: SLOW_SECTION_TIMEOUT_MS }),
     ]);
     const general = unwrapPayload(generalPayload);
     const reputation = unwrapPayload(reputationPayload);
@@ -404,11 +405,11 @@ export const buildStructuredOtxResult = async (type, query) => {
     const [generalPayload, geoPayload, passiveDnsPayload, whoisPayload, malwarePayload, urlListPayload, httpScansPayload] = await Promise.all([
       requestOtxCandidates([{ endpoint: `/indicators/domain/general/${query}`, internal: true }, { endpoint: `/indicators/domain/${query}/general`, internal: false }]),
       requestOtxCandidates([{ endpoint: `/indicators/domain/geo/${query}`, internal: true }, { endpoint: `/indicators/domain/${query}/geo`, internal: false }], { graceful: true, timeoutMs: OPTIONAL_SECTION_TIMEOUT_MS }),
-      requestOtxCandidates([{ endpoint: `/indicators/domain/passive_dns/${query}`, internal: true }, { endpoint: `/indicators/domain/${query}/passive_dns`, internal: false }], { graceful: true, timeoutMs: SLOW_SECTION_TIMEOUT_MS }),
+        coreOnly ? Promise.resolve({}) : requestOtxCandidates([{ endpoint: `/indicators/domain/passive_dns/${query}`, internal: true }, { endpoint: `/indicators/domain/${query}/passive_dns`, internal: false }], { graceful: true, timeoutMs: SLOW_SECTION_TIMEOUT_MS }),
       requestOtxCandidates([{ endpoint: `/indicators/domain/whois/${query}`, internal: true }, { endpoint: `/indicators/domain/${query}/whois`, internal: false }], { graceful: true, timeoutMs: OPTIONAL_SECTION_TIMEOUT_MS }),
-      requestOtxCandidates([{ endpoint: `/indicators/domain/malware/${query}?limit=10&page=1`, internal: true }, { endpoint: `/indicators/domain/${query}/malware`, internal: false }], { graceful: true, timeoutMs: SLOW_SECTION_TIMEOUT_MS }),
-      requestOtxCandidates([{ endpoint: `/indicators/domain/url_list/${query}`, internal: true }, { endpoint: `/indicators/domain/${query}/url_list`, internal: false }], { graceful: true, timeoutMs: OPTIONAL_SECTION_TIMEOUT_MS }),
-      requestOtxCandidates([{ endpoint: `/indicators/domain/http_scans/${query}`, internal: true }, { endpoint: `/indicators/domain/${query}/http_scans`, internal: false }], { graceful: true, timeoutMs: SLOW_SECTION_TIMEOUT_MS }),
+        coreOnly ? Promise.resolve({}) : requestOtxCandidates([{ endpoint: `/indicators/domain/malware/${query}?limit=10&page=1`, internal: true }, { endpoint: `/indicators/domain/${query}/malware`, internal: false }], { graceful: true, timeoutMs: SLOW_SECTION_TIMEOUT_MS }),
+        coreOnly ? Promise.resolve({}) : requestOtxCandidates([{ endpoint: `/indicators/domain/url_list/${query}`, internal: true }, { endpoint: `/indicators/domain/${query}/url_list`, internal: false }], { graceful: true, timeoutMs: OPTIONAL_SECTION_TIMEOUT_MS }),
+        coreOnly ? Promise.resolve({}) : requestOtxCandidates([{ endpoint: `/indicators/domain/http_scans/${query}`, internal: true }, { endpoint: `/indicators/domain/${query}/http_scans`, internal: false }], { graceful: true, timeoutMs: SLOW_SECTION_TIMEOUT_MS }),
     ]);
     const general = unwrapPayload(generalPayload);
     const geo = unwrapPayload(geoPayload);
@@ -485,7 +486,7 @@ export const buildStructuredOtxResult = async (type, query) => {
     const encodedQuery = encodeURIComponent(sanitizedQuery);
     const [generalPayload, urlListPayload] = await Promise.all([
       requestOtxCandidates([{ endpoint: `/indicators/url/general/${encodedQuery}`, internal: true }, { endpoint: `/indicators/url/${encodedQuery}/general`, internal: false }]),
-        requestOtxCandidates([{ endpoint: `/indicators/url/url_list/${encodedQuery}`, internal: true }, { endpoint: `/indicators/url/${encodedQuery}/url_list`, internal: false }], { graceful: true, timeoutMs: OPTIONAL_SECTION_TIMEOUT_MS }),
+          coreOnly ? Promise.resolve({}) : requestOtxCandidates([{ endpoint: `/indicators/url/url_list/${encodedQuery}`, internal: true }, { endpoint: `/indicators/url/${encodedQuery}/url_list`, internal: false }], { graceful: true, timeoutMs: OPTIONAL_SECTION_TIMEOUT_MS }),
     ]);
     const general = unwrapPayload(generalPayload);
     const pulses = Array.isArray(general?.pulse_info?.pulses) ? general.pulse_info.pulses : [];
@@ -531,7 +532,7 @@ export const buildStructuredOtxResult = async (type, query) => {
     const normalizedQuery = String(query).toUpperCase();
     const [generalPayload, pulsesPayload] = await Promise.all([
       requestOtxCandidates([{ endpoint: `/indicators/cve/general/${normalizedQuery}`, internal: true }, { endpoint: `/indicators/cve/${normalizedQuery}/general`, internal: false }]),
-        requestOtxCandidates([{ endpoint: `/indicators/cve/top_n_pulses/${normalizedQuery}`, internal: true }, { endpoint: `/indicators/cve/${normalizedQuery}/top_n_pulses`, internal: false }], { graceful: true, timeoutMs: OPTIONAL_SECTION_TIMEOUT_MS }),
+          coreOnly ? Promise.resolve({}) : requestOtxCandidates([{ endpoint: `/indicators/cve/top_n_pulses/${normalizedQuery}`, internal: true }, { endpoint: `/indicators/cve/${normalizedQuery}/top_n_pulses`, internal: false }], { graceful: true, timeoutMs: OPTIONAL_SECTION_TIMEOUT_MS }),
     ]);
     const general = unwrapPayload(generalPayload);
     const pulses = getCollection(pulsesPayload, 'top_n_pulses');

@@ -70,12 +70,13 @@ const requestOtxWithParams = async (endpoint: string, params?: OtxRequestParams,
 };
 
 export const otxApi = {
-  searchIntel: async (query: string, type: 'ip' | 'domain' | 'url' | 'cve', options?: { noCache?: boolean }) => {
+  searchIntel: async (query: string, type: 'ip' | 'domain' | 'url' | 'cve', options?: { noCache?: boolean; coreOnly?: boolean }) => {
     const response = await otxAxios.get('/search', {
       params: {
         query,
         type,
         ...(options?.noCache ? { noCache: '1' } : {}),
+        ...(options?.coreOnly ? { coreOnly: '1' } : {}),
       },
     });
 

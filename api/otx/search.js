@@ -24,6 +24,7 @@ export default async function handler(req, res) {
     const type = String(req.query.type || '').trim().toLowerCase();
     const query = String(req.query.query || '').trim();
     const noCache = String(req.query.noCache || '').trim().toLowerCase() === '1';
+    const coreOnly = String(req.query.coreOnly || '').trim().toLowerCase() === '1';
 
     if (!query || !['ip', 'domain', 'url', 'cve'].includes(type)) {
       return sendJson(res, 400, {
@@ -32,7 +33,7 @@ export default async function handler(req, res) {
       });
     }
 
-    const cached = noCache ? null : getCachedOtxSearch(type, query);
+    const cached = noCache || coreOnly ? null : getCachedOtxSearch(type, query);
     if (cached) {
       return sendJson(res, 200, {
         source: 'intel',
@@ -41,13 +42,16 @@ export default async function handler(req, res) {
       });
     }
 
-    const data = await buildStructuredOtxResult(type, query);
-    setCachedOtxSearch(type, query, data);
+    const data = await buildStructuredOtxResult(type, query, { coreOnly });
+    if (!coreOnly) {
+      setCachedOtxSearch(type, query, data);
+    }
 
     return sendJson(res, 200, {
       source: 'intel',
       cached: false,
       noCache,
+      coreOnly,
       data,
     });
   } catch (error) {
