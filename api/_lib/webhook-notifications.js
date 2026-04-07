@@ -228,6 +228,198 @@ const createWebhookSignature = (secret, body) => {
   return createHmac('sha256', secret).update(body).digest('hex');
 };
 
+const detectWebhookPlatform = (url) => {
+  try {
+    const parsed = new URL(url);
+    const host = parsed.hostname.toLowerCase();
+    const pathname = parsed.pathname.toLowerCase();
+
+    if (host.includes('weixin.qq.com') && pathname.includes('/cgi-bin/webhook/send')) {
+      return 'wecom';
+    }
+
+    if ((host.includes('dingtalk.com') || host.includes('dingtalkapps.com')) && pathname.includes('/robot/send')) {
+      return 'dingtalk';
+    }
+
+    if ((host.includes('feishu.cn') || host.includes('larksuite.com')) && pathname.includes('/open-apis/bot')) {
+      return 'feishu';
+    }
+  } catch {
+    return 'generic';
+  }
+
+  return 'generic';
+};
+
+const toDisplayText = (value, fallback = 'N/A') => {
+  if (value === null || value === undefined) return fallback;
+  const normalized = String(value).trim();
+  return normalized ? normalized : fallback;
+};
+
+const formatSeverityLabel = (severity) => {
+  const normalized = String(severity || '').toLowerCase();
+  if (normalized === 'critical') return '严重';
+  if (normalized === 'high') return '高危';
+  if (normalized === 'medium') return '中危';
+  if (normalized === 'low') return '低危';
+  if (normalized === 'safe') return '安全';
+  return toDisplayText(severity, '未知');
+};
+
+const buildRobotSummary = (eventName, payload) => {
+  const finding = payload?.finding || {};
+  const title = toDisplayText(finding.title || payload?.title, '泄露监测事件');
+  const summary = toDisplayText(finding.summary || payload?.message, '请前往平台查看详情。');
+  const source = toDisplayText(finding.source || payload?.source, 'LeakRadar');
+  const severity = formatSeverityLabel(finding.severity || payload?.severity);
+  const status = toDisplayText(finding.status || payload?.status, 'new');
+  const detectedAt = toDisplayText(payload?.detectedAt, new Date().toISOString());
+  const url = finding.url || payload?.url || '';
+
+  return {
+    title,
+    summary,
+    source,
+    severity,
+    status,
+    detectedAt,
+    url,
+    eventName,
+  };
+};
+
+const buildMarkdownSummary = (details) =>
+  [
+    `**${details.title}**`,
+    '',
+    `事件：${details.eventName}`,
+    `等级：${details.severity}`,
+    `来源：${details.source}`,
+    `状态：${details.status}`,
+    `时间：${details.detectedAt}`,
+    '',
+    details.summary,
+    details.url ? '' : null,
+    details.url ? `链接：${details.url}` : null,
+  ]
+    .filter(Boolean)
+    .join('\n');
+
+const buildPlainTextSummary = (details) =>
+  [
+    `【${details.title}】`,
+    `事件：${details.eventName}`,
+    `等级：${details.severity}`,
+    `来源：${details.source}`,
+    `状态：${details.status}`,
+    `时间：${details.detectedAt}`,
+    `摘要：${details.summary}`,
+    details.url ? `链接：${details.url}` : null,
+  ]
+    .filter(Boolean)
+    .join('\n');
+
+const createDingtalkSignedUrl = (rawUrl, secret) => {
+  if (!secret) return rawUrl;
+
+  const timestamp = Date.now().toString();
+  const sign = createHmac('sha256', secret).update(`${timestamp}\n${secret}`).digest('base64');
+  const parsed = new URL(rawUrl);
+  parsed.searchParams.set('timestamp', timestamp);
+  parsed.searchParams.set('sign', sign);
+  return parsed.toString();
+};
+
+const createFeishuSignedFields = (secret) => {
+  if (!secret) return {};
+  const timestamp = Math.floor(Date.now() / 1000).toString();
+  const sign = createHmac('sha256', `${timestamp}\n${secret}`).update('').digest('base64');
+  return { timestamp, sign };
+};
+
+const buildWebhookRequest = ({ config, eventName, payload, deliveryId }) => {
+  const platform = detectWebhookPlatform(config.url);
+  const details = buildRobotSummary(eventName, payload);
+  const genericBody = JSON.stringify(payload);
+  const signature = createWebhookSignature(config.secret, genericBody);
+
+  if (platform === 'wecom') {
+    const body = JSON.stringify({
+      msgtype: 'markdown',
+      markdown: {
+        content: buildMarkdownSummary(details),
+      },
+    });
+
+    return {
+      platform,
+      url: config.url,
+      body,
+      headers: {
+        'Content-Type': 'application/json',
+        'X-LeakRadar-Event': eventName,
+        'X-LeakRadar-Delivery': deliveryId,
+        ...(signature ? { 'X-LeakRadar-Signature': `sha256=${signature}` } : {}),
+      },
+    };
+  }
+
+  if (platform === 'dingtalk') {
+    const body = JSON.stringify({
+      msgtype: 'text',
+      text: {
+        content: buildPlainTextSummary(details),
+      },
+    });
+
+    return {
+      platform,
+      url: createDingtalkSignedUrl(config.url, config.secret),
+      body,
+      headers: {
+        'Content-Type': 'application/json',
+        'X-LeakRadar-Event': eventName,
+        'X-LeakRadar-Delivery': deliveryId,
+      },
+    };
+  }
+
+  if (platform === 'feishu') {
+    const body = JSON.stringify({
+      msg_type: 'text',
+      content: {
+        text: buildPlainTextSummary(details),
+      },
+      ...createFeishuSignedFields(config.secret),
+    });
+
+    return {
+      platform,
+      url: config.url,
+      body,
+      headers: {
+        'Content-Type': 'application/json',
+        'X-LeakRadar-Event': eventName,
+        'X-LeakRadar-Delivery': deliveryId,
+      },
+    };
+  }
+
+  return {
+    platform,
+    url: config.url,
+    body: genericBody,
+    headers: {
+      'Content-Type': 'application/json',
+      'X-LeakRadar-Event': eventName,
+      'X-LeakRadar-Delivery': deliveryId,
+      ...(signature ? { 'X-LeakRadar-Signature': `sha256=${signature}` } : {}),
+    },
+  };
+};
+
 export const sendWebhookNotification = async ({ userEmail, eventName, payload }) => {
   const config = await getWebhookConfig(userEmail);
 
@@ -236,19 +428,13 @@ export const sendWebhookNotification = async ({ userEmail, eventName, payload })
   }
 
   const deliveryId = typeof randomUUID === 'function' ? randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-  const body = JSON.stringify(payload);
-  const signature = createWebhookSignature(config.secret, body);
+  const request = buildWebhookRequest({ config, eventName, payload, deliveryId });
 
   try {
-    const response = await fetch(config.url, {
+    const response = await fetch(request.url, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-LeakRadar-Event': eventName,
-        'X-LeakRadar-Delivery': deliveryId,
-        ...(signature ? { 'X-LeakRadar-Signature': `sha256=${signature}` } : {}),
-      },
-      body,
+      headers: request.headers,
+      body: request.body,
     });
 
     const responseStatus = Number(response.status || 0);
@@ -290,14 +476,14 @@ export const sendWebhookTestNotification = async (userEmail) => {
     eventName: 'scheduled_scan.test',
     payload: {
       event: 'scheduled_scan.test',
-      message: 'This is a test webhook notification from LeakRadar.',
+      message: '这是一条来自 LeakRadar 的测试通知，用于验证机器人或 Webhook 是否接通。',
       detectedAt: new Date().toISOString(),
       finding: {
-        title: 'Webhook test notification',
+        title: 'Webhook 测试通知',
         source: 'LeakRadar',
         severity: 'low',
         status: 'new',
-        summary: 'Use this message to verify that your robot or webhook endpoint is connected successfully.',
+        summary: '如果你看到了这条消息，说明当前机器人或 Webhook 接入已经打通。',
       },
     },
   });
