@@ -8,6 +8,7 @@ import { otxApi } from '../api/otxApi';
 type SearchType = 'ip' | 'domain' | 'url' | 'cve';
 type ResultTab = 'analysis' | 'passive-dns' | 'pulses' | 'malware' | 'urls';
 type SectionKey = 'pulses' | 'passive_dns' | 'url_list' | 'malware' | 'http_scans';
+type LoadableSectionKey = 'passive_dns' | 'url_list' | 'malware';
 
 type SearchConfig = {
   label: string;
@@ -25,6 +26,7 @@ const SEARCH_TYPES: Record<SearchType, SearchConfig> = {
 const MAX_RETRIES = 1;
 const RETRY_DELAY = 2000;
 const IOC_UNAVAILABLE_MESSAGE = 'IOC 情报功能暂时不可用';
+const OTX_SECTION_PAGE_SIZE = 10;
 
 const CLOUD_PROVIDER_MATCHERS: Array<{ label: string; pattern: RegExp }> = [
   { label: 'Amazon Web Services', pattern: /\bamazon\b|\baws\b/i },
@@ -80,6 +82,56 @@ const getValueAtPath = (source: any, path: string) => {
 const pickFirstPath = (source: any, paths: string[], fallback?: any) => {
   const value = pickFirstValue(...paths.map((path) => getValueAtPath(source, path)));
   return value === undefined ? fallback : value;
+};
+
+const extractFirstArray = (...candidates: any[]) => {
+  for (const candidate of candidates) {
+    if (Array.isArray(candidate)) return candidate;
+    if (!candidate || typeof candidate !== 'object') continue;
+
+    for (const value of Object.values(candidate)) {
+      if (Array.isArray(value)) return value;
+    }
+  }
+
+  return [];
+};
+
+const getCollection = (payload: any, key: string) =>
+  extractFirstArray(
+    getValueAtPath(payload, key),
+    getValueAtPath(payload, `data.${key}`),
+    getValueAtPath(payload, `result.${key}`),
+    getValueAtPath(payload, `results.${key}`),
+    getValueAtPath(payload, 'items'),
+    getValueAtPath(payload, 'entries'),
+    getValueAtPath(payload, 'records'),
+    getValueAtPath(payload, 'list'),
+    getValueAtPath(payload, 'data'),
+    getValueAtPath(payload, 'result'),
+    getValueAtPath(payload, 'results')
+  );
+
+const dedupeCollection = (records: any[]) => {
+  const seen = new Set<string>();
+
+  return records.filter((record, index) => {
+    const key = JSON.stringify([
+      record?.id,
+      record?.url,
+      record?.hostname,
+      record?.sha256,
+      record?.hash,
+      record?.md5,
+      record?.sha1,
+      record?.date,
+      index,
+    ]);
+
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 };
 
 const formatDisplayDate = (value: any) => {
@@ -322,6 +374,14 @@ const Panel = ({ title, subtitle, children }: { title: string; subtitle?: string
     <div className="px-6 py-5 sm:px-7">{children}</div>
   </section>
 );
+
+const SectionLoadingState = ({ label }: { label: string }) => (
+  <div className="flex items-center gap-3 rounded-[22px] border border-white/10 bg-white/[0.03] px-5 py-5 text-sm text-white/60">
+    <Loader2 className="h-4 w-4 animate-spin text-accent" />
+    <span>{label}加载中，请稍候…</span>
+  </div>
+);
+
 const IocSearch = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -336,6 +396,13 @@ const IocSearch = () => {
   const [copied, setCopied] = useState(false);
   const [showResults, setShowResults] = useState(Boolean(queryFromUrl));
   const [activeTab, setActiveTab] = useState<ResultTab>('analysis');
+  const [sectionPages, setSectionPages] = useState<Record<LoadableSectionKey, number>>({
+    passive_dns: 1,
+    url_list: 1,
+    malware: 1,
+  });
+  const [sectionOverrides, setSectionOverrides] = useState<Partial<Record<LoadableSectionKey, any[]>>>({});
+  const [loadingMoreSection, setLoadingMoreSection] = useState<LoadableSectionKey | null>(null);
   const latestSearchIdRef = useRef(0);
   const hasBootstrappedQueryRef = useRef(false);
   const detailsSectionRef = useRef<HTMLElement | null>(null);
@@ -344,8 +411,8 @@ const IocSearch = () => {
   const Icon = currentConfig.icon;
 
   useEffect(() => {
-    setSearchQuery(queryFromUrl);
     if (!queryFromUrl) {
+      setSearchQuery('');
       setResults(null);
       setSubmittedQuery('');
       setShowResults(false);
@@ -354,12 +421,23 @@ const IocSearch = () => {
       return;
     }
 
+    setSearchQuery((currentQuery) => (currentQuery === queryFromUrl ? currentQuery : queryFromUrl));
     const detectedType = detectSearchType(queryFromUrl);
     if (detectedType) setActiveSearchType(detectedType);
   }, [queryFromUrl]);
 
   useEffect(() => {
     setActiveTab('analysis');
+  }, [submittedQuery, activeSearchType]);
+
+  useEffect(() => {
+    setSectionPages({
+      passive_dns: 1,
+      url_list: 1,
+      malware: 1,
+    });
+    setSectionOverrides({});
+    setLoadingMoreSection(null);
   }, [submittedQuery, activeSearchType]);
 
   const executeSearch = async (query: string, type: SearchType) => {
@@ -429,9 +507,18 @@ const IocSearch = () => {
   }, [queryFromUrl, submittedQuery]);
 
   const pulseEntries = useMemo(() => getPulseEntries(activeSearchType, results), [activeSearchType, results]);
-  const passiveDnsEntries = useMemo(() => (Array.isArray(results?.passive_dns) ? results.passive_dns : []), [results?.passive_dns]);
-  const malwareEntries = useMemo(() => (Array.isArray(results?.malware) ? results.malware : []), [results?.malware]);
-  const urlEntries = useMemo(() => (Array.isArray(results?.url_list) ? results.url_list : []), [results?.url_list]);
+  const passiveDnsEntries = useMemo(
+    () => sectionOverrides.passive_dns ?? (Array.isArray(results?.passive_dns) ? results.passive_dns : []),
+    [results?.passive_dns, sectionOverrides.passive_dns]
+  );
+  const malwareEntries = useMemo(
+    () => sectionOverrides.malware ?? (Array.isArray(results?.malware) ? results.malware : []),
+    [results?.malware, sectionOverrides.malware]
+  );
+  const urlEntries = useMemo(
+    () => sectionOverrides.url_list ?? (Array.isArray(results?.url_list) ? results.url_list : []),
+    [results?.url_list, sectionOverrides.url_list]
+  );
   const httpScanEntries = useMemo(() => (Array.isArray(results?.http_scans) ? results.http_scans : []), [results?.http_scans]);
   const topLevelDomains = useMemo(() => getTopLevelDomains(passiveDnsEntries), [passiveDnsEntries]);
   const unifiedTags = useMemo(() => getUnifiedTags(pulseEntries), [pulseEntries]);
@@ -591,6 +678,78 @@ const IocSearch = () => {
     malware: getSectionDisplayValue(results, 'malware', counts.malware),
     urls: getSectionDisplayValue(results, 'url_list', counts.urls),
   } as const;
+  const passiveDnsIsLoading = loading || loadingMoreSection === 'passive_dns';
+
+  const canLoadMore = (sectionKey: LoadableSectionKey) => {
+    if (loading || loadingMoreSection === sectionKey) return false;
+
+    const total =
+      sectionKey === 'passive_dns'
+        ? counts.passiveDns
+        : sectionKey === 'url_list'
+          ? counts.urls
+          : counts.malware;
+
+    const currentLength =
+      sectionKey === 'passive_dns'
+        ? passiveDnsEntries.length
+        : sectionKey === 'url_list'
+          ? urlEntries.length
+          : malwareEntries.length;
+
+    return total > currentLength;
+  };
+
+  const loadMoreSection = async (sectionKey: LoadableSectionKey) => {
+    if (!results?.indicator || loadingMoreSection) return;
+
+    const nextPage = (sectionPages[sectionKey] || 1) + 1;
+    setLoadingMoreSection(sectionKey);
+
+    try {
+      const params = { page: nextPage, limit: OTX_SECTION_PAGE_SIZE };
+      let payload: any = {};
+
+      if (activeSearchType === 'ip') {
+        payload = await otxApi.getIpInfo(results.indicator, sectionKey, results.indicator.includes(':'), params);
+      } else if (activeSearchType === 'domain') {
+        payload = await otxApi.getDomainInfo(results.indicator, sectionKey, params);
+      } else if (activeSearchType === 'url') {
+        payload = await otxApi.getUrlInfo(results.indicator, sectionKey, params);
+      } else {
+        payload = await otxApi.getCveInfo(results.indicator, sectionKey, params);
+      }
+
+      const nextItems = getCollection(payload, sectionKey);
+      if (!Array.isArray(nextItems) || nextItems.length === 0) return;
+
+      setSectionOverrides((current) => {
+        const previous =
+          current[sectionKey] ??
+          (sectionKey === 'passive_dns'
+            ? Array.isArray(results?.passive_dns)
+              ? results.passive_dns
+              : []
+            : sectionKey === 'url_list'
+              ? Array.isArray(results?.url_list)
+                ? results.url_list
+                : []
+              : Array.isArray(results?.malware)
+                ? results.malware
+                : []);
+
+        return {
+          ...current,
+          [sectionKey]: dedupeCollection([...previous, ...nextItems]),
+        };
+      });
+      setSectionPages((current) => ({ ...current, [sectionKey]: nextPage }));
+    } catch (loadError: any) {
+      setError(getFriendlyErrorMessage(loadError));
+    } finally {
+      setLoadingMoreSection(null);
+    }
+  };
 
   const handleSubmit = (event?: React.FormEvent) => {
     event?.preventDefault();
@@ -604,7 +763,16 @@ const IocSearch = () => {
     }
 
     setError('');
-    navigate(`/dns?q=${encodeURIComponent(query)}`);
+    hasBootstrappedQueryRef.current = true;
+    setSubmittedQuery(query);
+    setActiveSearchType(detectedType);
+    setShowResults(true);
+
+    if (queryFromUrl !== query) {
+      navigate(`/dns?q=${encodeURIComponent(query)}`);
+    }
+
+    void runSearch(query, detectedType);
   };
 
   const handleCopy = async () => {
@@ -752,43 +920,59 @@ const IocSearch = () => {
                   <div className="space-y-6">
                     <Panel title="被动 DNS" subtitle="分析">
                       {passiveDnsEntries.length > 0 ? (
-                        <div className="overflow-hidden rounded-[22px] border border-white/8">
-                          <div className="hidden grid-cols-[1.5fr_110px_1.1fr_1fr_1fr_1.1fr_0.9fr] gap-4 border-b border-white/8 bg-white/[0.02] px-4 py-3 text-[11px] uppercase tracking-[0.18em] text-white/38 xl:grid">
-                            <span>主机名</span><span>类型</span><span>地址</span><span>首次发现</span><span>最近出现</span><span>ASN</span><span>国家/地区</span>
-                          </div>
-                          <div className="divide-y divide-white/6">
-                            {passiveDnsEntries.slice(0, 8).map((record: any, index: number) => (
-                              <div key={`${record?.hostname || 'analysis-pdns'}-${index}`} className="px-4 py-4">
-                                <div className="hidden grid-cols-[1.5fr_110px_1.1fr_1fr_1fr_1.1fr_0.9fr] gap-4 xl:grid">
-                                  <span className="break-all text-sm text-accent">{toDisplayText(record?.hostname)}</span>
-                                  <span className="text-sm text-white/72">{toDisplayText(record?.type || record?.record_type)}</span>
-                                  <span className="break-all text-sm text-white/72">{toDisplayText(record?.address || results?.indicator)}</span>
-                                  <span className="text-sm text-white/56">{toDisplayText(record?.first)}</span>
-                                  <span className="text-sm text-white/56">{toDisplayText(record?.last)}</span>
-                                  <span className="text-sm text-white/72">{toDisplayText(record?.asn)}</span>
-                                  <span className="text-sm text-white/72">{toDisplayText(record?.country || record?.country_name || record?.flag_title)}</span>
-                                </div>
-                                <div className="grid gap-2 xl:hidden">
-                                  <div className="break-all text-sm font-medium text-accent">{toDisplayText(record?.hostname)}</div>
-                                  <div className="grid gap-2 text-sm text-white/58 sm:grid-cols-2">
-                                    <span>类型：{toDisplayText(record?.type || record?.record_type)}</span>
-                                    <span>地址：{toDisplayText(record?.address || results?.indicator)}</span>
-                                    <span>首次发现：{toDisplayText(record?.first)}</span>
-                                    <span>最近出现：{toDisplayText(record?.last)}</span>
-                                    <span>ASN：{toDisplayText(record?.asn)}</span>
-                                    <span>国家/地区：{toDisplayText(record?.country || record?.country_name || record?.flag_title)}</span>
+                        <>
+                          <div className="overflow-hidden rounded-[22px] border border-white/8">
+                            <div className="hidden grid-cols-[1.5fr_110px_1.1fr_1fr_1fr_1.1fr_0.9fr] gap-4 border-b border-white/8 bg-white/[0.02] px-4 py-3 text-[11px] uppercase tracking-[0.18em] text-white/38 xl:grid">
+                              <span>主机名</span><span>类型</span><span>地址</span><span>首次发现</span><span>最近出现</span><span>ASN</span><span>国家/地区</span>
+                            </div>
+                            <div className="divide-y divide-white/6">
+                              {passiveDnsEntries.slice(0, 8).map((record: any, index: number) => (
+                                <div key={`${record?.hostname || 'analysis-pdns'}-${index}`} className="px-4 py-4">
+                                  <div className="hidden grid-cols-[1.5fr_110px_1.1fr_1fr_1fr_1.1fr_0.9fr] gap-4 xl:grid">
+                                    <span className="break-all text-sm text-accent">{toDisplayText(record?.hostname)}</span>
+                                    <span className="text-sm text-white/72">{toDisplayText(record?.type || record?.record_type)}</span>
+                                    <span className="break-all text-sm text-white/72">{toDisplayText(record?.address || results?.indicator)}</span>
+                                    <span className="text-sm text-white/56">{toDisplayText(record?.first)}</span>
+                                    <span className="text-sm text-white/56">{toDisplayText(record?.last)}</span>
+                                    <span className="text-sm text-white/72">{toDisplayText(record?.asn)}</span>
+                                    <span className="text-sm text-white/72">{toDisplayText(record?.country || record?.country_name || record?.flag_title)}</span>
+                                  </div>
+                                  <div className="grid gap-2 xl:hidden">
+                                    <div className="break-all text-sm font-medium text-accent">{toDisplayText(record?.hostname)}</div>
+                                    <div className="grid gap-2 text-sm text-white/58 sm:grid-cols-2">
+                                      <span>类型：{toDisplayText(record?.type || record?.record_type)}</span>
+                                      <span>地址：{toDisplayText(record?.address || results?.indicator)}</span>
+                                      <span>首次发现：{toDisplayText(record?.first)}</span>
+                                      <span>最近出现：{toDisplayText(record?.last)}</span>
+                                      <span>ASN：{toDisplayText(record?.asn)}</span>
+                                      <span>国家/地区：{toDisplayText(record?.country || record?.country_name || record?.flag_title)}</span>
+                                    </div>
                                   </div>
                                 </div>
-                              </div>
-                            ))}
+                              ))}
+                            </div>
                           </div>
-                        </div>
-                      ) : <div className="rounded-[22px] border border-dashed border-white/10 px-5 py-8 text-sm text-white/52">{getSectionListMessage(passiveDnsState, counts.passiveDns, '被动 DNS 记录')}</div>}
+                          {canLoadMore('passive_dns') ? (
+                            <div className="mt-4">
+                              <button
+                                type="button"
+                                onClick={() => void loadMoreSection('passive_dns')}
+                                disabled={loadingMoreSection === 'passive_dns'}
+                                className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-sm text-white/78 transition-colors hover:border-accent/30 hover:bg-accent/10 disabled:opacity-60"
+                              >
+                                {loadingMoreSection === 'passive_dns' ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                                加载更多 Passive DNS
+                              </button>
+                            </div>
+                          ) : null}
+                        </>
+                      ) : passiveDnsIsLoading ? <SectionLoadingState label="被动 DNS" /> : <div className="rounded-[22px] border border-dashed border-white/10 px-5 py-8 text-sm text-white/52">{getSectionListMessage(passiveDnsState, counts.passiveDns, '被动 DNS 记录')}</div>}
                     </Panel>
 
                     <Panel title="关联 URL" subtitle="URL">
                       {urlEntries.length > 0 ? (
-                        <div className="overflow-hidden rounded-[22px] border border-white/8">
+                        <>
+                          <div className="overflow-hidden rounded-[22px] border border-white/8">
                           <div className="hidden grid-cols-[120px_1.8fr_1.35fr_120px_110px_130px] gap-4 border-b border-white/8 bg-white/[0.02] px-4 py-3 text-[11px] uppercase tracking-[0.18em] text-white/38 xl:grid">
                             <span>检测日期</span><span>URL</span><span>主机名</span><span>响应码</span><span>IP</span><span>安全浏览</span>
                           </div>
@@ -815,13 +999,28 @@ const IocSearch = () => {
                               </div>
                             ))}
                           </div>
-                        </div>
+                          </div>
+                          {canLoadMore('url_list') ? (
+                            <div className="mt-4">
+                              <button
+                                type="button"
+                                onClick={() => void loadMoreSection('url_list')}
+                                disabled={loadingMoreSection === 'url_list'}
+                                className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-sm text-white/78 transition-colors hover:border-accent/30 hover:bg-accent/10 disabled:opacity-60"
+                              >
+                                {loadingMoreSection === 'url_list' ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                                加载更多 URL
+                              </button>
+                            </div>
+                          ) : null}
+                        </>
                       ) : <div className="rounded-[22px] border border-dashed border-white/10 px-5 py-8 text-sm text-white/52">{getSectionListMessage(urlListState, counts.urls, '关联 URL')}</div>}
                     </Panel>
 
                     <Panel title="关联文件" subtitle="文件">
                       {malwareEntries.length > 0 ? (
-                        <div className="overflow-hidden rounded-[22px] border border-white/8">
+                        <>
+                          <div className="overflow-hidden rounded-[22px] border border-white/8">
                           <div className="hidden grid-cols-[120px_1.9fr_1fr_1fr_1.2fr] gap-4 border-b border-white/8 bg-white/[0.02] px-4 py-3 text-[11px] uppercase tracking-[0.18em] text-white/38 xl:grid">
                             <span>日期</span><span>哈希</span><span>Avast</span><span>AVG</span><span>ClamAV / 微软防护</span>
                           </div>
@@ -850,7 +1049,21 @@ const IocSearch = () => {
                               );
                             })}
                           </div>
-                        </div>
+                          </div>
+                          {canLoadMore('malware') ? (
+                            <div className="mt-4">
+                              <button
+                                type="button"
+                                onClick={() => void loadMoreSection('malware')}
+                                disabled={loadingMoreSection === 'malware'}
+                                className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-sm text-white/78 transition-colors hover:border-accent/30 hover:bg-accent/10 disabled:opacity-60"
+                              >
+                                {loadingMoreSection === 'malware' ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                                加载更多恶意样本
+                              </button>
+                            </div>
+                          ) : null}
+                        </>
                       ) : <div className="rounded-[22px] border border-dashed border-white/10 px-5 py-8 text-sm text-white/52">{getSectionListMessage(malwareState, counts.malware, '恶意样本')}</div>}
                     </Panel>
 
@@ -881,39 +1094,52 @@ const IocSearch = () => {
                 ) : null}
                 {activeTab === 'passive-dns' ? (
                   passiveDnsEntries.length > 0 ? (
-                    <div className="overflow-hidden rounded-[22px] border border-white/8">
-                      <div className="hidden grid-cols-[120px_1.4fr_120px_1.1fr_1fr_1fr_1.2fr_0.9fr] gap-4 border-b border-white/8 bg-white/[0.02] px-4 py-3 text-[11px] uppercase tracking-[0.18em] text-white/38 xl:grid">
-                        <span>状态</span><span>主机名</span><span>类型</span><span>地址</span><span>首次发现</span><span>最近出现</span><span>ASN</span><span>国家/地区</span>
-                      </div>
-                      <div className="divide-y divide-white/6">
-                        {passiveDnsEntries.map((record: any, index: number) => (
-                          <div key={`${record?.hostname || 'pdns'}-${index}`} className="px-4 py-4">
-                            <div className="hidden grid-cols-[120px_1.4fr_120px_1.1fr_1fr_1fr_1.2fr_0.9fr] gap-4 xl:grid">
-                              <span className="text-sm text-white/56">{toDisplayText(record?.status, '未知')}</span>
-                              <span className="break-all text-sm text-accent">{toDisplayText(record?.hostname)}</span>
-                              <span className="text-sm text-white/72">{toDisplayText(record?.type)}</span>
-                              <span className="break-all text-sm text-white/72">{toDisplayText(record?.address || record?.indicator || results?.indicator)}</span>
-                              <span className="text-sm text-white/56">{toDisplayText(record?.first)}</span>
-                              <span className="text-sm text-white/56">{toDisplayText(record?.last)}</span>
-                              <span className="text-sm text-white/72">{toDisplayText(record?.asn)}</span>
-                              <span className="text-sm text-white/72">{toDisplayText(record?.country || record?.country_name)}</span>
-                            </div>
-                            <div className="grid gap-2 xl:hidden">
-                              <div className="flex items-center justify-between gap-3"><div className="break-all text-sm font-medium text-accent">{toDisplayText(record?.hostname)}</div><span className="text-xs uppercase tracking-[0.18em] text-white/42">{toDisplayText(record?.status, '未知')}</span></div>
-                              <div className="grid gap-2 text-sm text-white/58 sm:grid-cols-2">
-                                <span>类型：{toDisplayText(record?.type)}</span>
-                                <span>地址：{toDisplayText(record?.address || record?.indicator || results?.indicator)}</span>
-                                <span>首次发现：{toDisplayText(record?.first)}</span>
-                                <span>最近出现：{toDisplayText(record?.last)}</span>
-                                <span>ASN：{toDisplayText(record?.asn)}</span>
-                                <span>国家/地区：{toDisplayText(record?.country || record?.country_name)}</span>
+                    <div className="space-y-4">
+                      <div className="overflow-hidden rounded-[22px] border border-white/8">
+                        <div className="hidden grid-cols-[120px_1.4fr_120px_1.1fr_1fr_1fr_1.2fr_0.9fr] gap-4 border-b border-white/8 bg-white/[0.02] px-4 py-3 text-[11px] uppercase tracking-[0.18em] text-white/38 xl:grid">
+                          <span>状态</span><span>主机名</span><span>类型</span><span>地址</span><span>首次发现</span><span>最近出现</span><span>ASN</span><span>国家/地区</span>
+                        </div>
+                        <div className="divide-y divide-white/6">
+                          {passiveDnsEntries.map((record: any, index: number) => (
+                            <div key={`${record?.hostname || 'pdns'}-${index}`} className="px-4 py-4">
+                              <div className="hidden grid-cols-[120px_1.4fr_120px_1.1fr_1fr_1fr_1.2fr_0.9fr] gap-4 xl:grid">
+                                <span className="text-sm text-white/56">{toDisplayText(record?.status, '未知')}</span>
+                                <span className="break-all text-sm text-accent">{toDisplayText(record?.hostname)}</span>
+                                <span className="text-sm text-white/72">{toDisplayText(record?.type)}</span>
+                                <span className="break-all text-sm text-white/72">{toDisplayText(record?.address || record?.indicator || results?.indicator)}</span>
+                                <span className="text-sm text-white/56">{toDisplayText(record?.first)}</span>
+                                <span className="text-sm text-white/56">{toDisplayText(record?.last)}</span>
+                                <span className="text-sm text-white/72">{toDisplayText(record?.asn)}</span>
+                                <span className="text-sm text-white/72">{toDisplayText(record?.country || record?.country_name)}</span>
+                              </div>
+                              <div className="grid gap-2 xl:hidden">
+                                <div className="flex items-center justify-between gap-3"><div className="break-all text-sm font-medium text-accent">{toDisplayText(record?.hostname)}</div><span className="text-xs uppercase tracking-[0.18em] text-white/42">{toDisplayText(record?.status, '未知')}</span></div>
+                                <div className="grid gap-2 text-sm text-white/58 sm:grid-cols-2">
+                                  <span>类型：{toDisplayText(record?.type)}</span>
+                                  <span>地址：{toDisplayText(record?.address || record?.indicator || results?.indicator)}</span>
+                                  <span>首次发现：{toDisplayText(record?.first)}</span>
+                                  <span>最近出现：{toDisplayText(record?.last)}</span>
+                                  <span>ASN：{toDisplayText(record?.asn)}</span>
+                                  <span>国家/地区：{toDisplayText(record?.country || record?.country_name)}</span>
+                                </div>
                               </div>
                             </div>
-                          </div>
-                        ))}
+                          ))}
+                        </div>
                       </div>
+                      {canLoadMore('passive_dns') ? (
+                        <button
+                          type="button"
+                          onClick={() => void loadMoreSection('passive_dns')}
+                          disabled={loadingMoreSection === 'passive_dns'}
+                          className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-sm text-white/78 transition-colors hover:border-accent/30 hover:bg-accent/10 disabled:opacity-60"
+                        >
+                          {loadingMoreSection === 'passive_dns' ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                          加载更多 Passive DNS
+                        </button>
+                      ) : null}
                     </div>
-                  ) : <div className="rounded-[22px] border border-dashed border-white/10 px-5 py-8 text-sm text-white/52">{getSectionListMessage(passiveDnsState, counts.passiveDns, '被动 DNS 记录')}</div>
+                  ) : passiveDnsIsLoading ? <SectionLoadingState label="被动 DNS" /> : <div className="rounded-[22px] border border-dashed border-white/10 px-5 py-8 text-sm text-white/52">{getSectionListMessage(passiveDnsState, counts.passiveDns, '被动 DNS 记录')}</div>
                 ) : null}
 
                 {activeTab === 'pulses' ? (
@@ -959,6 +1185,17 @@ const IocSearch = () => {
                           {record?.detections ? <div className="mt-4 text-sm text-white/52">检出结果：{Object.entries(record.detections).filter(([, value]) => Boolean(value)).map(([engine, value]) => `${engine}: ${value}`).join(' · ') || 'N/A'}</div> : null}
                         </div>
                       )})}
+                      {canLoadMore('malware') ? (
+                        <button
+                          type="button"
+                          onClick={() => void loadMoreSection('malware')}
+                          disabled={loadingMoreSection === 'malware'}
+                          className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-sm text-white/78 transition-colors hover:border-accent/30 hover:bg-accent/10 disabled:opacity-60"
+                        >
+                          {loadingMoreSection === 'malware' ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                          加载更多恶意样本
+                        </button>
+                      ) : null}
                     </div>
                   ) : <div className="rounded-[22px] border border-dashed border-white/10 px-5 py-8 text-sm text-white/52">{getSectionListMessage(malwareState, counts.malware, '恶意样本')}</div>
                 ) : null}
@@ -976,6 +1213,17 @@ const IocSearch = () => {
                           </div>
                         </div>
                       ))}
+                      {canLoadMore('url_list') ? (
+                        <button
+                          type="button"
+                          onClick={() => void loadMoreSection('url_list')}
+                          disabled={loadingMoreSection === 'url_list'}
+                          className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-sm text-white/78 transition-colors hover:border-accent/30 hover:bg-accent/10 disabled:opacity-60"
+                        >
+                          {loadingMoreSection === 'url_list' ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                          加载更多 URL
+                        </button>
+                      ) : null}
                     </div>
                   ) : <div className="rounded-[22px] border border-dashed border-white/10 px-5 py-8 text-sm text-white/52">{getSectionListMessage(urlListState, counts.urls, '关联 URL')}</div>
                 ) : null}

@@ -175,9 +175,10 @@ const getUnifiedTags = (pulses) => {
 
 const buildSectionState = (status, message) => ({ status, message });
 
-const SECTION_TIMEOUT_MS = 8000;
-const SLOW_SECTION_TIMEOUT_MS = 4000;
-const OPTIONAL_SECTION_TIMEOUT_MS = 6000;
+const SECTION_TIMEOUT_MS = 10000;
+const SLOW_SECTION_TIMEOUT_MS = 7000;
+const OPTIONAL_SECTION_TIMEOUT_MS = 8000;
+const OTX_TIMEOUT_RETRIES = 1;
 
 const isSectionErrorPayload = (payload) =>
   Boolean(payload && typeof payload === 'object' && payload.__section_error);
@@ -212,7 +213,7 @@ const getHttpScans = (payload) => {
 };
 
 const requestOtxSection = async (endpoint, options = {}) => {
-  const { graceful = false, timeoutMs = SECTION_TIMEOUT_MS, internal = false } = options;
+  const { graceful = false, timeoutMs = SECTION_TIMEOUT_MS, internal = false, retryCount = 0 } = options;
   const apiKey = process.env.OTX_API_KEY || process.env.VITE_OTX_API_KEY;
   if (!apiKey) {
     throw new Error('OTX_API_KEY is not configured');
@@ -252,6 +253,14 @@ const requestOtxSection = async (endpoint, options = {}) => {
 
     return response.json();
   } catch (error) {
+    if (error?.name === 'AbortError' && retryCount < OTX_TIMEOUT_RETRIES) {
+      return requestOtxSection(endpoint, {
+        ...options,
+        retryCount: retryCount + 1,
+        timeoutMs: Math.round(timeoutMs * 1.35),
+      });
+    }
+
     if (graceful) {
       if (error?.name === 'AbortError') {
         return { __section_error: 'timeout' };

@@ -54,6 +54,21 @@ const requestOtx = async (endpoint: string, retryCount = 0): Promise<any> => {
   }
 };
 
+type OtxRequestParams = Record<string, string | number | boolean | undefined>;
+
+const requestOtxWithParams = async (endpoint: string, params?: OtxRequestParams, retryCount = 0): Promise<any> => {
+  try {
+    const response = await otxAxios.get(endpoint, { params });
+    return ensureValidPayload(response.data, endpoint);
+  } catch (error: any) {
+    if (retryCount < OTX_MAX_RETRIES && shouldRetryOtxRequest(error)) {
+      await sleep(OTX_RETRY_DELAY * (retryCount + 1));
+      return requestOtxWithParams(endpoint, params, retryCount + 1);
+    }
+    throw error;
+  }
+};
+
 export const otxApi = {
   searchIntel: async (query: string, type: 'ip' | 'domain' | 'url' | 'cve', options?: { noCache?: boolean }) => {
     const response = await otxAxios.get('/search', {
@@ -68,12 +83,12 @@ export const otxApi = {
   },
 
   // 1.1 IPv4/IPv6 查询
-  getIpInfo: async (ip: string, section: string = 'general', isIpv6: boolean = false) => {
+  getIpInfo: async (ip: string, section: string = 'general', isIpv6: boolean = false, params?: OtxRequestParams) => {
     const ipVersion = isIpv6 ? 'IPv6' : 'IPv4';
     const endpoint = `/indicators/${ipVersion}/${ip}/${section}`;
     
     try {
-      return await requestOtx(endpoint);
+      return await requestOtxWithParams(endpoint, params);
     } catch (error: any) {
       // 忽略 404 错误（某些 section 可能不存在数据）
       if (error.response?.status === 404) {
@@ -85,11 +100,11 @@ export const otxApi = {
   },
 
   // 1.2 域名查询
-  getDomainInfo: async (domain: string, section: string = 'general') => {
+  getDomainInfo: async (domain: string, section: string = 'general', params?: OtxRequestParams) => {
     const endpoint = `/indicators/domain/${domain}/${section}`;
     
     try {
-      return await requestOtx(endpoint);
+      return await requestOtxWithParams(endpoint, params);
     } catch (error: any) {
       // 忽略 404 错误
       if (error.response?.status === 404) {
@@ -101,12 +116,12 @@ export const otxApi = {
   },
 
   // 1.2 主机名查询
-  getHostnameInfo: async (hostname: string, section: string = 'general') => {
-    return requestOtx(`/indicators/hostname/${hostname}/${section}`);
+  getHostnameInfo: async (hostname: string, section: string = 'general', params?: OtxRequestParams) => {
+    return requestOtxWithParams(`/indicators/hostname/${hostname}/${section}`, params);
   },
 
   // 1.3 URL检测
-  getUrlInfo: async (url: string, section: string = 'general') => {
+  getUrlInfo: async (url: string, section: string = 'general', params?: OtxRequestParams) => {
     // 移除 URL 中的协议头 (http:// 或 https://) 和末尾的斜杠，OTX 只需要域名或路径
     let cleanUrl = url.replace(/^https?:\/\//, '').replace(/\/$/, '');
     const encodedUrl = encodeURIComponent(cleanUrl);
@@ -114,7 +129,7 @@ export const otxApi = {
     // 这里我们先尝试只进行一次编码，但要注意斜杠
     
     try {
-      return await requestOtx(`/indicators/url/${encodedUrl}/${section}`);
+      return await requestOtxWithParams(`/indicators/url/${encodedUrl}/${section}`, params);
     } catch (error: any) {
       // 忽略 404 错误
       if (error.response?.status === 404) {
@@ -125,11 +140,11 @@ export const otxApi = {
   },
 
   // 1.4 CVE漏洞情报
-  getCveInfo: async (cveId: string, section: string = 'general') => {
+  getCveInfo: async (cveId: string, section: string = 'general', params?: OtxRequestParams) => {
     // 确保 CVE ID 格式正确 (大写)
     const formattedCveId = cveId.toUpperCase();
     try {
-      return await requestOtx(`/indicators/cve/${formattedCveId}/${section}`);
+      return await requestOtxWithParams(`/indicators/cve/${formattedCveId}/${section}`, params);
     } catch (error: any) {
       // 忽略 404 错误（某些 section 可能不存在数据）
       if (error.response?.status === 404) {
