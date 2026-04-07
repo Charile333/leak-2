@@ -5,6 +5,10 @@
       "destination": "/api/otx/search.js"
     },
     {
+      "source": "/api/otx/cve-feed",
+      "destination": "/api/otx/cve-feed.js"
+    },
+    {
       "source": "/api/code-leak/search",
       "destination": "/api/code-leak/search.js"
     },
@@ -27,6 +31,14 @@
     {
       "source": "/api/file-leak/assets/(.*)",
       "destination": "/api/file-leak/assets.js?id=$1"
+    },
+    {
+      "source": "/api/cve-intel/assets",
+      "destination": "/api/cve-intel/assets.js"
+    },
+    {
+      "source": "/api/cve-intel/assets/(.*)",
+      "destination": "/api/cve-intel/assets.js?id=$1"
     },
     {
       "source": "/api/scheduled-scans/tasks",

@@ -160,6 +160,17 @@ export const otxApi = {
     return requestOtx('/pulses/activity');
   },
 
+  getLatestCveIntel: async (options?: { limit?: number; window?: '24h' | '7d' | 'all'; noCache?: boolean }) => {
+    const response = await otxAxios.get('/cve-feed', {
+      params: {
+        ...(options?.limit ? { limit: options.limit } : {}),
+        ...(options?.window ? { window: options.window } : {}),
+        ...(options?.noCache ? { noCache: '1' } : {}),
+      },
+    });
+    return ensureValidPayload(response.data, '/cve-feed');
+  },
+
   // 2.2 关键词搜索
   searchPulses: async (keyword: string, sort: string = '-modified') => {
     const response = await otxAxios.get('/search/pulses', {

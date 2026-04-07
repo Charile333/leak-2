@@ -71,7 +71,7 @@ export default async function handler(req, res) {
         });
       }
 
-      if (!['code_leak', 'file_leak'].includes(scanType)) {
+      if (!['code_leak', 'file_leak', 'cve_intel'].includes(scanType)) {
         return sendJson(res, 400, {
           success: false,
           error: 'Bad Request',

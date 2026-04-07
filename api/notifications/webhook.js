@@ -18,6 +18,12 @@ export default async function handler(req, res) {
   try {
     const body = req.method === 'POST' || req.method === 'PATCH' ? await readJsonBody(req) : null;
     const userEmail = getWebhookUserEmail(req, body);
+    const channel =
+      typeof req.query?.channel === 'string'
+        ? req.query.channel.trim()
+        : typeof body?.channel === 'string'
+          ? body.channel.trim()
+          : 'leak_monitor';
 
     if (!userEmail) {
       return sendJson(res, 401, {
@@ -28,14 +34,23 @@ export default async function handler(req, res) {
     }
 
     if (req.method === 'GET') {
-      const config = await getWebhookConfig(userEmail);
+      const leakMonitorConfig = await getWebhookConfig(userEmail, 'leak_monitor');
+      const cveIntelConfig = await getWebhookConfig(userEmail, 'cve_intel');
       const logs = await listWebhookDeliveryLogs(userEmail, 8);
-      return sendJson(res, 200, { success: true, config, logs });
+      return sendJson(res, 200, {
+        success: true,
+        config: channel === 'cve_intel' ? cveIntelConfig : leakMonitorConfig,
+        configs: {
+          leak_monitor: leakMonitorConfig,
+          cve_intel: cveIntelConfig,
+        },
+        logs,
+      });
     }
 
     if (req.method === 'POST' || req.method === 'PATCH') {
       if (body?.action === 'test') {
-        const result = await sendWebhookTestNotification(userEmail);
+        const result = await sendWebhookTestNotification(userEmail, channel);
         return sendJson(res, result.delivered ? 200 : 502, {
           success: result.delivered,
           delivered: result.delivered,
@@ -59,6 +74,7 @@ export default async function handler(req, res) {
 
       const config = await upsertWebhookConfig(userEmail, {
         id: body?.id,
+        channel,
         url,
         secret,
         enabled,
@@ -68,7 +84,7 @@ export default async function handler(req, res) {
     }
 
     if (req.method === 'DELETE') {
-      await removeWebhookConfig(userEmail);
+      await removeWebhookConfig(userEmail, channel);
       return sendJson(res, 200, { success: true, config: null });
     }
 

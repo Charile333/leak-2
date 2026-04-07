@@ -1,4 +1,9 @@
-import { evaluateCodeLeak, evaluateFileLeak } from './leak-rules.js';
+import {
+  CODE_SENSITIVE_SEARCH_PATTERNS_V1,
+  evaluateCodeLeak,
+  evaluateFileLeak,
+  evaluateRepositoryAssociation,
+} from './leak-rules.js';
 
 const OTX_UPSTREAM_URL = 'https://otx.alienvault.com/api/v1';
 const OTX_INTERNAL_UPSTREAM_URL = 'https://otx.alienvault.com/otxapi';
@@ -6,8 +11,17 @@ const USE_OTX_INTERNAL_API = process.env.OTX_USE_INTERNAL_API === '1';
 
 const otxSearchCache = globalThis.__otxSearchCache || new Map();
 globalThis.__otxSearchCache = otxSearchCache;
+const cveIntelCache = globalThis.__cveIntelCache || new Map();
+globalThis.__cveIntelCache = cveIntelCache;
+const nvdCveCache = globalThis.__nvdCveCache || new Map();
+globalThis.__nvdCveCache = nvdCveCache;
+const aliyunCveCache = globalThis.__aliyunCveCache || new Map();
+globalThis.__aliyunCveCache = aliyunCveCache;
 
 const OTX_SEARCH_CACHE_TTL = 10 * 60 * 1000;
+const CVE_INTEL_CACHE_TTL = 15 * 60 * 1000;
+const NVD_CVE_CACHE_TTL = 30 * 60 * 1000;
+const ALIYUN_CVE_CACHE_TTL = 30 * 60 * 1000;
 
 export const applyCors = (res) => {
   res.setHeader('Access-Control-Allow-Credentials', 'true');
@@ -62,6 +76,60 @@ export const setCachedOtxSearch = (type, query, value) => {
   otxSearchCache.set(getCacheKey(type, query), {
     value,
     expiresAt: Date.now() + OTX_SEARCH_CACHE_TTL,
+  });
+};
+
+const getCveIntelCacheKey = ({ limit = 12, window = '7d' } = {}) => `cve-intel:${window}:${limit}`;
+
+const getCachedCveIntel = (options = {}) => {
+  const cacheKey = getCveIntelCacheKey(options);
+  const cached = cveIntelCache.get(cacheKey);
+  if (!cached) return null;
+  if (cached.expiresAt < Date.now()) {
+    cveIntelCache.delete(cacheKey);
+    return null;
+  }
+  return cached.value;
+};
+
+const setCachedCveIntel = (options, value) => {
+  cveIntelCache.set(getCveIntelCacheKey(options), {
+    value,
+    expiresAt: Date.now() + CVE_INTEL_CACHE_TTL,
+  });
+};
+
+const getCachedNvdCve = (cveId) => {
+  const cached = nvdCveCache.get(cveId);
+  if (!cached) return null;
+  if (cached.expiresAt < Date.now()) {
+    nvdCveCache.delete(cveId);
+    return null;
+  }
+  return cached.value;
+};
+
+const setCachedNvdCve = (cveId, value) => {
+  nvdCveCache.set(cveId, {
+    value,
+    expiresAt: Date.now() + NVD_CVE_CACHE_TTL,
+  });
+};
+
+const getCachedAliyunCve = (key) => {
+  const cached = aliyunCveCache.get(key);
+  if (!cached) return null;
+  if (cached.expiresAt < Date.now()) {
+    aliyunCveCache.delete(key);
+    return null;
+  }
+  return cached.value;
+};
+
+const setCachedAliyunCve = (key, value) => {
+  aliyunCveCache.set(key, {
+    value,
+    expiresAt: Date.now() + ALIYUN_CVE_CACHE_TTL,
   });
 };
 
@@ -316,6 +384,425 @@ const requestOtxCandidates = async (candidates, options = {}) => {
   throw lastError || new Error('OTX candidate request failed');
 };
 
+const requestJson = async (url, options = {}) => {
+  const { timeoutMs = SECTION_TIMEOUT_MS, graceful = false, headers = {} } = options;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const response = await fetch(url, {
+      headers: {
+        Accept: 'application/json',
+        'User-Agent': 'Lysir-Security-Platform/1.0',
+        ...headers,
+      },
+      signal: controller.signal,
+    });
+
+    if (!response.ok) {
+      if (graceful) {
+        return null;
+      }
+      throw new Error(`Request failed: ${response.status}`);
+    }
+
+    return response.json();
+  } catch (error) {
+    if (graceful) return null;
+    throw error;
+  } finally {
+    clearTimeout(timer);
+  }
+};
+
+const requestText = async (url, options = {}) => {
+  const { timeoutMs = SECTION_TIMEOUT_MS, graceful = false, headers = {} } = options;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const response = await fetch(url, {
+      headers: {
+        Accept: 'text/html,application/xhtml+xml',
+        'User-Agent': 'Lysir-Security-Platform/1.0',
+        ...headers,
+      },
+      signal: controller.signal,
+    });
+
+    if (!response.ok) {
+      if (graceful) {
+        return '';
+      }
+      throw new Error(`Request failed: ${response.status}`);
+    }
+
+    return response.text();
+  } catch (error) {
+    if (graceful) return '';
+    throw error;
+  } finally {
+    clearTimeout(timer);
+  }
+};
+
+const extractCveIds = (...values) => {
+  const matches = new Set();
+  values
+    .filter(Boolean)
+    .forEach((value) => {
+      String(value)
+        .match(/CVE-\d{4}-\d{4,7}/gi)
+        ?.forEach((match) => matches.add(match.toUpperCase()));
+    });
+  return Array.from(matches);
+};
+
+const extractEnglishDescription = (descriptions = []) => {
+  const english = descriptions.find(
+    (item) => item?.lang === 'en' && typeof item.value === 'string' && item.value.trim()
+  );
+  return english?.value?.trim() || '';
+};
+
+const extractCvssMetrics = (metrics = {}) => {
+  const candidates = [
+    ...(Array.isArray(metrics.cvssMetricV31) ? metrics.cvssMetricV31 : []),
+    ...(Array.isArray(metrics.cvssMetricV30) ? metrics.cvssMetricV30 : []),
+    ...(Array.isArray(metrics.cvssMetricV2) ? metrics.cvssMetricV2 : []),
+  ];
+
+  for (const candidate of candidates) {
+    const baseScore = candidate?.cvssData?.baseScore;
+    if (typeof baseScore === 'number') {
+      return {
+        score: baseScore,
+        severity:
+          candidate?.cvssData?.baseSeverity ||
+          candidate?.baseSeverity ||
+          (baseScore >= 9 ? 'CRITICAL' : baseScore >= 7 ? 'HIGH' : baseScore >= 4 ? 'MEDIUM' : 'LOW'),
+        vector: candidate?.cvssData?.vectorString || '',
+      };
+    }
+  }
+
+  return {
+    score: null,
+    severity: '',
+    vector: '',
+  };
+};
+
+const normalizePublishedDate = (value) => {
+  if (!value) return '';
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? String(value) : date.toISOString();
+};
+
+const getPushLevel = (score) => {
+  if (score >= 70) return '高优先';
+  if (score >= 45) return '建议关注';
+  return '情报观察';
+};
+
+const buildPushAssessment = ({ cvssScore, hasKev, otxMentionCount, summary, title }) => {
+  let score = 0;
+  const reasons = [];
+  const haystack = `${title || ''} ${summary || ''}`.toLowerCase();
+
+  if (hasKev) {
+    score += 40;
+    reasons.push('已进入 KEV');
+  }
+
+  if (typeof cvssScore === 'number') {
+    if (cvssScore >= 9) {
+      score += 25;
+      reasons.push('CVSS 极高危');
+    } else if (cvssScore >= 7) {
+      score += 15;
+      reasons.push('CVSS 高危');
+    }
+  }
+
+  if (otxMentionCount >= 5) {
+    score += 15;
+    reasons.push('近期情报热度较高');
+  } else if (otxMentionCount >= 2) {
+    score += 8;
+    reasons.push('近期被多条情报提及');
+  }
+
+  if (/(rce|remote code execution|actively exploited|exploit|poc|ransomware|0day|zero-day)/i.test(haystack)) {
+    score += 12;
+    reasons.push('存在高风险利用线索');
+  }
+
+  return {
+    score,
+    level: getPushLevel(score),
+    recommended: score >= 45,
+    reasons,
+  };
+};
+
+export const enrichWithNvd = async (cveId) => {
+  const cached = getCachedNvdCve(cveId);
+  if (cached) {
+    return cached;
+  }
+
+  const data = await requestJson(`https://services.nvd.nist.gov/rest/json/cves/2.0?cveId=${encodeURIComponent(cveId)}`, {
+    timeoutMs: 6000,
+    graceful: true,
+  });
+
+  const vulnerability = Array.isArray(data?.vulnerabilities) ? data.vulnerabilities[0]?.cve : null;
+  if (!vulnerability) {
+    return null;
+  }
+
+  const descriptions = Array.isArray(vulnerability.descriptions) ? vulnerability.descriptions : [];
+  const description = extractEnglishDescription(descriptions);
+  const metrics = extractCvssMetrics(vulnerability.metrics || {});
+  const weaknesses = Array.isArray(vulnerability.weaknesses) ? vulnerability.weaknesses : [];
+  const cwe = weaknesses
+    .flatMap((item) => (Array.isArray(item?.description) ? item.description : []))
+    .find((item) => item?.lang === 'en' && typeof item.value === 'string')?.value;
+
+  const normalized = {
+    cveId,
+    description,
+    published: normalizePublishedDate(vulnerability.published),
+    lastModified: normalizePublishedDate(vulnerability.lastModified),
+    cvssScore: metrics.score,
+    severity: metrics.severity,
+    vector: metrics.vector,
+    hasKev: Boolean(vulnerability.cisaExploitAdd),
+    kevDate: normalizePublishedDate(vulnerability.cisaExploitAdd),
+    cwe: cwe || '',
+    references: Array.isArray(vulnerability.references)
+      ? vulnerability.references
+          .map((item) => item?.url)
+          .filter(Boolean)
+          .slice(0, 6)
+      : [],
+  };
+
+  setCachedNvdCve(cveId, normalized);
+  return normalized;
+};
+
+const parseAliyunSeverity = (value) => {
+  const text = String(value || '').trim();
+  if (!text) return '';
+  if (/[严重|紧急]/.test(text)) return 'CRITICAL';
+  if (/高/.test(text)) return 'HIGH';
+  if (/中/.test(text)) return 'MEDIUM';
+  if (/低/.test(text)) return 'LOW';
+  return text.toUpperCase();
+};
+
+const enrichWithAliyunAvd = async (cveId) => {
+  const normalizedId = String(cveId || '').trim().toUpperCase();
+  if (!normalizedId) return null;
+
+  const cached = getCachedAliyunCve(normalizedId);
+  if (cached) {
+    return cached;
+  }
+
+  const html = await requestText('https://avd.aliyun.com/', {
+    timeoutMs: 7000,
+    graceful: true,
+  });
+
+  if (!html) {
+    return null;
+  }
+
+  const rows = html.match(/<tr[\s\S]*?<\/tr>/gi) || [];
+  for (const row of rows) {
+    if (!new RegExp(normalizedId, 'i').test(row)) {
+      continue;
+    }
+
+    const hrefMatch = row.match(/href="([^"]+)"/i);
+    const textCells = Array.from(row.matchAll(/<td[\s\S]*?>([\s\S]*?)<\/td>/gi))
+      .map((match) =>
+        String(match[1] || '')
+          .replace(/<[^>]+>/g, ' ')
+          .replace(/&nbsp;/gi, ' ')
+          .replace(/\s+/g, ' ')
+          .trim()
+      )
+      .filter(Boolean);
+
+    const normalized = {
+      cveId: normalizedId,
+      title: textCells[1] || '',
+      published: normalizePublishedDate(textCells[2] || ''),
+      severity: parseAliyunSeverity(textCells[4] || textCells[3] || ''),
+      sourceUrl: hrefMatch?.[1] ? `https://avd.aliyun.com${hrefMatch[1]}` : '',
+      sourceName: 'Aliyun AVD',
+    };
+
+    setCachedAliyunCve(normalizedId, normalized);
+    return normalized;
+  }
+
+  setCachedAliyunCve(normalizedId, null);
+  return null;
+};
+
+export const buildLatestCveIntelFeed = async (options = {}) => {
+  const limit = Math.max(4, Math.min(20, Number(options.limit) || 12));
+  const window = ['24h', '7d', 'all'].includes(String(options.window || '7d')) ? String(options.window) : '7d';
+  const noCache = options.noCache === true;
+
+  if (!noCache) {
+    const cached = getCachedCveIntel({ limit, window });
+    if (cached) {
+      return { ...cached, cached: true };
+    }
+  }
+
+  const activityPayload = await requestOtxSection('/pulses/activity', {
+    timeoutMs: 10000,
+    graceful: true,
+  });
+  const results = isSectionErrorPayload(activityPayload)
+    ? []
+    : Array.isArray(activityPayload?.results)
+      ? activityPayload.results
+      : [];
+  const now = Date.now();
+  const maxAge =
+    window === '24h' ? 24 * 60 * 60 * 1000 : window === '7d' ? 7 * 24 * 60 * 60 * 1000 : Number.POSITIVE_INFINITY;
+
+  const cveMap = new Map();
+
+  results.forEach((pulse) => {
+    const eventTime = new Date(pulse?.modified || pulse?.created || '').getTime();
+    if (!Number.isNaN(eventTime) && eventTime < now - maxAge) {
+      return;
+    }
+
+    const cveIds = extractCveIds(
+      pulse?.name,
+      pulse?.description,
+      ...(Array.isArray(pulse?.indicators) ? pulse.indicators.map((indicator) => indicator?.indicator) : [])
+    );
+
+    cveIds.forEach((cveId) => {
+      const existing = cveMap.get(cveId) || {
+        cveId,
+        latestSeen: pulse?.modified || pulse?.created || '',
+        latestPulseName: pulse?.name || '',
+        latestPulseSummary: pulse?.description || '',
+        otxMentionCount: 0,
+        tags: new Set(),
+        references: new Set(),
+        sourceTags: new Set(['OTX']),
+      };
+
+      existing.otxMentionCount += 1;
+      if ((pulse?.modified || pulse?.created || '') > existing.latestSeen) {
+        existing.latestSeen = pulse?.modified || pulse?.created || '';
+        existing.latestPulseName = pulse?.name || existing.latestPulseName;
+        existing.latestPulseSummary = pulse?.description || existing.latestPulseSummary;
+      }
+
+      (Array.isArray(pulse?.tags) ? pulse.tags : []).forEach((tag) => {
+        if (typeof tag === 'string' && tag.trim()) existing.tags.add(tag.trim());
+      });
+      (Array.isArray(pulse?.references) ? pulse.references : []).forEach((reference) => {
+        if (typeof reference === 'string' && reference.trim()) existing.references.add(reference.trim());
+      });
+
+      cveMap.set(cveId, existing);
+    });
+  });
+
+  const rankedSignals = Array.from(cveMap.values())
+    .sort((a, b) => new Date(b.latestSeen).getTime() - new Date(a.latestSeen).getTime())
+    .slice(0, limit);
+
+  const enrichedItems = await Promise.all(
+    rankedSignals.map(async (signal) => {
+      const nvd = await enrichWithNvd(signal.cveId);
+      const aliyun = await enrichWithAliyunAvd(signal.cveId);
+      const summary = nvd?.description || signal.latestPulseSummary || '';
+      const title = aliyun?.title || signal.latestPulseName || signal.cveId;
+      const push = buildPushAssessment({
+        cvssScore: nvd?.cvssScore ?? null,
+        hasKev: Boolean(nvd?.hasKev),
+        otxMentionCount: signal.otxMentionCount,
+        summary,
+        title,
+      });
+
+      const sourceTags = new Set(signal.sourceTags);
+      if (nvd) sourceTags.add('NVD');
+      if (nvd?.hasKev) sourceTags.add('KEV');
+      if (aliyun) sourceTags.add('Aliyun AVD');
+
+      return {
+        cveId: signal.cveId,
+        title,
+        summary,
+        published: nvd?.published || aliyun?.published || '',
+        lastModified: nvd?.lastModified || signal.latestSeen,
+        latestSeen: signal.latestSeen,
+        cvssScore: nvd?.cvssScore ?? null,
+        severity: nvd?.severity || aliyun?.severity || '',
+        vector: nvd?.vector || '',
+        cwe: nvd?.cwe || '',
+        hasKev: Boolean(nvd?.hasKev),
+        kevDate: nvd?.kevDate || '',
+        otxMentionCount: signal.otxMentionCount,
+        latestPulseName: signal.latestPulseName,
+        tags: Array.from(signal.tags).slice(0, 8),
+        references: Array.from(
+          new Set([...(nvd?.references || []), ...(aliyun?.sourceUrl ? [aliyun.sourceUrl] : []), ...Array.from(signal.references)])
+        ).slice(0, 8),
+        sourceTags: Array.from(sourceTags),
+        sourceDetails: {
+          aliyun: aliyun || null,
+          nvd: nvd ? { severity: nvd.severity, cvssScore: nvd.cvssScore } : null,
+        },
+        pushScore: push.score,
+        pushLevel: push.level,
+        pushRecommended: push.recommended,
+        pushReasons: push.reasons,
+      };
+    })
+  );
+
+  const sortedItems = enrichedItems.sort((a, b) => {
+    if (b.pushScore !== a.pushScore) return b.pushScore - a.pushScore;
+    return new Date(b.lastModified || b.latestSeen).getTime() - new Date(a.lastModified || a.latestSeen).getTime();
+  });
+
+  const payload = {
+    cached: false,
+    generatedAt: new Date().toISOString(),
+    meta: {
+      totalSignals: sortedItems.length,
+      recommendedCount: sortedItems.filter((item) => item.pushRecommended).length,
+      kevCount: sortedItems.filter((item) => item.hasKev).length,
+      highSeverityCount: sortedItems.filter((item) => typeof item.cvssScore === 'number' && item.cvssScore >= 7).length,
+      sourceTags: ['OTX', 'NVD', 'KEV', 'Aliyun AVD'],
+      window,
+      upstreamStatus: isSectionErrorPayload(activityPayload) ? getSectionErrorType(activityPayload) : 'success',
+    },
+    items: sortedItems,
+  };
+
+  setCachedCveIntel({ limit, window }, payload);
+  return payload;
+};
+
 export const buildStructuredOtxResult = async (type, query, options = {}) => {
   const { coreOnly = false } = options;
   if (type === 'ip') {
@@ -532,18 +1019,24 @@ export const buildStructuredOtxResult = async (type, query, options = {}) => {
     const normalizedQuery = String(query).toUpperCase();
     const [generalPayload, pulsesPayload] = await Promise.all([
       requestOtxCandidates([{ endpoint: `/indicators/cve/general/${normalizedQuery}`, internal: true }, { endpoint: `/indicators/cve/${normalizedQuery}/general`, internal: false }]),
-          coreOnly ? Promise.resolve({}) : requestOtxCandidates([{ endpoint: `/indicators/cve/top_n_pulses/${normalizedQuery}`, internal: true }, { endpoint: `/indicators/cve/${normalizedQuery}/top_n_pulses`, internal: false }], { graceful: true, timeoutMs: OPTIONAL_SECTION_TIMEOUT_MS }),
+      requestOtxCandidates([{ endpoint: `/indicators/cve/top_n_pulses/${normalizedQuery}`, internal: true }, { endpoint: `/indicators/cve/${normalizedQuery}/top_n_pulses`, internal: false }], { graceful: true, timeoutMs: OPTIONAL_SECTION_TIMEOUT_MS }),
     ]);
     const general = unwrapPayload(generalPayload);
     const pulses = getCollection(pulsesPayload, 'top_n_pulses');
+    const nvd = await enrichWithNvd(normalizedQuery);
 
     return {
       type,
       query: normalizedQuery,
       indicator: pickFirstPath(general, ['indicator', 'name', 'id', 'cve'], normalizedQuery),
-      base_score: pickFirstPath(general, ['base_score', 'cvss_score', 'cvss.base_score', 'cvss.score', 'cvss.cvssV3.baseScore', 'cvss3.base_score', 'cvss3.score']),
-      published: formatDisplayDate(pickFirstPath(general, ['published', 'published_date', 'release_date', 'created', 'modified', 'updated'])),
-      description: pickFirstPath(general, ['description', 'details', 'summary'], ''),
+      base_score: pickFirstValue(
+        pickFirstPath(general, ['base_score', 'cvss_score', 'cvss.base_score', 'cvss.score', 'cvss.cvssV3.baseScore', 'cvss3.base_score', 'cvss3.score']),
+        nvd?.cvssScore
+      ),
+      published: formatDisplayDate(
+        pickFirstValue(pickFirstPath(general, ['published', 'published_date', 'release_date', 'created', 'modified', 'updated']), nvd?.published)
+      ),
+      description: pickFirstPath(general, ['description', 'details', 'summary'], nvd?.description || ''),
       pulse_info: {
         count: pickFirstPath(general, ['pulse_info.count', 'pulse_count'], pulses.length || 0),
         pulses: [],
@@ -578,7 +1071,7 @@ export const buildStructuredOtxResult = async (type, query, options = {}) => {
 const dedupeCodeLeakFindings = (findings) => {
   const seen = new Set();
   return findings.filter((finding) => {
-    const key = `${finding.source}:${finding.url}:${finding.match}`;
+    const key = `${finding.source}:${finding.repository}:${finding.path}:${finding.match}`;
     if (seen.has(key)) return false;
     seen.add(key);
     return true;
@@ -743,17 +1236,9 @@ const searchGiteeRepositories = async (terms) => {
 };
 
 export const searchCodeLeaks = async (assets = [], query = '') => {
-  const terms = Array.from(
-    new Set([
-      ...(query ? [query.trim()] : []),
-      ...assets
-        .filter((asset) => asset && asset.enabled !== false && typeof asset.value === 'string')
-        .map((asset) => asset.value.trim())
-        .filter(Boolean),
-    ])
-  ).slice(0, 6);
+  const normalizedAssets = normalizeCodeLeakAssets(assets, query);
 
-  if (terms.length === 0) {
+  if (normalizedAssets.length === 0) {
     return {
       success: true,
       findings: [],
@@ -764,24 +1249,277 @@ export const searchCodeLeaks = async (assets = [], query = '') => {
     };
   }
 
-  const [githubRepoFindings, githubCodeFindings, giteeRepoFindings] = await Promise.all([
-    searchGitHubRepositories(terms),
-    searchGitHubCode(terms),
-    searchGiteeRepositories(terms),
+  const [githubRepositoryCandidates, giteeRepositoryCandidates] = await Promise.all([
+    searchAssociatedGitHubRepositories(normalizedAssets),
+    searchAssociatedGiteeRepositories(normalizedAssets),
   ]);
+
+  const githubCodeFindings = await searchSensitiveGitHubRepositoryContent(githubRepositoryCandidates);
+  const giteeRepositoryFindings = giteeRepositoryCandidates.map((candidate) => ({
+    id: `gitee-repo-${candidate.repository}-${candidate.asset.id}`,
+    assetLabel: candidate.asset.label,
+    severity: 'medium',
+    status: 'new',
+    source: 'Gitee',
+    exposure: 'repository',
+    title: `${candidate.repository} related repository candidate`,
+    repository: candidate.repository,
+    owner: candidate.owner,
+    path: 'Repository metadata',
+    branch: candidate.branch,
+    match: candidate.asset.value,
+    snippet: candidate.description || 'Repository metadata requires manual verification.',
+    firstSeen: candidate.firstSeen,
+    lastSeen: candidate.lastSeen,
+    url: candidate.url,
+    confidence: Math.min(0.82, 0.44 + candidate.association.confidenceBoost),
+    matchedRules: candidate.association.matchedRules,
+    notes: [
+      `Repository appears related to monitored asset ${candidate.asset.type}:${candidate.asset.value}`,
+      ...candidate.association.notes,
+      'Gitee source is currently repository-level only; sensitive file verification still needs manual review.',
+    ],
+  }));
 
   return {
     success: true,
     findings: dedupeCodeLeakFindings([
-      ...githubRepoFindings,
       ...githubCodeFindings,
-      ...giteeRepoFindings,
+      ...giteeRepositoryFindings,
     ]),
     meta: {
-      usedTerms: terms,
+      usedTerms: normalizedAssets.map((asset) => asset.value),
       githubCodeEnabled: Boolean(process.env.GITHUB_TOKEN || process.env.VITE_GITHUB_TOKEN || ''),
+      repositoryCandidates: githubRepositoryCandidates.length + giteeRepositoryCandidates.length,
     },
   };
+};
+
+const normalizeCodeLeakAssets = (assets = [], query = '') =>
+  Array.from(
+    new Map(
+      [
+        ...assets
+          .filter((asset) => asset && asset.enabled !== false && typeof asset.value === 'string' && asset.value.trim())
+          .map((asset) => [
+            `${asset.type}:${asset.value.trim().toLowerCase()}`,
+            {
+              ...asset,
+              label: asset.label || asset.value.trim(),
+              value: asset.value.trim(),
+            },
+          ]),
+        ...(query && query.trim()
+          ? [[`query:${query.trim().toLowerCase()}`, { id: `query-${query.trim().toLowerCase()}`, label: query.trim(), value: query.trim(), type: 'repository', enabled: true }]]
+          : []),
+      ]
+    ).values()
+  ).slice(0, 8);
+
+const buildRepositorySearchTerms = (asset) => {
+  const rawValue = String(asset?.value || '').trim().toLowerCase();
+  if (!rawValue) return [];
+
+  const terms = new Set([rawValue]);
+  const sanitized = rawValue.replace(/^@/, '').replace(/^https?:\/\//, '').replace(/^www\./, '');
+  if (sanitized) terms.add(sanitized);
+
+  if (asset.type === 'domain' || asset.type === 'email_suffix') {
+    const domain = sanitized.replace(/^@/, '').split('/')[0];
+    if (domain) {
+      terms.add(domain);
+      const rootDomain = domain.split('.').slice(-2).join('.');
+      if (rootDomain) terms.add(rootDomain);
+      const ownerToken = domain.split('.')[0];
+      if (ownerToken && ownerToken.length >= 3) terms.add(ownerToken);
+    }
+  } else {
+    sanitized
+      .split(/[^a-z0-9]+/i)
+      .map((part) => part.trim())
+      .filter((part) => part.length >= 3)
+      .forEach((part) => terms.add(part));
+  }
+
+  return Array.from(terms).filter(Boolean).slice(0, 4);
+};
+
+const createRepositoryCandidateKey = (source, owner, repository) =>
+  `${source}:${String(owner || '').toLowerCase()}:${String(repository || '').toLowerCase()}`;
+
+const searchAssociatedGitHubRepositories = async (assets = []) => {
+  const githubToken = process.env.GITHUB_TOKEN || process.env.VITE_GITHUB_TOKEN || '';
+  const headers = {
+    Accept: 'application/vnd.github+json',
+    'User-Agent': 'Lysir-Security-Platform/1.0',
+  };
+
+  if (githubToken) {
+    headers.Authorization = `Bearer ${githubToken}`;
+    headers['X-GitHub-Api-Version'] = '2022-11-28';
+  }
+
+  const candidates = [];
+  const seen = new Set();
+
+  for (const asset of assets) {
+    const terms = buildRepositorySearchTerms(asset);
+    for (const term of terms) {
+      const url = `https://api.github.com/search/repositories?q=${encodeURIComponent(term)}&sort=updated&order=desc&per_page=3`;
+      const response = await fetch(url, { headers });
+      if (!response.ok) continue;
+      const data = await response.json();
+      const items = Array.isArray(data.items) ? data.items : [];
+
+      for (const item of items) {
+        const association = evaluateRepositoryAssociation({
+          asset,
+          repository: item.name || '',
+          owner: item.owner?.login || item.full_name || '',
+          text: `${item.description || ''} ${item.full_name || ''}`,
+          homepage: item.homepage || '',
+        });
+
+        if (!association.associated) continue;
+
+        const key = createRepositoryCandidateKey('GitHub', item.owner?.login, item.name);
+        if (seen.has(key)) continue;
+        seen.add(key);
+
+        candidates.push({
+          source: 'GitHub',
+          owner: item.owner?.login || 'unknown-owner',
+          repository: item.name || 'unknown-repository',
+          branch: item.default_branch || 'main',
+          url: item.html_url,
+          fullName: item.full_name || `${item.owner?.login || 'unknown-owner'}/${item.name || 'unknown-repository'}`,
+          description: item.description || '',
+          firstSeen: item.created_at || new Date().toISOString(),
+          lastSeen: item.updated_at || item.pushed_at || new Date().toISOString(),
+          asset,
+          association,
+        });
+      }
+    }
+  }
+
+  return candidates;
+};
+
+const searchSensitiveGitHubRepositoryContent = async (repositoryCandidates = []) => {
+  const githubToken = process.env.GITHUB_TOKEN || process.env.VITE_GITHUB_TOKEN || '';
+  if (!githubToken) return [];
+
+  const headers = {
+    Accept: 'application/vnd.github.text-match+json',
+    Authorization: `Bearer ${githubToken}`,
+    'User-Agent': 'Lysir-Security-Platform/1.0',
+    'X-GitHub-Api-Version': '2022-11-28',
+  };
+
+  const findings = [];
+  for (const candidate of repositoryCandidates.slice(0, 8)) {
+    for (const pattern of CODE_SENSITIVE_SEARCH_PATTERNS_V1) {
+      const scopedQuery = `repo:${candidate.fullName} ${pattern.query}`;
+      const url = `https://api.github.com/search/code?q=${encodeURIComponent(scopedQuery)}&per_page=2`;
+      const response = await fetch(url, { headers });
+      if (!response.ok) continue;
+      const data = await response.json();
+      const items = Array.isArray(data.items) ? data.items : [];
+
+      for (const item of items) {
+        const textMatch = Array.isArray(item.text_matches) && item.text_matches.length > 0
+          ? item.text_matches[0].fragment
+          : `${item.repository?.full_name || ''} ${item.path || ''}`.trim();
+        const ruleResult = evaluateCodeLeak({
+          term: candidate.asset.value,
+          text: textMatch,
+          path: item.path || pattern.label,
+        });
+
+        findings.push({
+          id: `github-code-${item.sha || item.url}-${candidate.asset.id}-${pattern.id}`,
+          assetLabel: candidate.asset.label,
+          severity: ruleResult.matchedRules.length > 0 ? ruleResult.severity : pattern.severity,
+          status: 'new',
+          source: 'GitHub',
+          exposure: ruleResult.matchedRules.length > 0 ? ruleResult.exposure : pattern.exposure,
+          title: `${candidate.repository} sensitive content match`,
+          repository: candidate.repository,
+          owner: candidate.owner,
+          path: item.path || 'Unknown path',
+          branch: candidate.branch,
+          match: candidate.asset.value,
+          snippet: textMatch || `Sensitive repository search matched ${pattern.label}.`,
+          firstSeen: candidate.firstSeen,
+          lastSeen: candidate.lastSeen,
+          url: item.html_url || candidate.url,
+          confidence: Math.min(0.99, 0.76 + candidate.association.confidenceBoost + ruleResult.confidenceBoost),
+          matchedRules: Array.from(new Set([...candidate.association.matchedRules, pattern.id, ...ruleResult.matchedRules])),
+          notes: [
+            `Repository association asset: ${candidate.asset.type}:${candidate.asset.value}`,
+            ...candidate.association.notes,
+            `Sensitive repository query matched: ${pattern.label}`,
+            ...ruleResult.notes,
+          ],
+        });
+      }
+    }
+  }
+
+  return findings;
+};
+
+const searchAssociatedGiteeRepositories = async (assets = []) => {
+  const giteeToken = process.env.GITEE_ACCESS_TOKEN || process.env.VITE_GITEE_ACCESS_TOKEN || '';
+  const candidates = [];
+  const seen = new Set();
+
+  for (const asset of assets) {
+    const terms = buildRepositorySearchTerms(asset);
+    for (const term of terms) {
+      const params = new URLSearchParams({ q: term, page: '1', per_page: '3' });
+      if (giteeToken) params.set('access_token', giteeToken);
+
+      const response = await fetch(`https://gitee.com/api/v5/search/repositories?${params.toString()}`, {
+        headers: { Accept: 'application/json', 'User-Agent': 'Lysir-Security-Platform/1.0' },
+      });
+      if (!response.ok) continue;
+
+      const data = await response.json();
+      const items = Array.isArray(data) ? data : [];
+      for (const item of items) {
+        const association = evaluateRepositoryAssociation({
+          asset,
+          repository: item.name || '',
+          owner: item.namespace?.name || item.owner?.login || '',
+          text: `${item.description || ''} ${item.full_name || ''}`,
+          homepage: item.html_url || '',
+        });
+
+        if (!association.associated) continue;
+
+        const key = createRepositoryCandidateKey('Gitee', item.namespace?.name || item.owner?.login, item.name);
+        if (seen.has(key)) continue;
+        seen.add(key);
+
+        candidates.push({
+          source: 'Gitee',
+          owner: item.namespace?.name || item.owner?.login || 'unknown-owner',
+          repository: item.name || 'unknown-repository',
+          branch: item.default_branch || 'master',
+          url: item.html_url,
+          description: item.description || '',
+          firstSeen: item.created_at || new Date().toISOString(),
+          lastSeen: item.updated_at || item.pushed_at || new Date().toISOString(),
+          asset,
+          association,
+        });
+      }
+    }
+  }
+
+  return candidates;
 };
 
 const FILE_LEAK_TYPES = [

@@ -524,7 +524,7 @@ const IocSearch = () => {
   }, [submittedQuery, activeSearchType]);
 
   const executeSearch = async (query: string, type: SearchType) => {
-      const response = await otxApi.searchIntel(query, type, { coreOnly: true });
+    const response = await otxApi.searchIntel(query, type, { coreOnly: type !== 'cve' });
     return response?.data || null;
   };
 

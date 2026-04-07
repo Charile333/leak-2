@@ -3,8 +3,9 @@ import { motion } from 'framer-motion';
 import {
   Activity as ActivityIcon,
   ArrowUpRight,
+  BellRing,
   Bug,
-  Globe,
+  ExternalLink,
   Loader2,
   Radar,
   RefreshCw,
@@ -27,6 +28,33 @@ type ActivityPulse = {
   tags?: string[];
   references?: string[];
   indicators?: Array<{ type?: string; indicator?: string }>;
+};
+
+type CveIntelItem = {
+  cveId: string;
+  title: string;
+  summary: string;
+  published?: string;
+  lastModified?: string;
+  latestSeen?: string;
+  cvssScore: number | null;
+  severity?: string;
+  hasKev: boolean;
+  otxMentionCount: number;
+  sourceTags: string[];
+  sourceDetails?: {
+    aliyun?: {
+      sourceUrl?: string;
+    } | null;
+  };
+  pushScore: number;
+  pushLevel: string;
+  pushRecommended: boolean;
+  pushReasons: string[];
+};
+
+type CveIntelFeed = {
+  items?: CveIntelItem[];
 };
 
 const REFRESH_INTERVAL_MS = 60_000;
@@ -66,7 +94,7 @@ const sanitizeText = (value?: string, fallback = '暂无说明') => {
 
 const getSeverityTone = (pulse: ActivityPulse) => {
   const haystack = `${pulse.name} ${pulse.description || ''}`.toLowerCase();
-  if (/(ransomware|supply chain|0day|zero[- ]day|backdoor|rat|apt|campaign)/i.test(haystack)) {
+  if (/(ransomware|supply chain|0day|zero-day|backdoor|rat|apt|campaign)/i.test(haystack)) {
     return { label: '高关注', className: 'border-rose-400/20 bg-rose-400/10 text-rose-200' };
   }
   if (/(phishing|stealer|malware|trojan|loader|botnet)/i.test(haystack)) {
@@ -77,10 +105,9 @@ const getSeverityTone = (pulse: ActivityPulse) => {
 
 const getTypeBreakdown = (items: ActivityPulse[]) => {
   const counters = new Map<string, number>();
-
   items.forEach((pulse) => {
     pulse.indicators?.forEach((indicator) => {
-      const type = indicator.type || 'Unknown';
+      const type = indicator.type || '未知类型';
       counters.set(type, (counters.get(type) || 0) + 1);
     });
   });
@@ -90,31 +117,30 @@ const getTypeBreakdown = (items: ActivityPulse[]) => {
     .slice(0, 5);
 };
 
-const getCveSignals = (items: ActivityPulse[]) =>
-  items
-    .map((item) => {
-      const cveMatches = new Set<string>();
+const getPushTone = (level: string) => {
+  if (level === '高优先') return 'border-rose-400/25 bg-rose-400/10 text-rose-200';
+  if (level === '建议关注') return 'border-amber-400/25 bg-amber-400/10 text-amber-200';
+  return 'border-white/10 bg-white/[0.04] text-white/68';
+};
 
-      [item.name, item.description, ...(item.indicators || []).map((indicator) => indicator.indicator || '')]
-        .filter(Boolean)
-        .forEach((value) => {
-          const matches = String(value).match(/CVE-\d{4}-\d{4,7}/gi);
-          matches?.forEach((match) => cveMatches.add(match.toUpperCase()));
-        });
-
-      return {
-        ...item,
-        cves: Array.from(cveMatches),
-      };
-    })
-    .filter((item) => item.cves.length > 0)
-    .slice(0, 10);
+const getSeverityPill = (score: number | null, severity?: string) => {
+  if (typeof score === 'number') {
+    if (score >= 9) return '危急';
+    if (score >= 7) return '高危';
+    if (score >= 4) return '中危';
+    return '低危';
+  }
+  return severity || '待补充';
+};
 
 const Activity = () => {
   const [items, setItems] = useState<ActivityPulse[]>([]);
+  const [cveFeed, setCveFeed] = useState<CveIntelFeed>({});
   const [loading, setLoading] = useState(true);
+  const [cveLoading, setCveLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
+  const [cveError, setCveError] = useState('');
   const [keyword, setKeyword] = useState('');
   const [activeWindow, setActiveWindow] = useState<'24h' | '7d' | 'all'>('7d');
 
@@ -122,31 +148,60 @@ const Activity = () => {
     let cancelled = false;
 
     const load = async (background = false) => {
-      try {
-        if (background) {
-          setRefreshing(true);
-        } else {
-          setLoading(true);
-        }
+      if (background) {
+        setRefreshing(true);
+      } else {
+        setLoading(true);
+        setCveLoading(true);
+      }
 
-        const payload = await otxApi.getActivity();
-        const results = Array.isArray(payload?.results) ? payload.results : [];
+      const activityTask = otxApi
+        .getActivity()
+        .then((activityPayload) => {
+          const results = Array.isArray(activityPayload?.results) ? activityPayload.results : [];
+          if (!cancelled) {
+            startTransition(() => {
+              setItems(results);
+              setError('');
+            });
+          }
+        })
+        .catch((err: any) => {
+          if (!cancelled) {
+            setError(err?.message || '活动流加载失败，请稍后重试。');
+          }
+        })
+        .finally(() => {
+          if (!cancelled) {
+            setLoading(false);
+          }
+        });
 
-        if (!cancelled) {
-          startTransition(() => {
-            setItems(results);
-            setError('');
-          });
-        }
-      } catch (err: any) {
-        if (!cancelled) {
-          setError(err?.message || '威胁流加载失败，请稍后重试。');
-        }
-      } finally {
-        if (!cancelled) {
-          setLoading(false);
-          setRefreshing(false);
-        }
+      const cveTask = otxApi
+        .getLatestCveIntel({ limit: 6, window: activeWindow })
+        .then((payload) => {
+          if (!cancelled) {
+            startTransition(() => {
+              setCveFeed(payload || {});
+              setCveError('');
+            });
+          }
+        })
+        .catch((err: any) => {
+          if (!cancelled) {
+            setCveFeed({});
+            setCveError(err?.message || 'CVE 最新情报加载失败，请稍后重试。');
+          }
+        })
+        .finally(() => {
+          if (!cancelled) {
+            setCveLoading(false);
+          }
+        });
+
+      await Promise.allSettled([activityTask, cveTask]);
+      if (!cancelled) {
+        setRefreshing(false);
       }
     };
 
@@ -157,7 +212,7 @@ const Activity = () => {
       cancelled = true;
       window.clearInterval(timer);
     };
-  }, []);
+  }, [activeWindow]);
 
   const filteredItems = useMemo(() => {
     const now = Date.now();
@@ -191,21 +246,21 @@ const Activity = () => {
     });
   }, [activeWindow, items, keyword]);
 
+  const cveItems = Array.isArray(cveFeed.items) ? cveFeed.items : [];
+  const pushQueue = useMemo(() => cveItems.filter((item) => item.pushRecommended).slice(0, 5), [cveItems]);
+  const typeBreakdown = useMemo(() => getTypeBreakdown(filteredItems), [filteredItems]);
+
   const stats = useMemo(() => {
     const totalIndicators = filteredItems.reduce((sum, item) => sum + (item.indicators?.length || 0), 0);
     const tagged = filteredItems.filter((item) => Array.isArray(item.tags) && item.tags.length > 0).length;
-    const tlpWhite = filteredItems.filter((item) => String(item.TLP || '').toLowerCase() === 'white').length;
 
     return {
       pulses: filteredItems.length,
       indicators: totalIndicators,
       tagged,
-      tlpWhite,
+      pushable: pushQueue.length,
     };
-  }, [filteredItems]);
-
-  const typeBreakdown = useMemo(() => getTypeBreakdown(filteredItems), [filteredItems]);
-  const cveSignals = useMemo(() => getCveSignals(filteredItems), [filteredItems]);
+  }, [filteredItems, pushQueue.length]);
 
   return (
     <div className="space-y-6">
@@ -223,8 +278,10 @@ const Activity = () => {
                 <ActivityIcon className="h-5 w-5" />
               </div>
               <div>
-                <h1 className="text-[2rem] font-semibold tracking-[-0.07em] text-white">实时威胁流与最新漏洞情报</h1>
-                <p className="text-sm text-white/54">左侧聚焦活动流与事件线索，右侧单独提炼最近脉冲里的 CVE 关联情报。</p>
+                <h1 className="text-[2rem] font-semibold tracking-[-0.07em] text-white">活动流与漏洞最新情报</h1>
+                <p className="text-sm text-white/54">
+                  左侧优先展示最新威胁活动，右侧补充最新漏洞动态与客户推送优先级。
+                </p>
               </div>
             </div>
           </div>
@@ -261,7 +318,7 @@ const Activity = () => {
               <input
                 value={keyword}
                 onChange={(event) => setKeyword(event.target.value)}
-                placeholder="搜索活动标题、标签、指标"
+                placeholder="搜索活动标题、标签、IOC"
                 className="min-w-0 flex-1 bg-transparent text-sm text-white outline-none placeholder:text-white/28"
               />
             </div>
@@ -270,10 +327,10 @@ const Activity = () => {
 
         <div className="grid gap-4 px-6 py-5 sm:px-7 md:grid-cols-2 xl:grid-cols-4">
           {[
-            { label: '脉冲总数', value: stats.pulses, icon: Radar },
+            { label: '活动脉冲', value: stats.pulses, icon: Radar },
             { label: '关联指标', value: stats.indicators, icon: ShieldAlert },
             { label: '带标签活动', value: stats.tagged, icon: Tags },
-            { label: 'TLP White', value: stats.tlpWhite, icon: Globe },
+            { label: '建议推送', value: stats.pushable, icon: BellRing },
           ].map((stat) => (
             <div key={stat.label} className="rounded-[24px] border border-white/8 bg-white/[0.025] p-5">
               <div className="flex items-center justify-between">
@@ -286,7 +343,7 @@ const Activity = () => {
         </div>
       </motion.section>
 
-      <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
+      <div className="grid gap-6 xl:grid-cols-[1.18fr_0.82fr]">
         <motion.section
           initial={{ opacity: 0, y: 18 }}
           animate={{ opacity: 1, y: 0 }}
@@ -295,7 +352,7 @@ const Activity = () => {
         >
           <div className="border-b border-white/8 px-6 py-5 sm:px-7">
             <h2 className="text-xl font-semibold tracking-[-0.05em] text-white">活动流与事件线索</h2>
-            <p className="mt-1 text-sm text-white/50">按时间顺序跟踪最近公开脉冲，提炼主题、标签、对手和关键 IOC。</p>
+            <p className="mt-1 text-sm text-white/50">先给出近期公开威胁活动，再展示标签、来源和首批 IOC 方便快速研判。</p>
           </div>
 
           <div className="px-6 py-6 sm:px-7">
@@ -303,14 +360,14 @@ const Activity = () => {
               <div className="flex min-h-[280px] items-center justify-center rounded-[24px] border border-dashed border-white/10 bg-white/[0.02]">
                 <div className="flex items-center gap-3 text-sm text-white/58">
                   <Loader2 className="h-4 w-4 animate-spin text-accent" />
-                  正在载入实时威胁流...
+                  正在加载活动流...
                 </div>
               </div>
             ) : error ? (
               <div className="rounded-[24px] border border-rose-400/15 bg-rose-400/8 px-5 py-8 text-sm text-rose-100">{error}</div>
             ) : filteredItems.length === 0 ? (
               <div className="rounded-[24px] border border-dashed border-white/10 bg-white/[0.02] px-5 py-8 text-sm text-white/52">
-                当前筛选条件下没有可显示的威胁活动。
+                当前筛选条件下没有可展示的威胁活动。
               </div>
             ) : (
               <div className="space-y-4">
@@ -337,7 +394,7 @@ const Activity = () => {
                         </div>
 
                         <div className="rounded-[20px] border border-white/8 bg-[#111723] px-4 py-3 text-right">
-                          <div className="text-[11px] uppercase tracking-[0.22em] text-white/34">更新时间</div>
+                          <div className="text-[11px] uppercase tracking-[0.22em] text-white/34">最近更新时间</div>
                           <div className="mt-2 text-sm font-medium text-white/84">{formatAbsoluteTime(item.modified || item.created)}</div>
                         </div>
                       </div>
@@ -415,48 +472,127 @@ const Activity = () => {
                 </div>
                 <div>
                   <h2 className="text-lg font-semibold tracking-[-0.05em] text-white">CVE 最新情报</h2>
-                  <p className="text-sm text-white/50">从最新脉冲里抽取含有 CVE 线索的活动，适合快速浏览漏洞热点。</p>
+                  <p className="text-sm text-white/50">活动流提取最新 CVE，再补充 NVD 风险信息与客户推送优先级。</p>
                 </div>
               </div>
             </div>
 
             <div className="space-y-4 px-6 py-5">
-              {loading ? (
-                <div className="rounded-[20px] border border-dashed border-white/10 px-4 py-6 text-sm text-white/50">
-                  正在提取 CVE 情报...
-                </div>
-              ) : cveSignals.length > 0 ? (
-                cveSignals.map((item) => (
-                  <article key={`cve-${item.id}`} className="rounded-[22px] border border-white/8 bg-white/[0.025] p-4">
+              {cveLoading ? (
+                <div className="rounded-[20px] border border-dashed border-white/10 px-4 py-6 text-sm text-white/50">正在提取 CVE 情报...</div>
+              ) : cveError ? (
+                <div className="rounded-[20px] border border-amber-400/15 bg-amber-400/8 px-4 py-6 text-sm text-amber-100">{cveError}</div>
+              ) : cveItems.length > 0 ? (
+                cveItems.map((item) => (
+                  <article key={item.cveId} className="rounded-[22px] border border-white/8 bg-white/[0.025] p-4">
                     <div className="flex items-start justify-between gap-3">
                       <div>
-                        <div className="text-xs uppercase tracking-[0.2em] text-white/38">{formatRelativeTime(item.modified || item.created)}</div>
-                        <h3 className="mt-2 text-base font-semibold leading-6 text-white">{sanitizeText(item.name, '未命名漏洞情报')}</h3>
+                        <div className="text-xs uppercase tracking-[0.2em] text-white/38">{formatRelativeTime(item.latestSeen || item.lastModified)}</div>
+                        <h3 className="mt-2 text-base font-semibold leading-6 text-white">{item.cveId}</h3>
                       </div>
-                      <span className="rounded-full border border-white/10 px-2.5 py-1 text-[11px] text-white/58">
-                        {item.TLP ? `TLP ${String(item.TLP).toUpperCase()}` : 'TLP 未知'}
-                      </span>
+                      <span className={cn('rounded-full border px-2.5 py-1 text-[11px]', getPushTone(item.pushLevel))}>{item.pushLevel}</span>
                     </div>
 
                     <div className="mt-3 flex flex-wrap gap-2">
-                      {item.cves.slice(0, 4).map((cve) => (
-                        <span key={cve} className="rounded-full border border-accent/15 bg-accent/10 px-3 py-1 text-xs text-accent">
-                          {cve}
+                      {item.sourceTags.map((tag) => (
+                        <span key={`${item.cveId}-${tag}`} className="rounded-full border border-white/10 px-2.5 py-1 text-[11px] text-white/62">
+                          {tag}
                         </span>
                       ))}
                     </div>
 
-                    <p className="mt-3 line-clamp-3 text-sm leading-7 text-white/60">{sanitizeText(item.description)}</p>
+                    <p className="mt-3 text-sm font-medium text-white/86">{sanitizeText(item.title, item.cveId)}</p>
+                    <p className="mt-2 line-clamp-3 text-sm leading-7 text-white/60">{sanitizeText(item.summary)}</p>
 
-                    <div className="mt-4 grid gap-2 text-sm text-white/56">
-                      <span>来源：{sanitizeText(item.author_name, '未知来源')}</span>
-                      <span>指标数量：{item.indicators?.length || 0}</span>
+                    <div className="mt-4 grid gap-2 text-sm text-white/58">
+                      <span>最新提及：{formatAbsoluteTime(item.latestSeen || item.lastModified)}</span>
+                      <span>发布时间：{formatAbsoluteTime(item.published)}</span>
+                      <span>资料更新时间：{formatAbsoluteTime(item.lastModified)}</span>
+                      <span>CVSS：{typeof item.cvssScore === 'number' ? item.cvssScore.toFixed(1) : '待补充'}</span>
+                      <span>风险等级：{getSeverityPill(item.cvssScore, item.severity)}</span>
+                      <span>KEV：{item.hasKev ? '是' : '否'}</span>
+                      <span>情报提及：{item.otxMentionCount} 次</span>
+                      <span>推送评分：{item.pushScore}</span>
+                    </div>
+
+                    {item.pushReasons.length > 0 ? (
+                      <div className="mt-4 flex flex-wrap gap-2">
+                        {item.pushReasons.map((reason) => (
+                          <span key={`${item.cveId}-${reason}`} className="rounded-full border border-accent/15 bg-accent/10 px-3 py-1 text-xs text-accent">
+                            {reason}
+                          </span>
+                        ))}
+                      </div>
+                    ) : null}
+
+                    <div className="mt-5 flex flex-wrap gap-2">
+                      <a
+                        href={`/dns?q=${encodeURIComponent(item.cveId)}`}
+                        className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-3 py-2 text-xs text-white/70 transition-colors hover:bg-white/[0.06] hover:text-white"
+                      >
+                        站内查看
+                        <ArrowUpRight className="h-3.5 w-3.5" />
+                      </a>
+                      <a
+                        href={`https://nvd.nist.gov/vuln/detail/${encodeURIComponent(item.cveId)}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-3 py-2 text-xs text-white/70 transition-colors hover:bg-white/[0.06] hover:text-white"
+                      >
+                        NVD
+                        <ExternalLink className="h-3.5 w-3.5" />
+                      </a>
+                      {item.sourceDetails?.aliyun?.sourceUrl ? (
+                        <a
+                          href={item.sourceDetails.aliyun.sourceUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-3 py-2 text-xs text-white/70 transition-colors hover:bg-white/[0.06] hover:text-white"
+                        >
+                          阿里云 AVD
+                          <ExternalLink className="h-3.5 w-3.5" />
+                        </a>
+                      ) : null}
                     </div>
                   </article>
                 ))
               ) : (
                 <div className="rounded-[20px] border border-dashed border-white/10 px-4 py-6 text-sm text-white/50">
                   当前时间窗口内没有提取到新的 CVE 关联情报。
+                </div>
+              )}
+            </div>
+          </section>
+
+          <section className="overflow-hidden rounded-[28px] border border-white/8 bg-[linear-gradient(180deg,rgba(17,22,31,0.98),rgba(10,14,20,0.98))]">
+            <div className="border-b border-white/8 px-6 py-5">
+              <h2 className="text-lg font-semibold tracking-[-0.05em] text-white">建议推送给客户</h2>
+              <p className="mt-1 text-sm text-white/50">优先展示高危、进入 KEV 或近期热度较高的漏洞。</p>
+            </div>
+            <div className="space-y-4 px-6 py-5">
+              {pushQueue.length > 0 ? (
+                pushQueue.map((item) => (
+                  <div key={`push-${item.cveId}`} className="rounded-[22px] border border-white/8 bg-white/[0.025] p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <div className="text-sm font-semibold text-white">{item.cveId}</div>
+                        <div className="mt-1 text-xs text-white/48">{formatAbsoluteTime(item.published || item.lastModified || item.latestSeen)}</div>
+                      </div>
+                      <span className={cn('rounded-full border px-2.5 py-1 text-[11px]', getPushTone(item.pushLevel))}>{item.pushLevel}</span>
+                    </div>
+                    <p className="mt-3 line-clamp-2 text-sm text-white/60">{sanitizeText(item.summary)}</p>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {item.pushReasons.map((reason) => (
+                        <span key={`${item.cveId}-push-${reason}`} className="rounded-full border border-white/10 px-2.5 py-1 text-[11px] text-white/60">
+                          {reason}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="rounded-[20px] border border-dashed border-white/10 px-4 py-6 text-sm text-white/50">
+                  当前没有达到推送阈值的漏洞情报。
                 </div>
               )}
             </div>

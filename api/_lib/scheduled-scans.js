@@ -204,6 +204,17 @@ export const ensureDefaultScheduledScanTasks = async (userEmail) => {
       lastRunAt: null,
       createdAt: now,
     },
+    {
+      id: `task-cve-intel-${normalizedUserEmail}`,
+      userEmail: normalizedUserEmail,
+      scanType: 'cve_intel',
+      label: 'CVE 婕忔礊鎯呮姤瀹氭椂鎵弿',
+      query: '7d',
+      intervalMinutes: 120,
+      enabled: true,
+      lastRunAt: null,
+      createdAt: now,
+    },
   ];
 
   for (const task of defaults) {

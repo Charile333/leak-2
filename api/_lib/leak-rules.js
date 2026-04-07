@@ -46,6 +46,58 @@ export const CODE_LEAK_RULES_V1 = [
   },
 ];
 
+export const CODE_REPOSITORY_ASSOCIATION_RULES_V1 = [
+  {
+    id: 'repo-owned-domain',
+    assetTypes: ['domain', 'email_suffix'],
+    severity: 'high',
+    regex: /([a-z0-9-]+\.)+[a-z]{2,}/i,
+  },
+  {
+    id: 'repo-company-keyword',
+    assetTypes: ['company', 'repository'],
+    severity: 'medium',
+    regex: /[a-z0-9._-]{3,}/i,
+  },
+  {
+    id: 'repo-owner-match',
+    assetTypes: ['company', 'repository', 'domain'],
+    severity: 'high',
+    regex: /[a-z0-9._-]{2,}/i,
+  },
+];
+
+export const CODE_SENSITIVE_SEARCH_PATTERNS_V1 = [
+  {
+    id: 'code-sensitive-env-file',
+    label: '.env file',
+    query: 'filename:.env',
+    exposure: 'config',
+    severity: 'critical',
+  },
+  {
+    id: 'code-sensitive-config-file',
+    label: 'runtime config',
+    query: 'filename:application.properties OR filename:config.yml OR filename:docker-compose.yml',
+    exposure: 'config',
+    severity: 'high',
+  },
+  {
+    id: 'code-sensitive-secret-keyword',
+    label: 'secret keyword',
+    query: 'secret OR token OR api_key OR access_key OR client_secret',
+    exposure: 'secret',
+    severity: 'critical',
+  },
+  {
+    id: 'code-sensitive-password-keyword',
+    label: 'credential keyword',
+    query: 'password OR passwd OR jdbc: OR private_key',
+    exposure: 'credential',
+    severity: 'critical',
+  },
+];
+
 export const FILE_LEAK_RULES_V1 = [
   {
     id: 'file-database-backup',
@@ -122,6 +174,75 @@ export const evaluateCodeLeak = ({ term = '', text = '', path = '' }) => {
     exposure: matchedRules[0]?.exposure || 'source',
     notes: matchedRules.map((rule) => `命中规则: ${rule.name}`),
     confidenceBoost: Math.min(0.28, matchedRules.length * 0.06),
+  };
+};
+
+const normalizeAssociationNeedle = (asset = {}) => {
+  const rawValue = String(asset.value || '').trim().toLowerCase();
+  if (!rawValue) return [];
+
+  const variants = new Set([rawValue]);
+  const sanitized = rawValue.replace(/^@/, '').replace(/^https?:\/\//, '').replace(/^www\./, '');
+  if (sanitized) variants.add(sanitized);
+
+  if (asset.type === 'domain' || asset.type === 'email_suffix') {
+    const domain = sanitized.replace(/^@/, '');
+    variants.add(domain);
+    const host = domain.split('/')[0];
+    if (host) {
+      variants.add(host);
+      const hostWithoutSubdomain = host.split('.').slice(-2).join('.');
+      if (hostWithoutSubdomain) variants.add(hostWithoutSubdomain);
+      const orgToken = host.split('.')[0];
+      if (orgToken && orgToken.length >= 3) variants.add(orgToken);
+    }
+  }
+
+  if (asset.type === 'company' || asset.type === 'repository') {
+    sanitized
+      .split(/[^a-z0-9]+/i)
+      .map((part) => part.trim())
+      .filter((part) => part.length >= 3)
+      .forEach((part) => variants.add(part));
+  }
+
+  return Array.from(variants).filter(Boolean);
+};
+
+export const evaluateRepositoryAssociation = ({
+  asset = {},
+  repository = '',
+  owner = '',
+  text = '',
+  homepage = '',
+}) => {
+  const haystack = `${repository} ${owner} ${text} ${homepage}`.toLowerCase();
+  const needles = normalizeAssociationNeedle(asset);
+  const matchedNeedles = needles.filter((needle) => haystack.includes(needle));
+
+  const matchedRules = CODE_REPOSITORY_ASSOCIATION_RULES_V1.filter((rule) => {
+    if (Array.isArray(rule.assetTypes) && rule.assetTypes.length > 0 && !rule.assetTypes.includes(asset.type)) {
+      return false;
+    }
+    return matchedNeedles.some((needle) => rule.regex.test(needle));
+  });
+
+  const ownerMatched = matchedNeedles.some((needle) => owner.toLowerCase().includes(needle));
+  const repositoryMatched = matchedNeedles.some((needle) => repository.toLowerCase().includes(needle));
+  const homepageMatched = matchedNeedles.some((needle) => homepage.toLowerCase().includes(needle));
+
+  let score = matchedNeedles.length * 10 + matchedRules.length * 12;
+  if (ownerMatched) score += 16;
+  if (repositoryMatched) score += 12;
+  if (homepageMatched) score += 14;
+
+  return {
+    associated: score >= 24,
+    score,
+    matchedNeedles,
+    matchedRules: matchedRules.map((rule) => rule.id),
+    notes: matchedNeedles.map((needle) => `Repository association matched: ${needle}`),
+    confidenceBoost: Math.min(0.24, score / 100),
   };
 };
 

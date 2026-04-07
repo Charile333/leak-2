@@ -1,6 +1,9 @@
+export type WebhookChannel = 'leak_monitor' | 'cve_intel';
+
 export interface WebhookConfig {
   id: string;
   userEmail: string;
+  channel?: WebhookChannel;
   url: string;
   secret: string;
   enabled: boolean;
@@ -11,6 +14,7 @@ export interface WebhookConfig {
 export interface WebhookDeliveryLog {
   id: string;
   userEmail: string;
+  channel?: WebhookChannel;
   webhookUrl: string;
   eventName: string;
   status: 'success' | 'failed';
@@ -65,18 +69,20 @@ const requestJson = async <T>(url: string, options: RequestInit = {}) => {
 };
 
 export const webhookService = {
-  async getConfig(): Promise<{ config: WebhookConfig | null; logs: WebhookDeliveryLog[] }> {
-    const payload = await requestJson<{ config?: WebhookConfig | null; logs?: WebhookDeliveryLog[] }>('/api/notifications/webhook');
+  async getConfig(channel: WebhookChannel = 'leak_monitor'): Promise<{ config: WebhookConfig | null; configs?: Partial<Record<WebhookChannel, WebhookConfig | null>>; logs: WebhookDeliveryLog[] }> {
+    const payload = await requestJson<{ config?: WebhookConfig | null; configs?: Partial<Record<WebhookChannel, WebhookConfig | null>>; logs?: WebhookDeliveryLog[] }>(`/api/notifications/webhook?channel=${encodeURIComponent(channel)}`);
     return {
       config: payload.config ?? null,
+      configs: payload.configs,
       logs: Array.isArray(payload.logs) ? payload.logs : [],
     };
   },
 
-  async saveConfig(input: { url: string; secret?: string; enabled: boolean }): Promise<WebhookConfig> {
+  async saveConfig(input: { channel?: WebhookChannel; url: string; secret?: string; enabled: boolean }): Promise<WebhookConfig> {
     const payload = await requestJson<{ config?: WebhookConfig }>('/api/notifications/webhook', {
       method: 'POST',
       body: JSON.stringify({
+        channel: input.channel || 'leak_monitor',
         url: input.url.trim(),
         secret: input.secret?.trim() || '',
         enabled: input.enabled,
@@ -90,7 +96,7 @@ export const webhookService = {
     return payload.config;
   },
 
-  async testConfig(): Promise<{ delivered: boolean; responseStatus?: number | null; error?: string | null }> {
+  async testConfig(channel: WebhookChannel = 'leak_monitor'): Promise<{ delivered: boolean; responseStatus?: number | null; error?: string | null }> {
     const payload = await requestJson<{
       delivered?: boolean;
       responseStatus?: number | null;
@@ -98,6 +104,7 @@ export const webhookService = {
     }>('/api/notifications/webhook', {
       method: 'POST',
       body: JSON.stringify({
+        channel,
         action: 'test',
       }),
     });
@@ -109,8 +116,8 @@ export const webhookService = {
     };
   },
 
-  async deleteConfig(): Promise<void> {
-    await requestJson('/api/notifications/webhook', {
+  async deleteConfig(channel: WebhookChannel = 'leak_monitor'): Promise<void> {
+    await requestJson(`/api/notifications/webhook?channel=${encodeURIComponent(channel)}`, {
       method: 'DELETE',
     });
   },

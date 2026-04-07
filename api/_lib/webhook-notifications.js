@@ -1,4 +1,4 @@
-import { neon } from '@neondatabase/serverless';
+﻿import { neon } from '@neondatabase/serverless';
 import { createHmac, randomUUID } from 'crypto';
 import { promises as fs } from 'fs';
 import path from 'path';
@@ -7,6 +7,7 @@ const DATABASE_URL = process.env.DATABASE_URL || process.env.NEON_DATABASE_URL |
 const sql = DATABASE_URL ? neon(DATABASE_URL) : null;
 const CONFIGS_FILE = path.join(process.cwd(), '.data', 'webhook-configs.json');
 const LOGS_FILE = path.join(process.cwd(), '.data', 'webhook-delivery-logs.json');
+const DEFAULT_WEBHOOK_CHANNEL = 'leak_monitor';
 
 let tablesReady = false;
 
@@ -41,8 +42,9 @@ export const ensureWebhookTables = async () => {
   await sql`
     CREATE TABLE IF NOT EXISTS webhook_configs (
       id TEXT PRIMARY KEY,
-      user_email TEXT NOT NULL UNIQUE,
+      user_email TEXT NOT NULL,
       url TEXT NOT NULL,
+      channel TEXT NOT NULL DEFAULT 'leak_monitor',
       secret TEXT,
       enabled BOOLEAN NOT NULL DEFAULT TRUE,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -51,9 +53,29 @@ export const ensureWebhookTables = async () => {
   `;
 
   await sql`
+    ALTER TABLE webhook_configs
+    ADD COLUMN IF NOT EXISTS channel TEXT NOT NULL DEFAULT 'leak_monitor'
+  `;
+
+  await sql`
+    ALTER TABLE webhook_configs
+    DROP CONSTRAINT IF EXISTS webhook_configs_user_email_key
+  `;
+
+  await sql`
+    DROP INDEX IF EXISTS webhook_configs_user_email_idx
+  `;
+
+  await sql`
+    CREATE UNIQUE INDEX IF NOT EXISTS webhook_configs_user_email_channel_idx
+    ON webhook_configs (user_email, channel)
+  `;
+
+  await sql`
     CREATE TABLE IF NOT EXISTS webhook_delivery_logs (
       id TEXT PRIMARY KEY,
       user_email TEXT NOT NULL,
+      channel TEXT NOT NULL DEFAULT 'leak_monitor',
       webhook_url TEXT NOT NULL,
       event_name TEXT NOT NULL,
       status TEXT NOT NULL,
@@ -62,6 +84,11 @@ export const ensureWebhookTables = async () => {
       payload JSONB NOT NULL,
       delivered_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
+  `;
+
+  await sql`
+    ALTER TABLE webhook_delivery_logs
+    ADD COLUMN IF NOT EXISTS channel TEXT NOT NULL DEFAULT 'leak_monitor'
   `;
 
   tablesReady = true;
@@ -73,17 +100,28 @@ export const getWebhookUserEmail = (req, body = null) => {
   return (headerEmail || bodyEmail).toLowerCase();
 };
 
-export const getWebhookConfig = async (userEmail) => {
+const normalizeWebhookChannel = (value) => {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (normalized === 'cve_intel') return 'cve_intel';
+  return DEFAULT_WEBHOOK_CHANNEL;
+};
+
+export const getWebhookConfig = async (userEmail, channel = DEFAULT_WEBHOOK_CHANNEL) => {
+  const normalizedChannel = normalizeWebhookChannel(channel);
   if (!sql) {
     const store = await readJsonFile(CONFIGS_FILE, {});
-    return store[userEmail] || null;
+    const userStore = store[userEmail];
+    if (userStore && !userStore.channel && !userStore[DEFAULT_WEBHOOK_CHANNEL]) {
+      return normalizedChannel === DEFAULT_WEBHOOK_CHANNEL ? userStore : null;
+    }
+    return userStore?.[normalizedChannel] || null;
   }
 
   await ensureWebhookTables();
   const rows = await sql`
-    SELECT id, user_email, url, secret, enabled, created_at, updated_at
+    SELECT id, user_email, channel, url, secret, enabled, created_at, updated_at
     FROM webhook_configs
-    WHERE user_email = ${userEmail}
+    WHERE user_email = ${userEmail} AND channel = ${normalizedChannel}
     LIMIT 1
   `;
 
@@ -93,6 +131,7 @@ export const getWebhookConfig = async (userEmail) => {
   return {
     id: row.id,
     userEmail: row.user_email,
+    channel: row.channel || normalizedChannel,
     url: row.url,
     secret: row.secret || '',
     enabled: Boolean(row.enabled),
@@ -102,9 +141,11 @@ export const getWebhookConfig = async (userEmail) => {
 };
 
 export const upsertWebhookConfig = async (userEmail, config) => {
+  const channel = normalizeWebhookChannel(config.channel);
   const normalized = {
-    id: config.id || `webhook-${userEmail}`,
+    id: config.id || `webhook-${channel}-${userEmail}`,
     userEmail,
+    channel,
     url: String(config.url || '').trim(),
     secret: typeof config.secret === 'string' ? config.secret.trim() : '',
     enabled: config.enabled !== false,
@@ -118,16 +159,27 @@ export const upsertWebhookConfig = async (userEmail, config) => {
 
   if (!sql) {
     const store = await readJsonFile(CONFIGS_FILE, {});
-    store[userEmail] = normalized;
+    const currentUserStore = store[userEmail];
+    if (currentUserStore && !currentUserStore.channel && !currentUserStore[DEFAULT_WEBHOOK_CHANNEL]) {
+      store[userEmail] = {
+        [DEFAULT_WEBHOOK_CHANNEL]: currentUserStore,
+        [channel]: normalized,
+      };
+    } else {
+      store[userEmail] = {
+        ...(currentUserStore || {}),
+        [channel]: normalized,
+      };
+    }
     await writeJsonFile(CONFIGS_FILE, store);
     return normalized;
   }
 
   await ensureWebhookTables();
   await sql`
-    INSERT INTO webhook_configs (id, user_email, url, secret, enabled, created_at, updated_at)
-    VALUES (${normalized.id}, ${normalized.userEmail}, ${normalized.url}, ${normalized.secret}, ${normalized.enabled}, ${normalized.createdAt}, ${normalized.updatedAt})
-    ON CONFLICT (user_email) DO UPDATE SET
+    INSERT INTO webhook_configs (id, user_email, channel, url, secret, enabled, created_at, updated_at)
+    VALUES (${normalized.id}, ${normalized.userEmail}, ${normalized.channel}, ${normalized.url}, ${normalized.secret}, ${normalized.enabled}, ${normalized.createdAt}, ${normalized.updatedAt})
+    ON CONFLICT (user_email, channel) DO UPDATE SET
       url = EXCLUDED.url,
       secret = EXCLUDED.secret,
       enabled = EXCLUDED.enabled,
@@ -137,10 +189,21 @@ export const upsertWebhookConfig = async (userEmail, config) => {
   return normalized;
 };
 
-export const removeWebhookConfig = async (userEmail) => {
+export const removeWebhookConfig = async (userEmail, channel = DEFAULT_WEBHOOK_CHANNEL) => {
+  const normalizedChannel = normalizeWebhookChannel(channel);
   if (!sql) {
     const store = await readJsonFile(CONFIGS_FILE, {});
-    delete store[userEmail];
+    const currentUserStore = store[userEmail];
+    if (currentUserStore?.[normalizedChannel]) {
+      delete currentUserStore[normalizedChannel];
+      if (Object.keys(currentUserStore).length === 0) {
+        delete store[userEmail];
+      } else {
+        store[userEmail] = currentUserStore;
+      }
+    } else if (normalizedChannel === DEFAULT_WEBHOOK_CHANNEL) {
+      delete store[userEmail];
+    }
     await writeJsonFile(CONFIGS_FILE, store);
     return null;
   }
@@ -148,13 +211,14 @@ export const removeWebhookConfig = async (userEmail) => {
   await ensureWebhookTables();
   await sql`
     DELETE FROM webhook_configs
-    WHERE user_email = ${userEmail}
+    WHERE user_email = ${userEmail} AND channel = ${normalizedChannel}
   `;
   return null;
 };
 
 export const recordWebhookDelivery = async ({
   userEmail,
+  channel = DEFAULT_WEBHOOK_CHANNEL,
   webhookUrl,
   eventName,
   status,
@@ -165,6 +229,7 @@ export const recordWebhookDelivery = async ({
   const entry = {
     id: `webhook-log-${typeof randomUUID === 'function' ? randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`}`,
     userEmail,
+    channel: normalizeWebhookChannel(channel),
     webhookUrl,
     eventName,
     status,
@@ -183,8 +248,8 @@ export const recordWebhookDelivery = async ({
 
   await ensureWebhookTables();
   await sql`
-    INSERT INTO webhook_delivery_logs (id, user_email, webhook_url, event_name, status, response_status, error_message, payload, delivered_at)
-    VALUES (${entry.id}, ${entry.userEmail}, ${entry.webhookUrl}, ${entry.eventName}, ${entry.status}, ${entry.responseStatus}, ${entry.errorMessage}, ${JSON.stringify(entry.payload)}, ${entry.deliveredAt})
+    INSERT INTO webhook_delivery_logs (id, user_email, channel, webhook_url, event_name, status, response_status, error_message, payload, delivered_at)
+    VALUES (${entry.id}, ${entry.userEmail}, ${entry.channel}, ${entry.webhookUrl}, ${entry.eventName}, ${entry.status}, ${entry.responseStatus}, ${entry.errorMessage}, ${JSON.stringify(entry.payload)}, ${entry.deliveredAt})
   `;
 
   return entry;
@@ -203,7 +268,7 @@ export const listWebhookDeliveryLogs = async (userEmail, limit = 10) => {
 
   await ensureWebhookTables();
   const rows = await sql`
-    SELECT id, user_email, webhook_url, event_name, status, response_status, error_message, payload, delivered_at
+    SELECT id, user_email, channel, webhook_url, event_name, status, response_status, error_message, payload, delivered_at
     FROM webhook_delivery_logs
     WHERE user_email = ${userEmail}
     ORDER BY delivered_at DESC
@@ -213,6 +278,7 @@ export const listWebhookDeliveryLogs = async (userEmail, limit = 10) => {
   return rows.map((row) => ({
     id: row.id,
     userEmail: row.user_email,
+    channel: row.channel || DEFAULT_WEBHOOK_CHANNEL,
     webhookUrl: row.webhook_url,
     eventName: row.event_name,
     status: row.status,
@@ -260,19 +326,19 @@ const toDisplayText = (value, fallback = 'N/A') => {
 
 const formatSeverityLabel = (severity) => {
   const normalized = String(severity || '').toLowerCase();
-  if (normalized === 'critical') return '严重';
-  if (normalized === 'high') return '高危';
-  if (normalized === 'medium') return '中危';
-  if (normalized === 'low') return '低危';
-  if (normalized === 'safe') return '安全';
-  return toDisplayText(severity, '未知');
+  if (normalized === 'critical') return '涓ラ噸';
+  if (normalized === 'high') return '楂樺嵄';
+  if (normalized === 'medium') return '涓嵄';
+  if (normalized === 'low') return '浣庡嵄';
+  if (normalized === 'safe') return '瀹夊叏';
+  return toDisplayText(severity, '鏈煡');
 };
 
 const buildRobotSummary = (eventName, payload) => {
   const finding = payload?.finding || {};
-  const title = toDisplayText(finding.title || payload?.title, '泄露监测事件');
+  const title = toDisplayText(finding.title || payload?.title, '泄露监测通知');
   const summary = toDisplayText(finding.summary || payload?.message, '请前往平台查看详情。');
-  const source = toDisplayText(finding.source || payload?.source, 'LeakRadar');
+  const source = toDisplayText(finding.source || payload?.source, '谍卫');
   const severity = formatSeverityLabel(finding.severity || payload?.severity);
   const status = toDisplayText(finding.status || payload?.status, 'new');
   const detectedAt = toDisplayText(payload?.detectedAt, new Date().toISOString());
@@ -309,7 +375,7 @@ const buildMarkdownSummary = (details) =>
 
 const buildPlainTextSummary = (details) =>
   [
-    `【${details.title}】`,
+    `标题：${details.title}`,
     `事件：${details.eventName}`,
     `等级：${details.severity}`,
     `来源：${details.source}`,
@@ -320,7 +386,6 @@ const buildPlainTextSummary = (details) =>
   ]
     .filter(Boolean)
     .join('\n');
-
 const createDingtalkSignedUrl = (rawUrl, secret) => {
   if (!secret) return rawUrl;
 
@@ -420,8 +485,9 @@ const buildWebhookRequest = ({ config, eventName, payload, deliveryId }) => {
   };
 };
 
-export const sendWebhookNotification = async ({ userEmail, eventName, payload }) => {
-  const config = await getWebhookConfig(userEmail);
+export const sendWebhookNotification = async ({ userEmail, eventName, payload, channel = DEFAULT_WEBHOOK_CHANNEL }) => {
+  const normalizedChannel = normalizeWebhookChannel(channel);
+  const config = await getWebhookConfig(userEmail, normalizedChannel);
 
   if (!config || !config.enabled || !config.url) {
     return { delivered: false, skipped: true, reason: 'Webhook is not configured.' };
@@ -442,6 +508,7 @@ export const sendWebhookNotification = async ({ userEmail, eventName, payload })
 
     await recordWebhookDelivery({
       userEmail,
+      channel: normalizedChannel,
       webhookUrl: config.url,
       eventName,
       status: ok ? 'success' : 'failed',
@@ -454,6 +521,7 @@ export const sendWebhookNotification = async ({ userEmail, eventName, payload })
   } catch (error) {
     await recordWebhookDelivery({
       userEmail,
+      channel: normalizedChannel,
       webhookUrl: config.url,
       eventName,
       status: 'failed',
@@ -470,20 +538,21 @@ export const sendWebhookNotification = async ({ userEmail, eventName, payload })
   }
 };
 
-export const sendWebhookTestNotification = async (userEmail) => {
+export const sendWebhookTestNotification = async (userEmail, channel = DEFAULT_WEBHOOK_CHANNEL) => {
   return sendWebhookNotification({
     userEmail,
+    channel,
     eventName: 'scheduled_scan.test',
     payload: {
       event: 'scheduled_scan.test',
-      message: '这是一条来自 LeakRadar 的测试通知，用于验证机器人或 Webhook 是否接通。',
+      message: '这是一条来自 谍卫 的测试通知，用于验证机器人或 Webhook 是否接通。',
       detectedAt: new Date().toISOString(),
       finding: {
         title: 'Webhook 测试通知',
-        source: 'LeakRadar',
+        source: '谍卫',
         severity: 'low',
         status: 'new',
-        summary: '如果你看到了这条消息，说明当前机器人或 Webhook 接入已经打通。',
+        summary: '如果你看到这条消息，说明当前机器人或 Webhook 接入已经打通。',
       },
     },
   });
