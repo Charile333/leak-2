@@ -1,4 +1,4 @@
-import {
+﻿import {
   CODE_SENSITIVE_SEARCH_PATTERNS_V1,
   evaluateCodeLeak,
   evaluateFileLeak,
@@ -500,9 +500,9 @@ const normalizePublishedDate = (value) => {
 };
 
 const getPushLevel = (score) => {
-  if (score >= 70) return '高优先';
-  if (score >= 45) return '建议关注';
-  return '情报观察';
+  if (score >= 70) return '楂樹紭鍏?;
+  if (score >= 45) return '寤鸿鍏虫敞';
+  return '鎯呮姤瑙傚療';
 };
 
 const buildPushAssessment = ({ cvssScore, hasKev, otxMentionCount, summary, title }) => {
@@ -512,30 +512,30 @@ const buildPushAssessment = ({ cvssScore, hasKev, otxMentionCount, summary, titl
 
   if (hasKev) {
     score += 40;
-    reasons.push('已进入 KEV');
+    reasons.push('宸茶繘鍏?KEV');
   }
 
   if (typeof cvssScore === 'number') {
     if (cvssScore >= 9) {
       score += 25;
-      reasons.push('CVSS 极高危');
+      reasons.push('CVSS 鏋侀珮鍗?);
     } else if (cvssScore >= 7) {
       score += 15;
-      reasons.push('CVSS 高危');
+      reasons.push('CVSS 楂樺嵄');
     }
   }
 
   if (otxMentionCount >= 5) {
     score += 15;
-    reasons.push('近期情报热度较高');
+    reasons.push('杩戞湡鎯呮姤鐑害杈冮珮');
   } else if (otxMentionCount >= 2) {
     score += 8;
-    reasons.push('近期被多条情报提及');
+    reasons.push('杩戞湡琚鏉℃儏鎶ユ彁鍙?);
   }
 
   if (/(rce|remote code execution|actively exploited|exploit|poc|ransomware|0day|zero-day)/i.test(haystack)) {
     score += 12;
-    reasons.push('存在高风险利用线索');
+    reasons.push('瀛樺湪楂橀闄╁埄鐢ㄧ嚎绱?);
   }
 
   return {
@@ -596,10 +596,10 @@ export const enrichWithNvd = async (cveId) => {
 const parseAliyunSeverity = (value) => {
   const text = String(value || '').trim();
   if (!text) return '';
-  if (/[严重|紧急]/.test(text)) return 'CRITICAL';
-  if (/高/.test(text)) return 'HIGH';
-  if (/中/.test(text)) return 'MEDIUM';
-  if (/低/.test(text)) return 'LOW';
+  if (/[涓ラ噸|绱ф€/.test(text)) return 'CRITICAL';
+  if (/楂?.test(text)) return 'HIGH';
+  if (/涓?.test(text)) return 'MEDIUM';
+  if (/浣?.test(text)) return 'LOW';
   return text.toUpperCase();
 };
 
@@ -858,31 +858,31 @@ export const buildStructuredOtxResult = async (type, query, options = {}) => {
         http_scan_count: httpScanCount,
       },
       section_states: {
-        pulses: buildSectionState(pulses.length > 0 ? 'success' : 'no_data', pulses.length > 0 ? '已找到关联情报。' : '未找到关联情报。'),
+        pulses: buildSectionState(pulses.length > 0 ? 'success' : 'no_data', pulses.length > 0 ? '宸叉壘鍒板叧鑱旀儏鎶ャ€? : '鏈壘鍒板叧鑱旀儏鎶ャ€?),
         passive_dns: buildSectionState(
           getSectionErrorType(passiveDnsPayload) === 'timeout' ? 'timeout' : passiveDnsCount > 0 ? 'success' : 'no_data',
           getSectionErrorType(passiveDnsPayload) === 'timeout'
-            ? '被动 DNS 查询超时，情报源未在限定时间内返回数据。'
+            ? '琚姩 DNS 鏌ヨ瓒呮椂锛屾儏鎶ユ簮鏈湪闄愬畾鏃堕棿鍐呰繑鍥炴暟鎹€?
             : passiveDnsCount > 0
-              ? '已获取被动 DNS 记录。'
-              : '情报源未返回被动 DNS 记录。'
+              ? '宸茶幏鍙栬鍔?DNS 璁板綍銆?
+              : '鎯呮姤婧愭湭杩斿洖琚姩 DNS 璁板綍銆?
         ),
-        url_list: buildSectionState(urlList.length > 0 ? 'success' : 'no_data', urlList.length > 0 ? '已找到关联 URL。' : '未找到关联 URL。'),
+        url_list: buildSectionState(urlList.length > 0 ? 'success' : 'no_data', urlList.length > 0 ? '宸叉壘鍒板叧鑱?URL銆? : '鏈壘鍒板叧鑱?URL銆?),
         malware: buildSectionState(
           getSectionErrorType(malwarePayload) === 'timeout' ? 'timeout' : malwareCount > 0 ? 'success' : 'no_data',
           getSectionErrorType(malwarePayload) === 'timeout'
-            ? '恶意样本查询超时，情报源未在限定时间内返回数据。'
+            ? '鎭舵剰鏍锋湰鏌ヨ瓒呮椂锛屾儏鎶ユ簮鏈湪闄愬畾鏃堕棿鍐呰繑鍥炴暟鎹€?
             : malwareCount > 0
-              ? '已获取恶意样本记录。'
-              : '情报源未返回恶意样本记录。'
+              ? '宸茶幏鍙栨伓鎰忔牱鏈褰曘€?
+              : '鎯呮姤婧愭湭杩斿洖鎭舵剰鏍锋湰璁板綍銆?
         ),
         http_scans: buildSectionState(
           getSectionErrorType(httpScansPayload) === 'timeout' ? 'timeout' : httpScanCount > 0 ? 'success' : 'no_data',
           getSectionErrorType(httpScansPayload) === 'timeout'
-            ? 'HTTP 扫描查询超时，情报源未在限定时间内返回数据。'
+            ? 'HTTP 鎵弿鏌ヨ瓒呮椂锛屾儏鎶ユ簮鏈湪闄愬畾鏃堕棿鍐呰繑鍥炴暟鎹€?
             : httpScanCount > 0
-              ? '已获取 HTTP 扫描记录。'
-              : '未找到 HTTP 扫描记录。'
+              ? '宸茶幏鍙?HTTP 鎵弿璁板綍銆?
+              : '鏈壘鍒?HTTP 鎵弿璁板綍銆?
         ),
       },
     };
@@ -938,31 +938,31 @@ export const buildStructuredOtxResult = async (type, query, options = {}) => {
         http_scan_count: httpScanCount,
       },
       section_states: {
-        pulses: buildSectionState(pulses.length > 0 ? 'success' : 'no_data', pulses.length > 0 ? '已找到关联情报。' : '未找到关联情报。'),
+        pulses: buildSectionState(pulses.length > 0 ? 'success' : 'no_data', pulses.length > 0 ? '宸叉壘鍒板叧鑱旀儏鎶ャ€? : '鏈壘鍒板叧鑱旀儏鎶ャ€?),
         passive_dns: buildSectionState(
           getSectionErrorType(passiveDnsPayload) === 'timeout' ? 'timeout' : passiveDnsCount > 0 ? 'success' : 'no_data',
           getSectionErrorType(passiveDnsPayload) === 'timeout'
-            ? '被动 DNS 查询超时，情报源未在限定时间内返回数据。'
+            ? '琚姩 DNS 鏌ヨ瓒呮椂锛屾儏鎶ユ簮鏈湪闄愬畾鏃堕棿鍐呰繑鍥炴暟鎹€?
             : passiveDnsCount > 0
-              ? '已获取被动 DNS 记录。'
-              : '情报源未返回被动 DNS 记录。'
+              ? '宸茶幏鍙栬鍔?DNS 璁板綍銆?
+              : '鎯呮姤婧愭湭杩斿洖琚姩 DNS 璁板綍銆?
         ),
-        url_list: buildSectionState(urlList.length > 0 ? 'success' : 'no_data', urlList.length > 0 ? '已找到关联 URL。' : '未找到关联 URL。'),
+        url_list: buildSectionState(urlList.length > 0 ? 'success' : 'no_data', urlList.length > 0 ? '宸叉壘鍒板叧鑱?URL銆? : '鏈壘鍒板叧鑱?URL銆?),
         malware: buildSectionState(
           getSectionErrorType(malwarePayload) === 'timeout' ? 'timeout' : malwareCount > 0 ? 'success' : 'no_data',
           getSectionErrorType(malwarePayload) === 'timeout'
-            ? '恶意样本查询超时，情报源未在限定时间内返回数据。'
+            ? '鎭舵剰鏍锋湰鏌ヨ瓒呮椂锛屾儏鎶ユ簮鏈湪闄愬畾鏃堕棿鍐呰繑鍥炴暟鎹€?
             : malwareCount > 0
-              ? '已获取恶意样本记录。'
-              : '情报源未返回恶意样本记录。'
+              ? '宸茶幏鍙栨伓鎰忔牱鏈褰曘€?
+              : '鎯呮姤婧愭湭杩斿洖鎭舵剰鏍锋湰璁板綍銆?
         ),
         http_scans: buildSectionState(
           getSectionErrorType(httpScansPayload) === 'timeout' ? 'timeout' : httpScanCount > 0 ? 'success' : 'no_data',
           getSectionErrorType(httpScansPayload) === 'timeout'
-            ? 'HTTP 扫描查询超时，情报源未在限定时间内返回数据。'
+            ? 'HTTP 鎵弿鏌ヨ瓒呮椂锛屾儏鎶ユ簮鏈湪闄愬畾鏃堕棿鍐呰繑鍥炴暟鎹€?
             : httpScanCount > 0
-              ? '已获取 HTTP 扫描记录。'
-              : '未找到 HTTP 扫描记录。'
+              ? '宸茶幏鍙?HTTP 鎵弿璁板綍銆?
+              : '鏈壘鍒?HTTP 鎵弿璁板綍銆?
         ),
       },
     };
@@ -1006,11 +1006,11 @@ export const buildStructuredOtxResult = async (type, query, options = {}) => {
         http_scan_count: 0,
       },
       section_states: {
-        pulses: buildSectionState(pulses.length > 0 ? 'success' : 'no_data', pulses.length > 0 ? '已找到关联情报。' : '未找到关联情报。'),
-        passive_dns: buildSectionState('not_supported', 'URL 查询暂不提供被动 DNS 记录。'),
-        url_list: buildSectionState(urlList.length > 0 ? 'success' : 'no_data', urlList.length > 0 ? '已找到关联 URL。' : '未找到关联 URL。'),
-        malware: buildSectionState('not_supported', 'URL 查询暂不提供恶意样本记录。'),
-        http_scans: buildSectionState('not_supported', 'URL 查询暂不提供 HTTP 扫描记录。'),
+        pulses: buildSectionState(pulses.length > 0 ? 'success' : 'no_data', pulses.length > 0 ? '宸叉壘鍒板叧鑱旀儏鎶ャ€? : '鏈壘鍒板叧鑱旀儏鎶ャ€?),
+        passive_dns: buildSectionState('not_supported', 'URL 鏌ヨ鏆備笉鎻愪緵琚姩 DNS 璁板綍銆?),
+        url_list: buildSectionState(urlList.length > 0 ? 'success' : 'no_data', urlList.length > 0 ? '宸叉壘鍒板叧鑱?URL銆? : '鏈壘鍒板叧鑱?URL銆?),
+        malware: buildSectionState('not_supported', 'URL 鏌ヨ鏆備笉鎻愪緵鎭舵剰鏍锋湰璁板綍銆?),
+        http_scans: buildSectionState('not_supported', 'URL 鏌ヨ鏆備笉鎻愪緵 HTTP 鎵弿璁板綍銆?),
       },
     };
   }
@@ -1056,11 +1056,11 @@ export const buildStructuredOtxResult = async (type, query, options = {}) => {
         http_scan_count: 0,
       },
       section_states: {
-        pulses: buildSectionState(pulses.length > 0 ? 'success' : 'no_data', pulses.length > 0 ? '已找到关联情报。' : '未找到关联情报。'),
-        passive_dns: buildSectionState('not_supported', 'CVE 查询暂不提供被动 DNS 记录。'),
-        url_list: buildSectionState('not_supported', 'CVE 查询暂不提供关联 URL。'),
-        malware: buildSectionState('not_supported', 'CVE 查询暂不提供恶意样本记录。'),
-        http_scans: buildSectionState('not_supported', 'CVE 查询暂不提供 HTTP 扫描记录。'),
+        pulses: buildSectionState(pulses.length > 0 ? 'success' : 'no_data', pulses.length > 0 ? '宸叉壘鍒板叧鑱旀儏鎶ャ€? : '鏈壘鍒板叧鑱旀儏鎶ャ€?),
+        passive_dns: buildSectionState('not_supported', 'CVE 鏌ヨ鏆備笉鎻愪緵琚姩 DNS 璁板綍銆?),
+        url_list: buildSectionState('not_supported', 'CVE 鏌ヨ鏆備笉鎻愪緵鍏宠仈 URL銆?),
+        malware: buildSectionState('not_supported', 'CVE 鏌ヨ鏆備笉鎻愪緵鎭舵剰鏍锋湰璁板綍銆?),
+        http_scans: buildSectionState('not_supported', 'CVE 鏌ヨ鏆備笉鎻愪緵 HTTP 鎵弿璁板綍銆?),
       },
     };
   }
@@ -1111,7 +1111,7 @@ const searchGitHubRepositories = async (terms) => {
         status: 'new',
         source: 'GitHub',
         exposure: ruleResult.exposure,
-        title: `公开仓库命中关键词“${term}”`,
+        title: `鍏紑浠撳簱鍛戒腑鍏抽敭璇嶁€?{term}鈥漙,
         repository: item.name || 'unknown-repository',
         owner: item.owner?.login || 'unknown-owner',
         path: 'Repository metadata',
@@ -1123,7 +1123,7 @@ const searchGitHubRepositories = async (terms) => {
         url: item.html_url,
         confidence: Math.min(0.95, 0.58 + ruleResult.confidenceBoost),
         matchedRules: ruleResult.matchedRules,
-        notes: ['公开仓库元数据命中监控对象', '建议继续查看 README、配置文件与提交历史'],
+        notes: ['鍏紑浠撳簱鍏冩暟鎹懡涓洃鎺у璞?, '寤鸿缁х画鏌ョ湅 README銆侀厤缃枃浠朵笌鎻愪氦鍘嗗彶'],
       });
     }
   }
@@ -1167,7 +1167,7 @@ const searchGitHubCode = async (terms) => {
         status: 'new',
         source: 'GitHub',
         exposure: ruleResult.exposure,
-        title: `代码搜索命中“${term}”`,
+        title: `浠ｇ爜鎼滅储鍛戒腑鈥?{term}鈥漙,
         repository: item.repository?.name || 'unknown-repository',
         owner: item.repository?.owner?.login || 'unknown-owner',
         path: item.path || 'Unknown path',
@@ -1179,7 +1179,7 @@ const searchGitHubCode = async (terms) => {
         url: item.html_url || item.repository?.html_url,
         confidence: Math.min(0.98, 0.84 + ruleResult.confidenceBoost),
         matchedRules: ruleResult.matchedRules,
-        notes: ['GitHub code search returned a direct file-level match', '建议优先核对片段是否包含真实凭据或内部配置'],
+        notes: ['GitHub code search returned a direct file-level match', '寤鸿浼樺厛鏍稿鐗囨鏄惁鍖呭惈鐪熷疄鍑嵁鎴栧唴閮ㄩ厤缃?],
       });
     }
   }
@@ -1215,7 +1215,7 @@ const searchGiteeRepositories = async (terms) => {
         status: 'new',
         source: 'Gitee',
         exposure: ruleResult.exposure,
-        title: `公开 Gitee 仓库命中关键词“${term}”`,
+        title: `鍏紑 Gitee 浠撳簱鍛戒腑鍏抽敭璇嶁€?{term}鈥漙,
         repository: item.name || 'unknown-repository',
         owner: item.namespace?.name || item.owner?.login || 'unknown-owner',
         path: 'Repository metadata',
@@ -1227,7 +1227,7 @@ const searchGiteeRepositories = async (terms) => {
         url: item.html_url,
         confidence: Math.min(0.92, 0.54 + ruleResult.confidenceBoost),
         matchedRules: ruleResult.matchedRules,
-        notes: ['Gitee 公开仓库元数据命中监控对象', '建议继续检查 README、配置目录和 Issues 讨论内容'],
+        notes: ['Gitee 鍏紑浠撳簱鍏冩暟鎹懡涓洃鎺у璞?, '寤鸿缁х画妫€鏌?README銆侀厤缃洰褰曞拰 Issues 璁ㄨ鍐呭'],
       });
     }
   }
@@ -1591,6 +1591,7 @@ const searchGitHubFiles = async (terms) => {
           path: item.path || '',
           extension: fileType.extension,
         });
+        if (!ruleResult.eligible) continue;
 
         findings.push({
           id: `github-file-${item.sha || item.url}-${term}-${fileType.extension}`,
@@ -1647,6 +1648,7 @@ const searchGiteeFileRepositories = async (terms) => {
           path: item.full_name || '',
           extension: fileType.extension,
         });
+        if (!ruleResult.eligible) continue;
         findings.push({
           id: `gitee-file-${item.id}-${term}-${fileType.extension}`,
           assetLabel: term,

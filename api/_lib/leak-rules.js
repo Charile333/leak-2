@@ -1,7 +1,7 @@
-export const CODE_LEAK_RULES_V1 = [
+﻿export const CODE_LEAK_RULES_V1 = [
   {
     id: 'secret-generic-key',
-    name: '通用密钥模式',
+    name: '閫氱敤瀵嗛挜妯″紡',
     category: 'secret_patterns',
     severity: 'critical',
     exposure: 'secret',
@@ -10,7 +10,7 @@ export const CODE_LEAK_RULES_V1 = [
   },
   {
     id: 'credential-connection-string',
-    name: '数据库与凭据连接串',
+    name: '鏁版嵁搴撲笌鍑嵁杩炴帴涓?,
     category: 'credential_patterns',
     severity: 'critical',
     exposure: 'credential',
@@ -19,7 +19,7 @@ export const CODE_LEAK_RULES_V1 = [
   },
   {
     id: 'internal-infrastructure',
-    name: '内部基础设施标识',
+    name: '鍐呴儴鍩虹璁炬柦鏍囪瘑',
     category: 'internal_hosts',
     severity: 'high',
     exposure: 'source',
@@ -28,7 +28,7 @@ export const CODE_LEAK_RULES_V1 = [
   },
   {
     id: 'config-sensitive-file',
-    name: '敏感配置文件',
+    name: '鏁忔劅閰嶇疆鏂囦欢',
     category: 'infra_files',
     severity: 'medium',
     exposure: 'config',
@@ -37,7 +37,7 @@ export const CODE_LEAK_RULES_V1 = [
   },
   {
     id: 'repository-exposure',
-    name: '仓库镜像与备份痕迹',
+    name: '浠撳簱闀滃儚涓庡浠界棔杩?,
     category: 'repository_context',
     severity: 'medium',
     exposure: 'repository',
@@ -101,7 +101,7 @@ export const CODE_SENSITIVE_SEARCH_PATTERNS_V1 = [
 export const FILE_LEAK_RULES_V1 = [
   {
     id: 'file-database-backup',
-    name: '数据库与备份文件',
+    name: '鏁版嵁搴撲笌澶囦唤鏂囦欢',
     category: 'document_keywords',
     severity: 'critical',
     sensitivity: 'critical',
@@ -110,7 +110,7 @@ export const FILE_LEAK_RULES_V1 = [
   },
   {
     id: 'file-sensitive-sheet',
-    name: '高敏感表格文件',
+    name: '楂樻晱鎰熻〃鏍兼枃浠?,
     category: 'document_keywords',
     severity: 'high',
     sensitivity: 'high',
@@ -119,16 +119,16 @@ export const FILE_LEAK_RULES_V1 = [
   },
   {
     id: 'file-confidential-document',
-    name: '涉密文档候选',
+    name: '娑夊瘑鏂囨。鍊欓€?,
     category: 'document_keywords',
     severity: 'high',
     sensitivity: 'high',
     extensions: ['pdf', 'docx'],
-    regex: /(contract|confidential|nda|proposal|报价|合同|财务)/i,
+    regex: /(contract|confidential|nda|proposal|鎶ヤ环|鍚堝悓|璐㈠姟)/i,
   },
   {
     id: 'file-general-document',
-    name: '一般业务文档',
+    name: '涓€鑸笟鍔℃枃妗?,
     category: 'document_keywords',
     severity: 'medium',
     sensitivity: 'medium',
@@ -150,6 +150,10 @@ const rankSensitivity = {
   critical: 3,
 };
 
+
+const FILE_LEAK_STRONG_SIGNALS = /(backup|dump|restore|database|db[_-]?backup|credential|password|passwd|secret|token|customer|employee|payroll|salary|invoice|finance|contract|confidential|nda|private|internal|prod|production|insert\s+into|create\s+table|grant\s+all|users?\b|accounts?\b)/i;
+
+const FILE_LEAK_FALSE_POSITIVE_HINTS = /(seed|fixture|example|sample|demo|mock|brand(s)?|testdata|test-data|public[\s_-]?suffix)/i;
 const maxByRank = (values, rankMap, fallback) => {
   if (!Array.isArray(values) || values.length === 0) return fallback;
   return values.reduce((best, current) => (rankMap[current] > rankMap[best] ? current : best), fallback);
@@ -172,7 +176,7 @@ export const evaluateCodeLeak = ({ term = '', text = '', path = '' }) => {
     matchedRules: matchedRules.map((rule) => rule.id),
     severity: maxByRank(matchedRules.map((rule) => rule.severity), rankSeverity, 'low'),
     exposure: matchedRules[0]?.exposure || 'source',
-    notes: matchedRules.map((rule) => `命中规则: ${rule.name}`),
+    notes: matchedRules.map((rule) => `鍛戒腑瑙勫垯: ${rule.name}`),
     confidenceBoost: Math.min(0.28, matchedRules.length * 0.06),
   };
 };
@@ -255,11 +259,28 @@ export const evaluateFileLeak = ({ term = '', text = '', path = '', extension = 
     return extensionMatched && regexMatched;
   });
 
+  const requiresStrongEvidence = ['sql', 'bak', 'zip'].includes(normalizedExtension);
+  const strongSignalMatched = FILE_LEAK_STRONG_SIGNALS.test(haystack);
+  const falsePositiveHintMatched = FILE_LEAK_FALSE_POSITIVE_HINTS.test(haystack);
+  const eligible = matchedRules.length > 0
+    && (!requiresStrongEvidence || strongSignalMatched)
+    && !(falsePositiveHintMatched && !strongSignalMatched);
+
+  const fallbackSeverity = requiresStrongEvidence
+    ? (strongSignalMatched ? 'critical' : 'low')
+    : 'medium';
+  const fallbackSensitivity = requiresStrongEvidence
+    ? (strongSignalMatched ? 'critical' : 'medium')
+    : 'medium';
+
   return {
     matchedRules: matchedRules.map((rule) => rule.id),
-    severity: maxByRank(matchedRules.map((rule) => rule.severity), rankSeverity, normalizedExtension === 'sql' ? 'critical' : 'medium'),
-    sensitivity: maxByRank(matchedRules.map((rule) => rule.sensitivity), rankSensitivity, normalizedExtension === 'sql' ? 'critical' : 'medium'),
-    notes: matchedRules.map((rule) => `命中规则: ${rule.name}`),
+    severity: maxByRank(matchedRules.map((rule) => rule.severity), rankSeverity, fallbackSeverity),
+    sensitivity: maxByRank(matchedRules.map((rule) => rule.sensitivity), rankSensitivity, fallbackSensitivity),
+    notes: matchedRules.map((rule) => `閸涙垝鑵戠憴鍕灟: ${rule.name}`),
     confidenceBoost: Math.min(0.24, matchedRules.length * 0.05),
+    eligible,
+    falsePositiveHintMatched,
+    strongSignalMatched,
   };
 };
