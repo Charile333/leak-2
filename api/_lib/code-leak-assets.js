@@ -1,9 +1,8 @@
-import { neon } from '@neondatabase/serverless';
 import { promises as fs } from 'fs';
 import path from 'path';
+import { getSqlClient, hasDatabase, withDatabaseErrorBoundary } from './db.js';
 
-const DATABASE_URL = process.env.DATABASE_URL || process.env.NEON_DATABASE_URL || '';
-const sql = DATABASE_URL ? neon(DATABASE_URL) : null;
+const sql = getSqlClient();
 const CODE_LEAK_ASSETS_FILE = path.join(process.cwd(), '.data', 'code-leak-assets.json');
 
 let tableReady = false;
@@ -40,43 +39,47 @@ export const getCodeLeakUserEmail = (req, body = null) => {
 };
 
 export const ensureCodeLeakAssetsTable = async () => {
-  if (!sql || tableReady) return;
+  if (!hasDatabase() || tableReady) return;
 
-  await sql`
-    CREATE TABLE IF NOT EXISTS code_leak_assets (
-      id TEXT PRIMARY KEY,
-      user_email TEXT NOT NULL,
-      label TEXT NOT NULL,
-      value TEXT NOT NULL,
-      type TEXT NOT NULL,
-      enabled BOOLEAN NOT NULL DEFAULT TRUE,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    )
-  `;
+  await withDatabaseErrorBoundary(async () => {
+    await sql`
+      CREATE TABLE IF NOT EXISTS code_leak_assets (
+        id TEXT PRIMARY KEY,
+        user_email TEXT NOT NULL,
+        label TEXT NOT NULL,
+        value TEXT NOT NULL,
+        type TEXT NOT NULL,
+        enabled BOOLEAN NOT NULL DEFAULT TRUE,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `;
 
-  await sql`
-    CREATE UNIQUE INDEX IF NOT EXISTS code_leak_assets_user_value_idx
-    ON code_leak_assets (user_email, value)
-  `;
+    await sql`
+      CREATE UNIQUE INDEX IF NOT EXISTS code_leak_assets_user_value_idx
+      ON code_leak_assets (user_email, value)
+    `;
+  }, 'Failed to prepare code leak assets table.');
 
   tableReady = true;
 };
 
 export const listCodeLeakAssets = async (userEmail) => {
-  if (!sql) {
+  if (!hasDatabase()) {
     const store = await readCodeLeakAssetsStore();
     return Array.isArray(store[userEmail]) ? store[userEmail] : [];
   }
 
   await ensureCodeLeakAssetsTable();
 
-  const rows = await sql`
-    SELECT id, label, value, type, enabled
-    FROM code_leak_assets
-    WHERE user_email = ${userEmail}
-    ORDER BY created_at ASC
-  `;
+  const rows = await withDatabaseErrorBoundary(() => sql`
+      SELECT id, label, value, type, enabled
+      FROM code_leak_assets
+      WHERE user_email = ${userEmail}
+      ORDER BY created_at ASC
+    `,
+    'Failed to load code leak assets.'
+  );
 
   return rows.map((row) => ({
     id: row.id,
@@ -88,7 +91,7 @@ export const listCodeLeakAssets = async (userEmail) => {
 };
 
 export const addCodeLeakAsset = async (userEmail, asset) => {
-  if (!sql) {
+  if (!hasDatabase()) {
     const store = await readCodeLeakAssetsStore();
     const currentAssets = Array.isArray(store[userEmail]) ? store[userEmail] : [];
     const duplicated = currentAssets.some((item) => String(item?.value || '').toLowerCase() === asset.value.toLowerCase());
@@ -101,25 +104,29 @@ export const addCodeLeakAsset = async (userEmail, asset) => {
 
   await ensureCodeLeakAssetsTable();
 
-  const duplicated = await sql`
-    SELECT id
-    FROM code_leak_assets
-    WHERE user_email = ${userEmail} AND lower(value) = lower(${asset.value})
-    LIMIT 1
-  `;
+  const duplicated = await withDatabaseErrorBoundary(() => sql`
+      SELECT id
+      FROM code_leak_assets
+      WHERE user_email = ${userEmail} AND lower(value) = lower(${asset.value})
+      LIMIT 1
+    `,
+    'Failed to check duplicated code leak asset.'
+  );
 
   if (duplicated.length === 0) {
-    await sql`
-      INSERT INTO code_leak_assets (id, user_email, label, value, type, enabled)
-      VALUES (${asset.id}, ${userEmail}, ${asset.label}, ${asset.value}, ${asset.type}, ${asset.enabled})
-    `;
+    await withDatabaseErrorBoundary(() => sql`
+        INSERT INTO code_leak_assets (id, user_email, label, value, type, enabled)
+        VALUES (${asset.id}, ${userEmail}, ${asset.label}, ${asset.value}, ${asset.type}, ${asset.enabled})
+      `,
+      'Failed to save code leak asset.'
+    );
   }
 
   return listCodeLeakAssets(userEmail);
 };
 
 export const removeCodeLeakAsset = async (userEmail, assetId) => {
-  if (!sql) {
+  if (!hasDatabase()) {
     const store = await readCodeLeakAssetsStore();
     const currentAssets = Array.isArray(store[userEmail]) ? store[userEmail] : [];
     store[userEmail] = currentAssets.filter((asset) => asset.id !== assetId);
@@ -129,10 +136,12 @@ export const removeCodeLeakAsset = async (userEmail, assetId) => {
 
   await ensureCodeLeakAssetsTable();
 
-  await sql`
-    DELETE FROM code_leak_assets
-    WHERE user_email = ${userEmail} AND id = ${assetId}
-  `;
+  await withDatabaseErrorBoundary(() => sql`
+      DELETE FROM code_leak_assets
+      WHERE user_email = ${userEmail} AND id = ${assetId}
+    `,
+    'Failed to remove code leak asset.'
+  );
 
   return listCodeLeakAssets(userEmail);
 };

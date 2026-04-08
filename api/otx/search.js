@@ -7,6 +7,7 @@ import {
   setCachedOtxSearch,
 } from '../_lib/intel.js';
 import { getCveIntelUserEmail, listCveIntelAssets } from '../_lib/cve-intel-assets.js';
+import { sendApiError } from '../_lib/api-errors.js';
 
 const normalizeForMatch = (value) =>
   String(value || '')
@@ -39,6 +40,17 @@ const filterItemsByAssets = (items, assets) => {
   });
 };
 
+const listCveIntelAssetsSafely = async (userEmail) => {
+  if (!userEmail) return [];
+
+  try {
+    return await listCveIntelAssets(userEmail);
+  } catch (error) {
+    console.warn('[api/otx/search] failed to load CVE intel assets:', error);
+    return [];
+  }
+};
+
 export default async function handler(req, res) {
   applyCors(res);
 
@@ -68,7 +80,7 @@ export default async function handler(req, res) {
         noCache,
       });
 
-      const assets = userEmail ? await listCveIntelAssets(userEmail) : [];
+      const assets = await listCveIntelAssetsSafely(userEmail);
       const filteredItems = filterItemsByAssets(Array.isArray(data.items) ? data.items : [], assets);
 
       return sendJson(res, 200, {
@@ -119,9 +131,10 @@ export default async function handler(req, res) {
     });
   } catch (error) {
     console.error('[api/otx/search] failed:', error);
-    return sendJson(res, 500, {
+    return sendApiError(res, error, {
+      status: 500,
       error: 'Intel Search Failed',
-      message: error.message || 'Failed to search intelligence source',
+      message: 'Failed to search intelligence source',
     });
   }
 }

@@ -1,9 +1,8 @@
-import { neon } from '@neondatabase/serverless';
 import { promises as fs } from 'fs';
 import path from 'path';
+import { getSqlClient, hasDatabase, withDatabaseErrorBoundary } from './db.js';
 
-const DATABASE_URL = process.env.DATABASE_URL || process.env.NEON_DATABASE_URL || '';
-const sql = DATABASE_URL ? neon(DATABASE_URL) : null;
+const sql = getSqlClient();
 const TASKS_FILE = path.join(process.cwd(), '.data', 'scheduled-scan-tasks.json');
 const FINDINGS_FILE = path.join(process.cwd(), '.data', 'scheduled-scan-findings.json');
 const RUNS_FILE = path.join(process.cwd(), '.data', 'scheduled-scan-runs.json');
@@ -36,57 +35,59 @@ const writeJsonFile = async (filePath, value) => {
 };
 
 export const ensureScheduledScanTables = async () => {
-  if (!sql || tablesReady) return;
+  if (!hasDatabase() || tablesReady) return;
 
-  await sql`
-    CREATE TABLE IF NOT EXISTS scheduled_scan_tasks (
-      id TEXT PRIMARY KEY,
-      user_email TEXT NOT NULL,
-      scan_type TEXT NOT NULL,
-      label TEXT NOT NULL,
-      query TEXT,
-      interval_minutes INTEGER NOT NULL DEFAULT 60,
-      enabled BOOLEAN NOT NULL DEFAULT TRUE,
-      last_run_at TIMESTAMPTZ,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    )
-  `;
+  await withDatabaseErrorBoundary(async () => {
+    await sql`
+      CREATE TABLE IF NOT EXISTS scheduled_scan_tasks (
+        id TEXT PRIMARY KEY,
+        user_email TEXT NOT NULL,
+        scan_type TEXT NOT NULL,
+        label TEXT NOT NULL,
+        query TEXT,
+        interval_minutes INTEGER NOT NULL DEFAULT 60,
+        enabled BOOLEAN NOT NULL DEFAULT TRUE,
+        last_run_at TIMESTAMPTZ,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `;
 
-  await sql`
-    CREATE TABLE IF NOT EXISTS scheduled_scan_findings (
-      id TEXT PRIMARY KEY,
-      task_id TEXT NOT NULL,
-      user_email TEXT NOT NULL,
-      scan_type TEXT NOT NULL,
-      dedupe_key TEXT NOT NULL,
-      finding_payload JSONB NOT NULL,
-      first_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      last_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      hit_count INTEGER NOT NULL DEFAULT 1,
-      UNIQUE (task_id, dedupe_key)
-    )
-  `;
+    await sql`
+      CREATE TABLE IF NOT EXISTS scheduled_scan_findings (
+        id TEXT PRIMARY KEY,
+        task_id TEXT NOT NULL,
+        user_email TEXT NOT NULL,
+        scan_type TEXT NOT NULL,
+        dedupe_key TEXT NOT NULL,
+        finding_payload JSONB NOT NULL,
+        first_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        last_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        hit_count INTEGER NOT NULL DEFAULT 1,
+        UNIQUE (task_id, dedupe_key)
+      )
+    `;
 
-  await sql`
-    CREATE TABLE IF NOT EXISTS scheduled_scan_runs (
-      id TEXT PRIMARY KEY,
-      task_id TEXT NOT NULL,
-      user_email TEXT NOT NULL,
-      scan_type TEXT NOT NULL,
-      status TEXT NOT NULL,
-      findings_count INTEGER NOT NULL DEFAULT 0,
-      error_message TEXT,
-      started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      finished_at TIMESTAMPTZ
-    )
-  `;
+    await sql`
+      CREATE TABLE IF NOT EXISTS scheduled_scan_runs (
+        id TEXT PRIMARY KEY,
+        task_id TEXT NOT NULL,
+        user_email TEXT NOT NULL,
+        scan_type TEXT NOT NULL,
+        status TEXT NOT NULL,
+        findings_count INTEGER NOT NULL DEFAULT 0,
+        error_message TEXT,
+        started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        finished_at TIMESTAMPTZ
+      )
+    `;
+  }, 'Failed to prepare scheduled scan tables.');
 
   tablesReady = true;
 };
 
 export const listScheduledScanTasks = async () => {
-  if (!sql) {
+  if (!hasDatabase()) {
     return readJsonFile(TASKS_FILE, []);
   }
 
@@ -137,7 +138,7 @@ export const upsertScheduledScanTask = async (task) => {
     updatedAt: new Date().toISOString(),
   };
 
-  if (!sql) {
+  if (!hasDatabase()) {
     const tasks = await readJsonFile(TASKS_FILE, []);
     const nextTasks = tasks.filter((item) => item.id !== normalizedTask.id);
     nextTasks.push(normalizedTask);
@@ -231,7 +232,7 @@ export const ensureDefaultScheduledScanTasks = async (userEmail) => {
 };
 
 export const removeScheduledScanTask = async (taskId, userEmail = '') => {
-  if (!sql) {
+  if (!hasDatabase()) {
     const tasks = await readJsonFile(TASKS_FILE, []);
     const nextTasks = tasks.filter((task) => {
       if (task.id !== taskId) return true;
@@ -260,7 +261,7 @@ export const removeScheduledScanTask = async (taskId, userEmail = '') => {
 };
 
 export const markScheduledScanTaskRun = async (taskId, finishedAt = new Date().toISOString()) => {
-  if (!sql) {
+  if (!hasDatabase()) {
     const tasks = await readJsonFile(TASKS_FILE, []);
     const nextTasks = tasks.map((task) => (task.id === taskId ? { ...task, lastRunAt: finishedAt, updatedAt: finishedAt } : task));
     await writeJsonFile(TASKS_FILE, nextTasks);
@@ -298,7 +299,7 @@ export const recordScheduledScanRun = async ({
     finishedAt,
   };
 
-  if (!sql) {
+  if (!hasDatabase()) {
     const runs = await readJsonFile(RUNS_FILE, []);
     runs.push(payload);
     await writeJsonFile(RUNS_FILE, runs);

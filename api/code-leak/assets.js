@@ -1,6 +1,15 @@
 import { addCodeLeakAsset, getCodeLeakUserEmail, listCodeLeakAssets, removeCodeLeakAsset } from '../_lib/code-leak-assets.js';
 import { applyCors, readJsonBody, sendJson } from '../_lib/intel.js';
 import { ensureDefaultScheduledScanTasks } from '../_lib/scheduled-scans.js';
+import { sendApiError } from '../_lib/api-errors.js';
+
+const ensureDefaultTasksSafely = async (userEmail) => {
+  try {
+    await ensureDefaultScheduledScanTasks(userEmail);
+  } catch (error) {
+    console.warn('[api/code-leak/assets] failed to ensure default scan tasks:', error);
+  }
+};
 
 export default async function handler(req, res) {
   applyCors(res);
@@ -21,7 +30,7 @@ export default async function handler(req, res) {
       });
     }
 
-    await ensureDefaultScheduledScanTasks(userEmail);
+    await ensureDefaultTasksSafely(userEmail);
 
     if (req.method === 'GET') {
       const assets = await listCodeLeakAssets(userEmail);
@@ -75,10 +84,10 @@ export default async function handler(req, res) {
     });
   } catch (error) {
     console.error('[api/code-leak/assets] failed:', error);
-    return sendJson(res, 500, {
-      success: false,
+    return sendApiError(res, error, {
+      status: 500,
       error: 'Code leak assets failed',
-      details: error.message || 'Unknown error',
+      message: 'Failed to load code leak assets.',
     });
   }
 }
