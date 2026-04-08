@@ -161,14 +161,15 @@ export const otxApi = {
   },
 
   getLatestCveIntel: async (options?: { limit?: number; window?: '24h' | '7d' | 'all'; noCache?: boolean }) => {
-    const response = await otxAxios.get('/cve-feed', {
+    const response = await otxAxios.get('/search', {
       params: {
+        mode: 'cve-feed',
         ...(options?.limit ? { limit: options.limit } : {}),
         ...(options?.window ? { window: options.window } : {}),
         ...(options?.noCache ? { noCache: '1' } : {}),
       },
     });
-    return ensureValidPayload(response.data, '/cve-feed');
+    return ensureValidPayload(response.data, '/search?mode=cve-feed');
   },
 
   // 2.2 关键词搜索

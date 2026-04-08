@@ -97,6 +97,121 @@ const emptyWebhookConfig = (channel: WebhookChannel): WebhookConfig => ({
   enabled: true,
 });
 
+const SkeletonBlock = ({ className }: { className?: string }) => (
+  <div className={cn('monitor-skeleton rounded-2xl', className)} aria-hidden="true" />
+);
+
+const MonitorSkeleton = () => (
+  <div className="space-y-8">
+    <div className="flex items-center justify-between gap-4">
+      <div className="space-y-3">
+        <SkeletonBlock className="h-10 w-48 rounded-xl" />
+        <SkeletonBlock className="h-4 w-[min(42rem,72vw)] rounded-full" />
+        <SkeletonBlock className="h-4 w-[min(36rem,64vw)] rounded-full" />
+      </div>
+      <SkeletonBlock className="h-11 w-28 rounded-full" />
+    </div>
+
+    <div className="glass-card overflow-hidden rounded-2xl border-white/5 bg-[#16161a] shadow-2xl">
+      <div className="flex items-center gap-3 border-b border-white/5 bg-[#1a1a20]/50 p-6">
+        <SkeletonBlock className="h-9 w-9 rounded-lg" />
+        <SkeletonBlock className="h-4 w-28 rounded-full" />
+      </div>
+      <div className="grid gap-6 border-b border-white/5 bg-black/10 px-6 py-5 lg:grid-cols-2">
+        {[0, 1].map((index) => (
+          <div key={`channel-${index}`} className="rounded-2xl border border-white/8 bg-[#101217] p-4">
+            <div className="flex items-center justify-between gap-3">
+              <SkeletonBlock className="h-4 w-32 rounded-full" />
+              <SkeletonBlock className="h-7 w-20 rounded-full" />
+            </div>
+            <div className="mt-4 grid gap-3">
+              <SkeletonBlock className="h-12 w-full rounded-2xl" />
+              <SkeletonBlock className="h-12 w-full rounded-2xl" />
+              <div className="flex flex-wrap gap-2">
+                <SkeletonBlock className="h-11 w-24 rounded-2xl" />
+                <SkeletonBlock className="h-11 w-24 rounded-2xl" />
+                <SkeletonBlock className="h-11 w-28 rounded-2xl" />
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="space-y-3 px-6 py-5">
+        {Array.from({ length: 4 }).map((_, index) => (
+          <div key={`webhook-row-${index}`} className="grid gap-3 rounded-2xl border border-white/5 bg-white/[0.02] px-4 py-4 md:grid-cols-6">
+            <SkeletonBlock className="h-6 w-16 rounded-full" />
+            <SkeletonBlock className="h-4 w-24 rounded-full" />
+            <SkeletonBlock className="h-4 w-28 rounded-full" />
+            <SkeletonBlock className="h-4 w-full rounded-full" />
+            <SkeletonBlock className="h-4 w-12 rounded-full" />
+            <SkeletonBlock className="h-4 w-28 rounded-full" />
+          </div>
+        ))}
+      </div>
+    </div>
+
+    <div className="glass-card overflow-hidden rounded-2xl border-white/5 bg-[#16161a] shadow-2xl">
+      <div className="flex items-center gap-3 border-b border-white/5 bg-[#1a1a20]/50 p-6">
+        <SkeletonBlock className="h-9 w-9 rounded-lg" />
+        <SkeletonBlock className="h-4 w-40 rounded-full" />
+      </div>
+      <div className="space-y-4 border-b border-white/5 bg-black/10 px-6 py-5">
+        {[0, 1, 2].map((index) => (
+          <div key={`asset-form-${index}`} className="grid gap-4 lg:grid-cols-[auto_1fr_auto]">
+            <SkeletonBlock className="h-12 w-full min-w-[9rem] rounded-2xl" />
+            <SkeletonBlock className="h-12 w-full rounded-2xl" />
+            <SkeletonBlock className="h-12 w-full min-w-[9rem] rounded-2xl" />
+          </div>
+        ))}
+      </div>
+      <div className="space-y-3 px-6 py-5">
+        {Array.from({ length: 5 }).map((_, index) => (
+          <div key={`asset-row-${index}`} className="grid gap-3 rounded-2xl border border-white/5 bg-white/[0.02] px-4 py-4 md:grid-cols-[1.2fr_0.9fr_1.6fr_1.2fr_1fr_auto]">
+            <SkeletonBlock className="h-6 w-24 rounded-full" />
+            <SkeletonBlock className="h-4 w-20 rounded-full" />
+            <SkeletonBlock className="h-4 w-full rounded-full" />
+            <SkeletonBlock className="h-4 w-full rounded-full" />
+            <SkeletonBlock className="h-4 w-20 rounded-full" />
+            <SkeletonBlock className="h-9 w-9 rounded-full" />
+          </div>
+        ))}
+      </div>
+    </div>
+
+    <div className="glass-card overflow-hidden rounded-2xl border-white/5 bg-[#16161a] shadow-2xl">
+      <div className="flex items-center gap-3 border-b border-white/5 bg-[#1a1a20]/50 p-6">
+        <SkeletonBlock className="h-9 w-9 rounded-lg" />
+        <SkeletonBlock className="h-4 w-28 rounded-full" />
+      </div>
+      <div className="grid gap-4 border-b border-white/5 bg-black/10 px-6 py-5 lg:grid-cols-3">
+        {[0, 1, 2].map((index) => (
+          <div key={`task-card-${index}`} className="rounded-2xl border border-white/8 bg-[#101217] px-4 py-4">
+            <div className="flex items-center justify-between gap-3">
+              <SkeletonBlock className="h-4 w-32 rounded-full" />
+              <SkeletonBlock className="h-7 w-16 rounded-full" />
+            </div>
+            <SkeletonBlock className="mt-3 h-10 w-full rounded-xl" />
+            <SkeletonBlock className="mt-3 h-3.5 w-28 rounded-full" />
+            <SkeletonBlock className="mt-2 h-3.5 w-24 rounded-full" />
+          </div>
+        ))}
+      </div>
+      <div className="space-y-3 px-6 py-5">
+        {Array.from({ length: 5 }).map((_, index) => (
+          <div key={`run-row-${index}`} className="grid gap-3 rounded-2xl border border-white/5 bg-white/[0.02] px-4 py-4 md:grid-cols-[1.1fr_1fr_0.9fr_0.9fr_0.7fr_1.2fr]">
+            <SkeletonBlock className="h-4 w-full rounded-full" />
+            <SkeletonBlock className="h-4 w-full rounded-full" />
+            <SkeletonBlock className="h-4 w-20 rounded-full" />
+            <SkeletonBlock className="h-4 w-24 rounded-full" />
+            <SkeletonBlock className="h-6 w-16 rounded-full" />
+            <SkeletonBlock className="h-4 w-full rounded-full" />
+          </div>
+        ))}
+      </div>
+    </div>
+  </div>
+);
+
 const DomainMonitor = () => {
   const [codeAssets, setCodeAssets] = useState<CodeLeakAsset[]>([]);
   const [cveAssets, setCveAssets] = useState<CveIntelAsset[]>([]);
@@ -432,12 +547,7 @@ const DomainMonitor = () => {
       )}
 
       {isLoading ? (
-        <div className="glass-card overflow-hidden rounded-2xl border-white/5 bg-[#16161a] shadow-2xl">
-          <div className="flex min-h-[280px] items-center justify-center text-sm text-white/60">
-            <Loader2 className="mr-3 h-4 w-4 animate-spin text-accent" />
-            正在加载监控总览...
-          </div>
-        </div>
+        <MonitorSkeleton />
       ) : (
         <>
           <div className="glass-card overflow-hidden rounded-2xl border-white/5 bg-[#16161a] shadow-2xl">

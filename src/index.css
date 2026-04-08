@@ -255,6 +255,25 @@ body {
       0 18px 32px -24px rgba(0, 0, 0, 0.68),
       0 0 0 1px color-mix(in srgb, var(--accent) 9%, transparent);
   }
+
+  .monitor-skeleton {
+    position: relative;
+    overflow: hidden;
+    background:
+      linear-gradient(
+        90deg,
+        rgba(255, 255, 255, 0.04) 0%,
+        rgba(255, 255, 255, 0.08) 18%,
+        rgba(168, 85, 247, 0.12) 34%,
+        rgba(255, 255, 255, 0.08) 52%,
+        rgba(255, 255, 255, 0.04) 100%
+      ),
+      rgba(255, 255, 255, 0.025);
+    background-size: 220% 100%;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+    animation: monitor-skeleton-shift 1.6s linear infinite;
+  }
 }
 
 /* Custom scrollbar for dark theme */
@@ -281,6 +300,11 @@ body {
   100% { background-position: -100% 0; }
 }
 
+@keyframes monitor-skeleton-shift {
+  0% { background-position: 120% 0; }
+  100% { background-position: -120% 0; }
+}
+
 .shimmer {
   background: linear-gradient(
     90deg,
@@ -301,13 +325,18 @@ body {
   .console-panel,
   .console-panel-strong,
   .console-control,
-  .glass-button {
+  .glass-button,
+  .monitor-skeleton {
     transition-duration: 0.01ms !important;
   }
 
   .console-control::before,
   .glass-button::before {
     display: none;
+  }
+
+  .monitor-skeleton {
+    animation: none;
   }
 }
 
