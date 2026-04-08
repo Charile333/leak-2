@@ -1,4 +1,4 @@
-import { applyCors, readJsonBody, sendJson } from '../_lib/intel.js';
+import { applyCors, readJsonBody, sendJson } from '../_lib/http.js';
 import {
   ensureDefaultScheduledScanTasks,
   listScheduledScanTasks,

@@ -1,7 +1,7 @@
-﻿export const CODE_LEAK_RULES_V1 = [
+export const CODE_LEAK_RULES_V1 = [
   {
     id: 'secret-generic-key',
-    name: '閫氱敤瀵嗛挜妯″紡',
+    name: 'Generic secret keyword',
     category: 'secret_patterns',
     severity: 'critical',
     exposure: 'secret',
@@ -10,7 +10,7 @@
   },
   {
     id: 'credential-connection-string',
-    name: '鏁版嵁搴撲笌鍑嵁杩炴帴涓?,
+    name: 'Credential connection string',
     category: 'credential_patterns',
     severity: 'critical',
     exposure: 'credential',
@@ -19,7 +19,7 @@
   },
   {
     id: 'internal-infrastructure',
-    name: '鍐呴儴鍩虹璁炬柦鏍囪瘑',
+    name: 'Internal infrastructure marker',
     category: 'internal_hosts',
     severity: 'high',
     exposure: 'source',
@@ -28,7 +28,7 @@
   },
   {
     id: 'config-sensitive-file',
-    name: '鏁忔劅閰嶇疆鏂囦欢',
+    name: 'Sensitive config file',
     category: 'infra_files',
     severity: 'medium',
     exposure: 'config',
@@ -37,7 +37,7 @@
   },
   {
     id: 'repository-exposure',
-    name: '浠撳簱闀滃儚涓庡浠界棔杩?,
+    name: 'Repository exposure context',
     category: 'repository_context',
     severity: 'medium',
     exposure: 'repository',
@@ -101,7 +101,7 @@ export const CODE_SENSITIVE_SEARCH_PATTERNS_V1 = [
 export const FILE_LEAK_RULES_V1 = [
   {
     id: 'file-database-backup',
-    name: '鏁版嵁搴撲笌澶囦唤鏂囦欢',
+    name: 'Database backup artifact',
     category: 'document_keywords',
     severity: 'critical',
     sensitivity: 'critical',
@@ -110,7 +110,7 @@ export const FILE_LEAK_RULES_V1 = [
   },
   {
     id: 'file-sensitive-sheet',
-    name: '楂樻晱鎰熻〃鏍兼枃浠?,
+    name: 'Sensitive spreadsheet content',
     category: 'document_keywords',
     severity: 'high',
     sensitivity: 'high',
@@ -119,16 +119,16 @@ export const FILE_LEAK_RULES_V1 = [
   },
   {
     id: 'file-confidential-document',
-    name: '娑夊瘑鏂囨。鍊欓€?,
+    name: 'Confidential document',
     category: 'document_keywords',
     severity: 'high',
     sensitivity: 'high',
     extensions: ['pdf', 'docx'],
-    regex: /(contract|confidential|nda|proposal|鎶ヤ环|鍚堝悓|璐㈠姟)/i,
+    regex: /(contract|confidential|nda|proposal|internal|private|restricted)/i,
   },
   {
     id: 'file-general-document',
-    name: '涓€鑸笟鍔℃枃妗?,
+    name: 'General business document',
     category: 'document_keywords',
     severity: 'medium',
     sensitivity: 'medium',
@@ -150,10 +150,9 @@ const rankSensitivity = {
   critical: 3,
 };
 
-
 const FILE_LEAK_STRONG_SIGNALS = /(backup|dump|restore|database|db[_-]?backup|credential|password|passwd|secret|token|customer|employee|payroll|salary|invoice|finance|contract|confidential|nda|private|internal|prod|production|insert\s+into|create\s+table|grant\s+all|users?\b|accounts?\b)/i;
-
 const FILE_LEAK_FALSE_POSITIVE_HINTS = /(seed|fixture|example|sample|demo|mock|brand(s)?|testdata|test-data|public[\s_-]?suffix)/i;
+
 const maxByRank = (values, rankMap, fallback) => {
   if (!Array.isArray(values) || values.length === 0) return fallback;
   return values.reduce((best, current) => (rankMap[current] > rankMap[best] ? current : best), fallback);
@@ -176,7 +175,7 @@ export const evaluateCodeLeak = ({ term = '', text = '', path = '' }) => {
     matchedRules: matchedRules.map((rule) => rule.id),
     severity: maxByRank(matchedRules.map((rule) => rule.severity), rankSeverity, 'low'),
     exposure: matchedRules[0]?.exposure || 'source',
-    notes: matchedRules.map((rule) => `鍛戒腑瑙勫垯: ${rule.name}`),
+    notes: matchedRules.map((rule) => `Matched code leak rule: ${rule.name}`),
     confidenceBoost: Math.min(0.28, matchedRules.length * 0.06),
   };
 };
@@ -277,7 +276,7 @@ export const evaluateFileLeak = ({ term = '', text = '', path = '', extension = 
     matchedRules: matchedRules.map((rule) => rule.id),
     severity: maxByRank(matchedRules.map((rule) => rule.severity), rankSeverity, fallbackSeverity),
     sensitivity: maxByRank(matchedRules.map((rule) => rule.sensitivity), rankSensitivity, fallbackSensitivity),
-    notes: matchedRules.map((rule) => `閸涙垝鑵戠憴鍕灟: ${rule.name}`),
+    notes: matchedRules.map((rule) => `Matched file leak rule: ${rule.name}`),
     confidenceBoost: Math.min(0.24, matchedRules.length * 0.05),
     eligible,
     falsePositiveHintMatched,

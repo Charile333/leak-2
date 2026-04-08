@@ -1,5 +1,5 @@
 import { addCodeLeakAsset, getCodeLeakUserEmail, listCodeLeakAssets, removeCodeLeakAsset } from '../_lib/code-leak-assets.js';
-import { applyCors, readJsonBody, sendJson } from '../_lib/intel.js';
+import { applyCors, readJsonBody, sendJson } from '../_lib/http.js';
 import { ensureDefaultScheduledScanTasks } from '../_lib/scheduled-scans.js';
 import { sendApiError } from '../_lib/api-errors.js';
 
