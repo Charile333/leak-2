@@ -109,7 +109,7 @@ const normalizeRemoteFinding = (
     assets[0] ||
     ({
       id: 'asset-unmatched',
-      label: finding.assetLabel || finding.match || '未匹配对象',
+      label: finding.assetLabel || finding.match || 'Unmatched asset',
       value: finding.match || finding.assetLabel || 'unmatched',
       type: 'company',
       enabled: true,
@@ -131,19 +131,19 @@ const normalizeRemoteFinding = (
     status: finding.status || 'new',
     source: finding.source || 'GitHub',
     exposure: finding.exposure || 'source',
-    title: finding.title || '发现疑似代码泄露线索',
+    title: finding.title || 'Potential code leak indicator detected',
     repository: finding.repository || 'unknown-repository',
     owner: finding.owner || 'unknown-owner',
     path: finding.path || 'unknown-path',
     branch: finding.branch || 'main',
     match: finding.match || linkedAsset.value,
-    snippet: finding.snippet || '未返回可预览的命中片段',
+    snippet: finding.snippet || 'No preview snippet returned.',
     firstSeen: finding.firstSeen || now,
     lastSeen: finding.lastSeen || finding.firstSeen || now,
     url: finding.url || '#',
     confidence: typeof finding.confidence === 'number' ? finding.confidence : 0.5,
     matchedRules: Array.isArray(finding.matchedRules) ? finding.matchedRules.filter((item): item is string => typeof item === 'string') : [],
-    notes: Array.isArray(finding.notes) ? finding.notes : ['建议尽快打开来源并确认是否为真实泄露。'],
+    notes: Array.isArray(finding.notes) ? finding.notes : ['Open the source and verify whether the exposed content is real and still active.'],
   };
 };
 
@@ -197,12 +197,25 @@ export const codeLeakService = {
     return fetchAssets();
   },
 
+  async getFindings(query?: string, assetsOverride?: CodeLeakAsset[]): Promise<CodeLeakFinding[]> {
+    await new Promise((resolve) => window.setTimeout(resolve, 120));
+
+    const assets = assetsOverride ?? (await fetchAssets());
+
+    try {
+      return applyStatuses(await fetchRemoteFindings(assets, query));
+    } catch (error) {
+      console.error('[codeLeakService] Remote code leak search failed:', error);
+      throw new CodeLeakSearchError('Remote code leak search failed. Please check the API configuration and try again.');
+    }
+  },
+
   async addAsset(input: { label?: string; value: string; type: CodeLeakAssetType }): Promise<CodeLeakAsset[]> {
     await new Promise((resolve) => window.setTimeout(resolve, 60));
 
     const value = input.value.trim();
     if (!value) {
-      throw new Error('监测对象不能为空');
+      throw new Error('Monitored asset value cannot be empty.');
     }
 
     const payload = await requestJson<{ assets?: CodeLeakAsset[] }>('/api/code-leak/assets', {
@@ -238,7 +251,7 @@ export const codeLeakService = {
       findings = applyStatuses(await fetchRemoteFindings(assets, filters.query));
     } catch (error) {
       console.error('[codeLeakService] Remote code leak search failed:', error);
-      throw new CodeLeakSearchError('当前无法从真实情报源加载代码泄露结果，请检查后端聚合服务或 API 配置。');
+      throw new CodeLeakSearchError('Unable to load code leak findings from the live intelligence source. Please check the backend or API configuration.');
     }
 
     return findings.filter((finding) => {

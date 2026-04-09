@@ -114,7 +114,7 @@ const normalizeRemoteFinding = (
     assets[0] ||
     ({
       id: 'file-asset-unmatched',
-      label: finding.assetLabel || finding.match || '未关联资产',
+      label: finding.assetLabel || finding.match || 'Unmatched asset',
       value: finding.match || finding.assetLabel || 'unmatched',
       type: 'company',
       enabled: true,
@@ -136,12 +136,12 @@ const normalizeRemoteFinding = (
     status: finding.status || 'new',
     source: finding.source || 'GitHub',
     exposure: finding.exposure || 'document',
-    title: finding.title || '公共文件暴露候选',
+    title: finding.title || 'Potential public file leak detected',
     repository: finding.repository || 'unknown-repository',
     owner: finding.owner || 'unknown-owner',
     path: finding.path || 'Unknown path',
     match: finding.match || linkedAsset.value,
-    snippet: finding.snippet || '未返回更多上下文内容。',
+    snippet: finding.snippet || 'No additional context snippet returned.',
     url: finding.url || '#',
     fileType: finding.fileType || 'UNKNOWN',
     sensitivity: finding.sensitivity || 'medium',
@@ -151,7 +151,7 @@ const normalizeRemoteFinding = (
     lastSeen: finding.lastSeen || finding.firstSeen || now,
     confidence: typeof finding.confidence === 'number' ? finding.confidence : 0.5,
     matchedRules: Array.isArray(finding.matchedRules) ? finding.matchedRules.filter((item): item is string => typeof item === 'string') : [],
-    notes: Array.isArray(finding.notes) ? finding.notes : ['需要人工进一步确认文件内容和泄露范围。'],
+    notes: Array.isArray(finding.notes) ? finding.notes : ['Review the source manually to confirm the file contents and leakage scope.'],
   };
 };
 
@@ -204,10 +204,21 @@ export const fileLeakService = {
     return fetchAssets();
   },
 
+  async getFindings(query?: string, assetsOverride?: FileLeakAsset[]): Promise<FileLeakFinding[]> {
+    const assets = assetsOverride ?? (await fetchAssets());
+
+    try {
+      return applyStatuses(await fetchRemoteFindings(assets, query));
+    } catch (error) {
+      console.error('[fileLeakService] Remote file leak search failed:', error);
+      throw new FileLeakSearchError('Remote file leak search failed. Please check the API configuration and try again.');
+    }
+  },
+
   async addAsset(input: { label?: string; value: string; type: FileLeakAssetType }): Promise<FileLeakAsset[]> {
     const value = input.value.trim();
     if (!value) {
-      throw new Error('监测对象不能为空。');
+      throw new Error('Monitored asset value cannot be empty.');
     }
 
     const payload = await requestJson<{ assets?: FileLeakAsset[] }>('/api/file-leak/assets', {
@@ -240,7 +251,7 @@ export const fileLeakService = {
       findings = applyStatuses(await fetchRemoteFindings(assets, filters.query));
     } catch (error) {
       console.error('[fileLeakService] Remote file leak search failed:', error);
-      throw new FileLeakSearchError('文件泄露搜索失败，请检查文件泄露接口和令牌配置。');
+      throw new FileLeakSearchError('Unable to load file leak findings from the live intelligence source. Please check the backend or API configuration.');
     }
 
     return findings.filter((finding) => {

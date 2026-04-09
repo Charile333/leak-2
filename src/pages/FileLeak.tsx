@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { startTransition, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { createPortal } from 'react-dom';
 import {
@@ -153,7 +153,7 @@ const getExposureIcon = (finding: FileLeakFinding) => {
 
 const FileLeak = () => {
   const [assets, setAssets] = useState<FileLeakAsset[]>([]);
-  const [findings, setFindings] = useState<FileLeakFinding[]>([]);
+  const [remoteFindings, setRemoteFindings] = useState<FileLeakFinding[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [assetFilter, setAssetFilter] = useState<string>('all');
   const [sourceFilter, setSourceFilter] = useState<FileLeakSource | 'all'>('all');
@@ -169,40 +169,52 @@ const FileLeak = () => {
   const [isSavingAsset, setIsSavingAsset] = useState(false);
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
   const drawerRef = useRef<HTMLDivElement>(null);
+  const latestLoadRequestRef = useRef(0);
+  const deferredSearchQuery = useDeferredValue(searchQuery);
+  const [debouncedQuery, setDebouncedQuery] = useState('');
 
-  const loadData = async (assetList?: FileLeakAsset[]) => {
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      startTransition(() => {
+        setDebouncedQuery(deferredSearchQuery.trim());
+      });
+    }, 250);
+
+    return () => window.clearTimeout(timer);
+  }, [deferredSearchQuery]);
+
+  const loadData = async (assetList?: FileLeakAsset[], queryOverride?: string) => {
+    const requestId = latestLoadRequestRef.current + 1;
+    latestLoadRequestRef.current = requestId;
     setIsLoading(true);
     setLoadError('');
     try {
       const nextAssets = assetList ?? (await fileLeakService.getAssets());
-      const nextFindings = await fileLeakService.searchFindings(
-        {
-          query: searchQuery,
-          assetId: assetFilter,
-          source: sourceFilter,
-          severity: severityFilter,
-          status: statusFilter,
-          sensitivity: sensitivityFilter,
-        },
-        nextAssets
-      );
+      const nextFindings = await fileLeakService.getFindings(queryOverride ?? debouncedQuery, nextAssets);
+
+      if (latestLoadRequestRef.current !== requestId) return;
+
       setAssets(nextAssets);
-      setFindings(nextFindings);
+      setRemoteFindings(nextFindings);
     } catch (error) {
-      setFindings([]);
+      if (latestLoadRequestRef.current !== requestId) return;
+
+      setRemoteFindings([]);
       setLoadError(error instanceof FileLeakSearchError ? error.message : '文件泄露数据加载失败，请稍后再试。');
       if (!assetList) {
         setAssets(await fileLeakService.getAssets().catch(() => []));
       }
     } finally {
-      setIsLoading(false);
+      if (latestLoadRequestRef.current === requestId) {
+        setIsLoading(false);
+      }
     }
   };
 
   useEffect(() => {
-    void loadData();
+    void loadData(undefined, debouncedQuery);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchQuery, assetFilter, sourceFilter, severityFilter, statusFilter, sensitivityFilter]);
+  }, [debouncedQuery]);
 
   useEffect(() => {
     const onClickOutside = (event: MouseEvent) => {
@@ -224,6 +236,19 @@ const FileLeak = () => {
     };
   }, [selectedFinding]);
 
+  const findings = useMemo(
+    () =>
+      remoteFindings.filter((finding) => {
+        if (assetFilter !== 'all' && finding.assetId !== assetFilter) return false;
+        if (sourceFilter !== 'all' && finding.source !== sourceFilter) return false;
+        if (severityFilter !== 'all' && finding.severity !== severityFilter) return false;
+        if (statusFilter !== 'all' && finding.status !== statusFilter) return false;
+        if (sensitivityFilter !== 'all' && finding.sensitivity !== sensitivityFilter) return false;
+        return true;
+      }),
+    [assetFilter, remoteFindings, sensitivityFilter, severityFilter, sourceFilter, statusFilter]
+  );
+
   const summary = useMemo(() => {
     const total = findings.length;
     const critical = findings.filter((item) => item.severity === 'critical' || item.sensitivity === 'critical').length;
@@ -242,8 +267,12 @@ const FileLeak = () => {
     try {
       const nextAssets = await fileLeakService.addAsset({ value, type: newAssetType });
       setNewAssetValue('');
-      if (assetFilter !== 'all') setAssetFilter('all');
-      await loadData(nextAssets);
+      if (assetFilter !== 'all') {
+        startTransition(() => {
+          setAssetFilter('all');
+        });
+      }
+      await loadData(nextAssets, debouncedQuery);
     } catch (error) {
       setAssetError(error instanceof Error ? error.message : '添加监测对象失败。');
     } finally {
@@ -256,8 +285,12 @@ const FileLeak = () => {
     setAssetError('');
     try {
       const nextAssets = await fileLeakService.removeAsset(id);
-      if (assetFilter === id) setAssetFilter('all');
-      await loadData(nextAssets);
+      if (assetFilter === id) {
+        startTransition(() => {
+          setAssetFilter('all');
+        });
+      }
+      await loadData(nextAssets, debouncedQuery);
     } catch (error) {
       setAssetError(error instanceof Error ? error.message : '删除监测对象失败。');
     } finally {
@@ -275,7 +308,7 @@ const FileLeak = () => {
     setIsUpdatingStatus(true);
     await fileLeakService.updateFindingStatus(selectedFinding.id, status);
     setSelectedFinding({ ...selectedFinding, status });
-    setFindings((current) => current.map((item) => (item.id === selectedFinding.id ? { ...item, status } : item)));
+    setRemoteFindings((current) => current.map((item) => (item.id === selectedFinding.id ? { ...item, status } : item)));
     setIsUpdatingStatus(false);
   };
 
@@ -420,7 +453,7 @@ const FileLeak = () => {
                   <p className="mx-auto mt-2 max-w-2xl text-sm leading-7 text-white/48">先添加客户资产，再尝试更具体的文件关键词，例如合同简称、内部项目代号、员工邮箱后缀或导出文件命名方式。</p>
                 </div>
               ) : (
-                <div className="space-y-4">
+                <div className="space-y-4 [contain-intrinsic-size:900px] [content-visibility:auto]">
                   {findings.map((finding) => (
                     <button key={finding.id} type="button" onClick={() => setSelectedFinding(finding)} className="w-full rounded-[26px] border border-white/8 bg-white/[0.025] p-5 text-left transition-all hover:border-accent/22 hover:bg-white/[0.04]">
                       <div className="flex flex-wrap items-start justify-between gap-4">

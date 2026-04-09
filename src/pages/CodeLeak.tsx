@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { startTransition, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { createPortal } from 'react-dom';
 import {
@@ -111,7 +111,7 @@ const Panel = ({
 
 const CodeLeak = () => {
   const [assets, setAssets] = useState<CodeLeakAsset[]>([]);
-  const [findings, setFindings] = useState<CodeLeakFinding[]>([]);
+  const [remoteFindings, setRemoteFindings] = useState<CodeLeakFinding[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [assetFilter, setAssetFilter] = useState<string>('all');
   const [sourceFilter, setSourceFilter] = useState<CodeLeakSource | 'all'>('all');
@@ -126,26 +126,37 @@ const CodeLeak = () => {
   const [isSavingAsset, setIsSavingAsset] = useState(false);
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
   const drawerRef = useRef<HTMLDivElement>(null);
+  const latestLoadRequestRef = useRef(0);
+  const deferredSearchQuery = useDeferredValue(searchQuery);
+  const [debouncedQuery, setDebouncedQuery] = useState('');
 
-  const loadData = async (assetList?: CodeLeakAsset[]) => {
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      startTransition(() => {
+        setDebouncedQuery(deferredSearchQuery.trim());
+      });
+    }, 250);
+
+    return () => window.clearTimeout(timer);
+  }, [deferredSearchQuery]);
+
+  const loadData = async (assetList?: CodeLeakAsset[], queryOverride?: string) => {
+    const requestId = latestLoadRequestRef.current + 1;
+    latestLoadRequestRef.current = requestId;
     setIsLoading(true);
     setLoadError('');
     try {
       const nextAssets = assetList ?? (await codeLeakService.getAssets());
-      const nextFindings = await codeLeakService.searchFindings(
-        {
-          query: searchQuery,
-          assetId: assetFilter,
-          source: sourceFilter,
-          severity: severityFilter,
-          status: statusFilter,
-        },
-        nextAssets
-      );
+      const nextFindings = await codeLeakService.getFindings(queryOverride ?? debouncedQuery, nextAssets);
+
+      if (latestLoadRequestRef.current !== requestId) return;
+
       setAssets(nextAssets);
-      setFindings(nextFindings);
+      setRemoteFindings(nextFindings);
     } catch (error) {
-      setFindings([]);
+      if (latestLoadRequestRef.current !== requestId) return;
+
+      setRemoteFindings([]);
       setLoadError(
         error instanceof CodeLeakSearchError
           ? error.message
@@ -155,14 +166,16 @@ const CodeLeak = () => {
         setAssets(await codeLeakService.getAssets());
       }
     } finally {
-      setIsLoading(false);
+      if (latestLoadRequestRef.current === requestId) {
+        setIsLoading(false);
+      }
     }
   };
 
   useEffect(() => {
-    void loadData();
+    void loadData(undefined, debouncedQuery);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchQuery, assetFilter, sourceFilter, severityFilter, statusFilter]);
+  }, [debouncedQuery]);
 
   useEffect(() => {
     const onClickOutside = (event: MouseEvent) => {
@@ -184,6 +197,18 @@ const CodeLeak = () => {
     };
   }, [selectedFinding]);
 
+  const findings = useMemo(
+    () =>
+      remoteFindings.filter((finding) => {
+        if (assetFilter !== 'all' && finding.assetId !== assetFilter) return false;
+        if (sourceFilter !== 'all' && finding.source !== sourceFilter) return false;
+        if (severityFilter !== 'all' && finding.severity !== severityFilter) return false;
+        if (statusFilter !== 'all' && finding.status !== statusFilter) return false;
+        return true;
+      }),
+    [assetFilter, remoteFindings, severityFilter, sourceFilter, statusFilter]
+  );
+
   const summary = useMemo(() => {
     const total = findings.length;
     const highRisk = findings.filter((item) => item.severity === 'critical' || item.severity === 'high').length;
@@ -202,8 +227,12 @@ const CodeLeak = () => {
     try {
       const nextAssets = await codeLeakService.addAsset({ value, type: newAssetType });
       setNewAssetValue('');
-      if (assetFilter !== 'all') setAssetFilter('all');
-      await loadData(nextAssets);
+      if (assetFilter !== 'all') {
+        startTransition(() => {
+          setAssetFilter('all');
+        });
+      }
+      await loadData(nextAssets, debouncedQuery);
     } catch (error) {
       setAssetError(error instanceof Error ? error.message : '添加失败');
     } finally {
@@ -216,8 +245,12 @@ const CodeLeak = () => {
     setAssetError('');
     try {
       const nextAssets = await codeLeakService.removeAsset(id);
-      if (assetFilter === id) setAssetFilter('all');
-      await loadData(nextAssets);
+      if (assetFilter === id) {
+        startTransition(() => {
+          setAssetFilter('all');
+        });
+      }
+      await loadData(nextAssets, debouncedQuery);
     } catch (error) {
       setAssetError(error instanceof Error ? error.message : '删除失败');
     } finally {
@@ -235,7 +268,7 @@ const CodeLeak = () => {
     setIsUpdatingStatus(true);
     await codeLeakService.updateFindingStatus(selectedFinding.id, status);
     setSelectedFinding({ ...selectedFinding, status });
-    setFindings((current) => current.map((item) => (item.id === selectedFinding.id ? { ...item, status } : item)));
+    setRemoteFindings((current) => current.map((item) => (item.id === selectedFinding.id ? { ...item, status } : item)));
     setIsUpdatingStatus(false);
   };
 
@@ -401,7 +434,7 @@ const CodeLeak = () => {
                 <p className="mt-3 text-sm leading-7 text-white/55">{loadError ? '这页已经不再回退到本地模拟数据；请检查开发服务和源站配置后再试。' : '可以切换筛选条件，或先在右侧新增监测对象。'}</p>
               </div>
             ) : (
-              <div className="space-y-4">
+              <div className="space-y-4 [contain-intrinsic-size:900px] [content-visibility:auto]">
                 {findings.map((finding) => (
                   <button key={finding.id} type="button" onClick={() => setSelectedFinding(finding)} className="w-full rounded-[24px] border border-white/8 bg-white/[0.03] p-5 text-left transition-all hover:border-accent/25 hover:bg-white/[0.05]">
                     <div className="flex flex-wrap items-center gap-2">
