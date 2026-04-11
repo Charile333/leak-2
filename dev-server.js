@@ -7,9 +7,11 @@ import { promises as fs } from 'fs';
 import path from 'path';
 import { neon } from '@neondatabase/serverless';
 import fileLeakAssetsHandler from './api/file-leak/assets.js';
+import cveIntelAssetsHandler from './api/cve-intel/assets.js';
 import fileLeakSearchHandler from './api/file-leak/search.js';
 import webhookConfigHandler from './api/notifications/webhook.js';
 import scheduledScanTasksHandler from './api/scheduled-scans/tasks.js';
+import { buildLatestCveIntelFeed, enrichWithNvd } from './api/_lib/intel.js';
 
 // 加载环境变量
 dotenv.config();
@@ -648,14 +650,20 @@ async function buildStructuredOtxResultV2(type, query) {
     ]);
     const general = unwrapPayload(generalPayload);
     const pulses = getCollection(pulsesPayload, 'top_n_pulses');
+    const nvd = await enrichWithNvd(normalizedQuery);
 
     return {
       type,
       query: normalizedQuery,
       indicator: pickFirstPath(general, ['indicator', 'name', 'id', 'cve'], normalizedQuery),
-      base_score: pickFirstPath(general, ['base_score', 'cvss_score', 'cvss.base_score', 'cvss.score', 'cvss.cvssV3.baseScore', 'cvss3.base_score', 'cvss3.score']),
-      published: formatDisplayDate(pickFirstPath(general, ['published', 'published_date', 'release_date', 'created', 'modified', 'updated'])),
-      description: pickFirstPath(general, ['description', 'details', 'summary'], ''),
+      base_score: pickFirstValue(
+        pickFirstPath(general, ['base_score', 'cvss_score', 'cvss.base_score', 'cvss.score', 'cvss.cvssV3.baseScore', 'cvss3.base_score', 'cvss3.score']),
+        nvd?.cvssScore
+      ),
+      published: formatDisplayDate(
+        pickFirstValue(pickFirstPath(general, ['published', 'published_date', 'release_date', 'created', 'modified', 'updated']), nvd?.published)
+      ),
+      description: pickFirstPath(general, ['description', 'details', 'summary'], nvd?.description || ''),
       pulse_info: {
         count: pickFirstPath(general, ['pulse_info.count', 'pulse_count'], pulses.length || 0),
         pulses: [],
@@ -854,6 +862,13 @@ const server = http.createServer((req, res) => {
       return;
     }
 
+    if (new URL(req.url, 'http://localhost').pathname.startsWith('/api/cve-intel/assets')) {
+      const pathParts = new URL(req.url, 'http://localhost').pathname.split('/').filter(Boolean);
+      req.query = pathParts.length >= 4 ? { id: decodeURIComponent(pathParts[3]) } : {};
+      cveIntelAssetsHandler(req, res);
+      return;
+    }
+
     if (new URL(req.url, 'http://localhost').pathname.startsWith('/api/scheduled-scans/tasks')) {
       const pathParts = new URL(req.url, 'http://localhost').pathname.split('/').filter(Boolean);
       req.query = pathParts.length >= 4 ? { id: decodeURIComponent(pathParts[3]) } : {};
@@ -933,6 +948,26 @@ async function handleApiRequest(req, res) {
         cached: false,
         noCache,
         data: structuredResult
+      }));
+      return;
+    }
+
+    if (new URL(url, 'http://localhost').pathname.startsWith('/api/otx/cve-feed')) {
+      const requestUrl = new URL(url, 'http://localhost');
+      const limit = Number(requestUrl.searchParams.get('limit') || 12);
+      const window = String(requestUrl.searchParams.get('window') || '7d');
+      const noCache = String(requestUrl.searchParams.get('noCache') || '').trim().toLowerCase() === '1';
+
+      const data = await buildLatestCveIntelFeed({
+        limit,
+        window,
+        noCache,
+      });
+
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({
+        success: true,
+        ...data,
       }));
       return;
     }

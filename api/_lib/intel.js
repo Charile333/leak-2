@@ -500,9 +500,9 @@ const normalizePublishedDate = (value) => {
 };
 
 const getPushLevel = (score) => {
-  if (score >= 70) return '楂樹紭鍏?;
-  if (score >= 45) return '寤鸿鍏虫敞';
-  return '鎯呮姤瑙傚療';
+  if (score >= 70) return 'High Priority';
+  if (score >= 45) return 'Needs Attention';
+  return 'Monitor';
 };
 
 const buildPushAssessment = ({ cvssScore, hasKev, otxMentionCount, summary, title }) => {
@@ -512,30 +512,30 @@ const buildPushAssessment = ({ cvssScore, hasKev, otxMentionCount, summary, titl
 
   if (hasKev) {
     score += 40;
-    reasons.push('宸茶繘鍏?KEV');
+    reasons.push('Added to CISA KEV');
   }
 
   if (typeof cvssScore === 'number') {
     if (cvssScore >= 9) {
       score += 25;
-      reasons.push('CVSS 鏋侀珮鍗?);
+      reasons.push('Critical CVSS score');
     } else if (cvssScore >= 7) {
       score += 15;
-      reasons.push('CVSS 楂樺嵄');
+      reasons.push('High CVSS score');
     }
   }
 
   if (otxMentionCount >= 5) {
     score += 15;
-    reasons.push('杩戞湡鎯呮姤鐑害杈冮珮');
+    reasons.push('High recent threat-intel activity');
   } else if (otxMentionCount >= 2) {
     score += 8;
-    reasons.push('杩戞湡琚鏉℃儏鎶ユ彁鍙?);
+    reasons.push('Mentioned by multiple recent intel sources');
   }
 
   if (/(rce|remote code execution|actively exploited|exploit|poc|ransomware|0day|zero-day)/i.test(haystack)) {
     score += 12;
-    reasons.push('瀛樺湪楂橀闄╁埄鐢ㄧ嚎绱?);
+    reasons.push('Exploit-related signals detected');
   }
 
   return {
@@ -596,10 +596,10 @@ export const enrichWithNvd = async (cveId) => {
 const parseAliyunSeverity = (value) => {
   const text = String(value || '').trim();
   if (!text) return '';
-  if (/[涓ラ噸|绱ф€/.test(text)) return 'CRITICAL';
-  if (/楂?.test(text)) return 'HIGH';
-  if (/涓?.test(text)) return 'MEDIUM';
-  if (/浣?.test(text)) return 'LOW';
+  if (/(critical|urgent|serious|严重|紧急)/i.test(text)) return 'CRITICAL';
+  if (/(high|高)/i.test(text)) return 'HIGH';
+  if (/(medium|moderate|中)/i.test(text)) return 'MEDIUM';
+  if (/(low|低)/i.test(text)) return 'LOW';
   return text.toUpperCase();
 };
 
@@ -858,31 +858,31 @@ export const buildStructuredOtxResult = async (type, query, options = {}) => {
         http_scan_count: httpScanCount,
       },
       section_states: {
-        pulses: buildSectionState(pulses.length > 0 ? 'success' : 'no_data', pulses.length > 0 ? '宸叉壘鍒板叧鑱旀儏鎶ャ€? : '鏈壘鍒板叧鑱旀儏鎶ャ€?),
+        pulses: buildSectionState(pulses.length > 0 ? 'success' : 'no_data', pulses.length > 0 ? 'Related intelligence found.' : 'No related intelligence found.'),
         passive_dns: buildSectionState(
           getSectionErrorType(passiveDnsPayload) === 'timeout' ? 'timeout' : passiveDnsCount > 0 ? 'success' : 'no_data',
           getSectionErrorType(passiveDnsPayload) === 'timeout'
-            ? '琚姩 DNS 鏌ヨ瓒呮椂锛屾儏鎶ユ簮鏈湪闄愬畾鏃堕棿鍐呰繑鍥炴暟鎹€?
+            ? 'Passive DNS lookup timed out before the upstream source responded.'
             : passiveDnsCount > 0
-              ? '宸茶幏鍙栬鍔?DNS 璁板綍銆?
-              : '鎯呮姤婧愭湭杩斿洖琚姩 DNS 璁板綍銆?
+              ? 'Passive DNS records retrieved.'
+              : 'No passive DNS records were returned.',
         ),
-        url_list: buildSectionState(urlList.length > 0 ? 'success' : 'no_data', urlList.length > 0 ? '宸叉壘鍒板叧鑱?URL銆? : '鏈壘鍒板叧鑱?URL銆?),
+        url_list: buildSectionState(urlList.length > 0 ? 'success' : 'no_data', urlList.length > 0 ? 'Related URLs found.' : 'No related URLs found.'),
         malware: buildSectionState(
           getSectionErrorType(malwarePayload) === 'timeout' ? 'timeout' : malwareCount > 0 ? 'success' : 'no_data',
           getSectionErrorType(malwarePayload) === 'timeout'
-            ? '鎭舵剰鏍锋湰鏌ヨ瓒呮椂锛屾儏鎶ユ簮鏈湪闄愬畾鏃堕棿鍐呰繑鍥炴暟鎹€?
+            ? 'Malware sample lookup timed out before the upstream source responded.'
             : malwareCount > 0
-              ? '宸茶幏鍙栨伓鎰忔牱鏈褰曘€?
-              : '鎯呮姤婧愭湭杩斿洖鎭舵剰鏍锋湰璁板綍銆?
+              ? 'Malware sample records retrieved.'
+              : 'No malware sample records were returned.',
         ),
         http_scans: buildSectionState(
           getSectionErrorType(httpScansPayload) === 'timeout' ? 'timeout' : httpScanCount > 0 ? 'success' : 'no_data',
           getSectionErrorType(httpScansPayload) === 'timeout'
-            ? 'HTTP 鎵弿鏌ヨ瓒呮椂锛屾儏鎶ユ簮鏈湪闄愬畾鏃堕棿鍐呰繑鍥炴暟鎹€?
+            ? 'HTTP scan lookup timed out before the upstream source responded.'
             : httpScanCount > 0
-              ? '宸茶幏鍙?HTTP 鎵弿璁板綍銆?
-              : '鏈壘鍒?HTTP 鎵弿璁板綍銆?
+              ? 'HTTP scan records retrieved.'
+              : 'No HTTP scan records were returned.',
         ),
       },
     };
@@ -938,31 +938,31 @@ export const buildStructuredOtxResult = async (type, query, options = {}) => {
         http_scan_count: httpScanCount,
       },
       section_states: {
-        pulses: buildSectionState(pulses.length > 0 ? 'success' : 'no_data', pulses.length > 0 ? '宸叉壘鍒板叧鑱旀儏鎶ャ€? : '鏈壘鍒板叧鑱旀儏鎶ャ€?),
+        pulses: buildSectionState(pulses.length > 0 ? 'success' : 'no_data', pulses.length > 0 ? 'Related intelligence found.' : 'No related intelligence found.'),
         passive_dns: buildSectionState(
           getSectionErrorType(passiveDnsPayload) === 'timeout' ? 'timeout' : passiveDnsCount > 0 ? 'success' : 'no_data',
           getSectionErrorType(passiveDnsPayload) === 'timeout'
-            ? '琚姩 DNS 鏌ヨ瓒呮椂锛屾儏鎶ユ簮鏈湪闄愬畾鏃堕棿鍐呰繑鍥炴暟鎹€?
+            ? 'Passive DNS lookup timed out before the upstream source responded.'
             : passiveDnsCount > 0
-              ? '宸茶幏鍙栬鍔?DNS 璁板綍銆?
-              : '鎯呮姤婧愭湭杩斿洖琚姩 DNS 璁板綍銆?
+              ? 'Passive DNS records retrieved.'
+              : 'No passive DNS records were returned.',
         ),
-        url_list: buildSectionState(urlList.length > 0 ? 'success' : 'no_data', urlList.length > 0 ? '宸叉壘鍒板叧鑱?URL銆? : '鏈壘鍒板叧鑱?URL銆?),
+        url_list: buildSectionState(urlList.length > 0 ? 'success' : 'no_data', urlList.length > 0 ? 'Related URLs found.' : 'No related URLs found.'),
         malware: buildSectionState(
           getSectionErrorType(malwarePayload) === 'timeout' ? 'timeout' : malwareCount > 0 ? 'success' : 'no_data',
           getSectionErrorType(malwarePayload) === 'timeout'
-            ? '鎭舵剰鏍锋湰鏌ヨ瓒呮椂锛屾儏鎶ユ簮鏈湪闄愬畾鏃堕棿鍐呰繑鍥炴暟鎹€?
+            ? 'Malware sample lookup timed out before the upstream source responded.'
             : malwareCount > 0
-              ? '宸茶幏鍙栨伓鎰忔牱鏈褰曘€?
-              : '鎯呮姤婧愭湭杩斿洖鎭舵剰鏍锋湰璁板綍銆?
+              ? 'Malware sample records retrieved.'
+              : 'No malware sample records were returned.',
         ),
         http_scans: buildSectionState(
           getSectionErrorType(httpScansPayload) === 'timeout' ? 'timeout' : httpScanCount > 0 ? 'success' : 'no_data',
           getSectionErrorType(httpScansPayload) === 'timeout'
-            ? 'HTTP 鎵弿鏌ヨ瓒呮椂锛屾儏鎶ユ簮鏈湪闄愬畾鏃堕棿鍐呰繑鍥炴暟鎹€?
+            ? 'HTTP scan lookup timed out before the upstream source responded.'
             : httpScanCount > 0
-              ? '宸茶幏鍙?HTTP 鎵弿璁板綍銆?
-              : '鏈壘鍒?HTTP 鎵弿璁板綍銆?
+              ? 'HTTP scan records retrieved.'
+              : 'No HTTP scan records were returned.',
         ),
       },
     };
@@ -1006,11 +1006,11 @@ export const buildStructuredOtxResult = async (type, query, options = {}) => {
         http_scan_count: 0,
       },
       section_states: {
-        pulses: buildSectionState(pulses.length > 0 ? 'success' : 'no_data', pulses.length > 0 ? '宸叉壘鍒板叧鑱旀儏鎶ャ€? : '鏈壘鍒板叧鑱旀儏鎶ャ€?),
-        passive_dns: buildSectionState('not_supported', 'URL 鏌ヨ鏆備笉鎻愪緵琚姩 DNS 璁板綍銆?),
-        url_list: buildSectionState(urlList.length > 0 ? 'success' : 'no_data', urlList.length > 0 ? '宸叉壘鍒板叧鑱?URL銆? : '鏈壘鍒板叧鑱?URL銆?),
-        malware: buildSectionState('not_supported', 'URL 鏌ヨ鏆備笉鎻愪緵鎭舵剰鏍锋湰璁板綍銆?),
-        http_scans: buildSectionState('not_supported', 'URL 鏌ヨ鏆備笉鎻愪緵 HTTP 鎵弿璁板綍銆?),
+        pulses: buildSectionState(pulses.length > 0 ? 'success' : 'no_data', pulses.length > 0 ? 'Related intelligence found.' : 'No related intelligence found.'),
+        passive_dns: buildSectionState('not_supported', 'Passive DNS records are not available for URL lookups.'),
+        url_list: buildSectionState(urlList.length > 0 ? 'success' : 'no_data', urlList.length > 0 ? 'Related URLs found.' : 'No related URLs found.'),
+        malware: buildSectionState('not_supported', 'Malware sample records are not available for URL lookups.'),
+        http_scans: buildSectionState('not_supported', 'HTTP scan records are not available for URL lookups.'),
       },
     };
   }
@@ -1056,11 +1056,11 @@ export const buildStructuredOtxResult = async (type, query, options = {}) => {
         http_scan_count: 0,
       },
       section_states: {
-        pulses: buildSectionState(pulses.length > 0 ? 'success' : 'no_data', pulses.length > 0 ? '宸叉壘鍒板叧鑱旀儏鎶ャ€? : '鏈壘鍒板叧鑱旀儏鎶ャ€?),
-        passive_dns: buildSectionState('not_supported', 'CVE 鏌ヨ鏆備笉鎻愪緵琚姩 DNS 璁板綍銆?),
-        url_list: buildSectionState('not_supported', 'CVE 鏌ヨ鏆備笉鎻愪緵鍏宠仈 URL銆?),
-        malware: buildSectionState('not_supported', 'CVE 鏌ヨ鏆備笉鎻愪緵鎭舵剰鏍锋湰璁板綍銆?),
-        http_scans: buildSectionState('not_supported', 'CVE 鏌ヨ鏆備笉鎻愪緵 HTTP 鎵弿璁板綍銆?),
+        pulses: buildSectionState(pulses.length > 0 ? 'success' : 'no_data', pulses.length > 0 ? 'Related intelligence found.' : 'No related intelligence found.'),
+        passive_dns: buildSectionState('not_supported', 'Passive DNS records are not available for CVE lookups.'),
+        url_list: buildSectionState('not_supported', 'Related URLs are not available for CVE lookups.'),
+        malware: buildSectionState('not_supported', 'Malware sample records are not available for CVE lookups.'),
+        http_scans: buildSectionState('not_supported', 'HTTP scan records are not available for CVE lookups.'),
       },
     };
   }
@@ -1111,7 +1111,7 @@ const searchGitHubRepositories = async (terms) => {
         status: 'new',
         source: 'GitHub',
         exposure: ruleResult.exposure,
-        title: `鍏紑浠撳簱鍛戒腑鍏抽敭璇嶁€?{term}鈥漙,
+        title: `Public repository match for "${term}"`,
         repository: item.name || 'unknown-repository',
         owner: item.owner?.login || 'unknown-owner',
         path: 'Repository metadata',
@@ -1123,7 +1123,7 @@ const searchGitHubRepositories = async (terms) => {
         url: item.html_url,
         confidence: Math.min(0.95, 0.58 + ruleResult.confidenceBoost),
         matchedRules: ruleResult.matchedRules,
-        notes: ['鍏紑浠撳簱鍏冩暟鎹懡涓洃鎺у璞?, '寤鸿缁х画鏌ョ湅 README銆侀厤缃枃浠朵笌鎻愪氦鍘嗗彶'],
+        notes: ['Public repository metadata matched a monitored asset.', 'Review the README, configuration files, and commit history for exposed context.'],
       });
     }
   }
@@ -1167,7 +1167,7 @@ const searchGitHubCode = async (terms) => {
         status: 'new',
         source: 'GitHub',
         exposure: ruleResult.exposure,
-        title: `浠ｇ爜鎼滅储鍛戒腑鈥?{term}鈥漙,
+        title: `Code search match for "${term}"`,
         repository: item.repository?.name || 'unknown-repository',
         owner: item.repository?.owner?.login || 'unknown-owner',
         path: item.path || 'Unknown path',
@@ -1179,7 +1179,7 @@ const searchGitHubCode = async (terms) => {
         url: item.html_url || item.repository?.html_url,
         confidence: Math.min(0.98, 0.84 + ruleResult.confidenceBoost),
         matchedRules: ruleResult.matchedRules,
-        notes: ['GitHub code search returned a direct file-level match', '寤鸿浼樺厛鏍稿鐗囨鏄惁鍖呭惈鐪熷疄鍑嵁鎴栧唴閮ㄩ厤缃?],
+        notes: ['GitHub code search returned a direct file-level match.', 'Verify first whether the snippet contains real credentials or internal configuration.'],
       });
     }
   }
@@ -1215,7 +1215,7 @@ const searchGiteeRepositories = async (terms) => {
         status: 'new',
         source: 'Gitee',
         exposure: ruleResult.exposure,
-        title: `鍏紑 Gitee 浠撳簱鍛戒腑鍏抽敭璇嶁€?{term}鈥漙,
+        title: `Public Gitee repository match for "${term}"`,
         repository: item.name || 'unknown-repository',
         owner: item.namespace?.name || item.owner?.login || 'unknown-owner',
         path: 'Repository metadata',
@@ -1227,7 +1227,7 @@ const searchGiteeRepositories = async (terms) => {
         url: item.html_url,
         confidence: Math.min(0.92, 0.54 + ruleResult.confidenceBoost),
         matchedRules: ruleResult.matchedRules,
-        notes: ['Gitee 鍏紑浠撳簱鍏冩暟鎹懡涓洃鎺у璞?, '寤鸿缁х画妫€鏌?README銆侀厤缃洰褰曞拰 Issues 璁ㄨ鍐呭'],
+        notes: ['Public Gitee repository metadata matched a monitored asset.', 'Review the README, configuration directories, and Issues discussion for additional exposure context.'],
       });
     }
   }

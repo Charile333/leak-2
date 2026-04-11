@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import axios from 'axios';
 import dotenv from 'dotenv';
+import { buildLatestCveIntelFeed, enrichWithNvd } from './api/_lib/intel.js';
 
 // 加载环境变量
 dotenv.config();
@@ -541,14 +542,20 @@ const buildStructuredOtxResultV2 = async (type, query) => {
     ]);
     const general = unwrapPayload(generalPayload);
     const pulses = getCollection(pulsesPayload, 'top_n_pulses');
+    const nvd = await enrichWithNvd(normalizedQuery);
 
     return {
       type,
       query: normalizedQuery,
       indicator: pickFirstPath(general, ['indicator', 'name', 'id', 'cve'], normalizedQuery),
-      base_score: pickFirstPath(general, ['base_score', 'cvss_score', 'cvss.base_score', 'cvss.score', 'cvss.cvssV3.baseScore', 'cvss3.base_score', 'cvss3.score']),
-      published: formatDisplayDate(pickFirstPath(general, ['published', 'published_date', 'release_date', 'created', 'modified', 'updated'])),
-      description: pickFirstPath(general, ['description', 'details', 'summary'], ''),
+      base_score: pickFirstValue(
+        pickFirstPath(general, ['base_score', 'cvss_score', 'cvss.base_score', 'cvss.score', 'cvss.cvssV3.baseScore', 'cvss3.base_score', 'cvss3.score']),
+        nvd?.cvssScore
+      ),
+      published: formatDisplayDate(
+        pickFirstValue(pickFirstPath(general, ['published', 'published_date', 'release_date', 'created', 'modified', 'updated']), nvd?.published)
+      ),
+      description: pickFirstPath(general, ['description', 'details', 'summary'], nvd?.description || ''),
       pulse_info: {
         count: pickFirstPath(general, ['pulse_info.count', 'pulse_count'], pulses.length || 0),
         pulses: [],
@@ -648,6 +655,23 @@ async function handleApiRequest(req, res) {
     }
 
     // 处理OTX API请求
+    if (url.startsWith('/api/otx/cve-feed')) {
+      const limit = Number(req.query.limit || 12);
+      const window = String(req.query.window || '7d');
+      const noCache = String(req.query.noCache || '').trim().toLowerCase() === '1';
+
+      const data = await buildLatestCveIntelFeed({
+        limit,
+        window,
+        noCache,
+      });
+
+      return res.status(200).json({
+        success: true,
+        ...data,
+      });
+    }
+
     if (url.startsWith('/api/otx')) {
       const upstreamUrl = OTX_UPSTREAM_URL;
       const targetUrl = `${upstreamUrl}${url.replace(/^\/api\/otx/, '')}`;
