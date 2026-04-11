@@ -1,81 +1,8 @@
 {
   "rewrites": [
     {
-      "source": "/api/otx/search",
-      "destination": "/api/otx/search.js"
-    },
-    {
-      "source": "/api/code-leak/search",
-      "destination": "/api/code-leak/search.js"
-    },
-    {
-      "source": "/api/code-leak/assets",
-      "destination": "/api/code-leak/assets.js"
-    },
-    {
-      "source": "/api/code-leak/assets/(.*)",
-      "destination": "/api/code-leak/assets.js?id=$1"
-    },
-    {
-      "source": "/api/file-leak/search",
-      "destination": "/api/file-leak/search.js"
-    },
-    {
-      "source": "/api/file-leak/assets",
-      "destination": "/api/file-leak/assets.js"
-    },
-    {
-      "source": "/api/file-leak/assets/(.*)",
-      "destination": "/api/file-leak/assets.js?id=$1"
-    },
-    {
-      "source": "/api/cve-intel/assets",
-      "destination": "/api/cve-intel/assets.js"
-    },
-    {
-      "source": "/api/cve-intel/assets/(.*)",
-      "destination": "/api/cve-intel/assets.js?id=$1"
-    },
-    {
-      "source": "/api/scheduled-scans/tasks",
-      "destination": "/api/scheduled-scans/tasks.js"
-    },
-    {
-      "source": "/api/scheduled-scans/runs",
-      "destination": "/api/scheduled-scans/runs.js"
-    },
-    {
-      "source": "/api/scheduled-scans/run",
-      "destination": "/api/scheduled-scans/run.js"
-    },
-    {
-      "source": "/api/scheduled-scans/tasks/(.*)",
-      "destination": "/api/scheduled-scans/tasks.js?id=$1"
-    },
-    {
-      "source": "/api/notifications/webhook",
-      "destination": "/api/notifications/webhook.js"
-    },
-    {
-      "source": "/api/auth/login",
-      "destination": "/api/auth/login.js"
-    },
-    {
-      "source": "/api/auth/whitelist",
-      "destination": "/api/auth/whitelist.js"
-    },
-    {
-      "source": "/api/(.*)",
-      "destination": "/api/[...path].js"
-    },
-    {
       "source": "/(.*)",
       "destination": "/index.html"
     }
-  ],
-  "functions": {
-    "api/**/*.js": {
-      "runtime": "@vercel/node@5.5.16"
-    }
-  }
+  ]
 }

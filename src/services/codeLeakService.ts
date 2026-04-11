@@ -1,3 +1,5 @@
+import { buildApiUrl } from './apiBase';
+
 export type CodeLeakSeverity = 'critical' | 'high' | 'medium' | 'low';
 export type CodeLeakStatus = 'new' | 'reviewing' | 'confirmed' | 'dismissed';
 export type CodeLeakSource = 'GitHub' | 'GitLab' | 'Gitee' | 'Paste';
@@ -151,12 +153,12 @@ const requestJson = async <T>(url: string, options: RequestInit = {}) => {
 };
 
 const fetchAssets = async () => {
-  const payload = await requestJson<{ assets?: CodeLeakAsset[] }>('/api/code-leak/assets');
+  const payload = await requestJson<{ assets?: CodeLeakAsset[] }>(buildApiUrl('/api/code-leak/assets'));
   return Array.isArray(payload.assets) ? payload.assets : [];
 };
 
 const fetchRemoteFindings = async (assets: CodeLeakAsset[], query?: string) => {
-  const payload = await requestJson<{ findings?: Array<Partial<CodeLeakFinding>> }>('/api/code-leak/search', {
+  const payload = await requestJson<{ findings?: Array<Partial<CodeLeakFinding>> }>(buildApiUrl('/api/code-leak/search'), {
     method: 'POST',
     body: JSON.stringify({ assets, query }),
   });
@@ -167,7 +169,7 @@ const fetchRemoteFindings = async (assets: CodeLeakAsset[], query?: string) => {
 };
 
 const fetchPersistedFindings = async (assets: CodeLeakAsset[]) => {
-  const payload = await requestJson<{ findings?: Array<Partial<CodeLeakFinding>> }>('/api/code-leak/findings');
+  const payload = await requestJson<{ findings?: Array<Partial<CodeLeakFinding>> }>(buildApiUrl('/api/code-leak/findings'));
   const findings = Array.isArray(payload.findings) ? payload.findings : [];
   const assetMap = buildAssetMap(assets);
   return findings.map((finding) => normalizeRemoteFinding(finding, assetMap, assets));
@@ -207,7 +209,7 @@ export const codeLeakService = {
       throw new Error('Monitored asset value cannot be empty.');
     }
 
-    const payload = await requestJson<{ assets?: CodeLeakAsset[] }>('/api/code-leak/assets', {
+    const payload = await requestJson<{ assets?: CodeLeakAsset[] }>(buildApiUrl('/api/code-leak/assets'), {
       method: 'POST',
       body: JSON.stringify({
         value,
@@ -222,7 +224,7 @@ export const codeLeakService = {
   async removeAsset(id: string): Promise<CodeLeakAsset[]> {
     await new Promise((resolve) => window.setTimeout(resolve, 60));
 
-    const payload = await requestJson<{ assets?: CodeLeakAsset[] }>(`/api/code-leak/assets/${encodeURIComponent(id)}`, {
+    const payload = await requestJson<{ assets?: CodeLeakAsset[] }>(buildApiUrl(`/api/code-leak/assets/${encodeURIComponent(id)}`), {
       method: 'DELETE',
     });
 
@@ -261,7 +263,7 @@ export const codeLeakService = {
   },
 
   async updateFindingStatus(id: string, status: CodeLeakStatus): Promise<void> {
-    await requestJson<{ finding?: Partial<CodeLeakFinding> }>('/api/code-leak/findings', {
+    await requestJson<{ finding?: Partial<CodeLeakFinding> }>(buildApiUrl('/api/code-leak/findings'), {
       method: 'PATCH',
       body: JSON.stringify({ id, status }),
     });

@@ -1,3 +1,5 @@
+import { buildApiUrl } from './apiBase';
+
 export type WebhookChannel = 'leak_monitor' | 'cve_intel';
 
 export interface WebhookConfig {
@@ -70,7 +72,7 @@ const requestJson = async <T>(url: string, options: RequestInit = {}) => {
 
 export const webhookService = {
   async getConfig(channel: WebhookChannel = 'leak_monitor'): Promise<{ config: WebhookConfig | null; configs?: Partial<Record<WebhookChannel, WebhookConfig | null>>; logs: WebhookDeliveryLog[] }> {
-    const payload = await requestJson<{ config?: WebhookConfig | null; configs?: Partial<Record<WebhookChannel, WebhookConfig | null>>; logs?: WebhookDeliveryLog[] }>(`/api/notifications/webhook?channel=${encodeURIComponent(channel)}`);
+    const payload = await requestJson<{ config?: WebhookConfig | null; configs?: Partial<Record<WebhookChannel, WebhookConfig | null>>; logs?: WebhookDeliveryLog[] }>(buildApiUrl(`/api/notifications/webhook?channel=${encodeURIComponent(channel)}`));
     return {
       config: payload.config ?? null,
       configs: payload.configs,
@@ -79,7 +81,7 @@ export const webhookService = {
   },
 
   async saveConfig(input: { channel?: WebhookChannel; url: string; secret?: string; enabled: boolean }): Promise<WebhookConfig> {
-    const payload = await requestJson<{ config?: WebhookConfig }>('/api/notifications/webhook', {
+    const payload = await requestJson<{ config?: WebhookConfig }>(buildApiUrl('/api/notifications/webhook'), {
       method: 'POST',
       body: JSON.stringify({
         channel: input.channel || 'leak_monitor',
@@ -101,7 +103,7 @@ export const webhookService = {
       delivered?: boolean;
       responseStatus?: number | null;
       error?: string | null;
-    }>('/api/notifications/webhook', {
+    }>(buildApiUrl('/api/notifications/webhook'), {
       method: 'POST',
       body: JSON.stringify({
         channel,
@@ -117,7 +119,7 @@ export const webhookService = {
   },
 
   async deleteConfig(channel: WebhookChannel = 'leak_monitor'): Promise<void> {
-    await requestJson(`/api/notifications/webhook?channel=${encodeURIComponent(channel)}`, {
+    await requestJson(buildApiUrl(`/api/notifications/webhook?channel=${encodeURIComponent(channel)}`), {
       method: 'DELETE',
     });
   },

@@ -1,3 +1,5 @@
+import { buildApiUrl } from './apiBase';
+
 export type FileLeakSeverity = 'critical' | 'high' | 'medium' | 'low';
 export type FileLeakStatus = 'new' | 'reviewing' | 'confirmed' | 'dismissed';
 export type FileLeakSource = 'GitHub' | 'Gitee';
@@ -159,12 +161,12 @@ const requestJson = async <T>(url: string, options: RequestInit = {}) => {
 };
 
 const fetchAssets = async () => {
-  const payload = await requestJson<{ assets?: FileLeakAsset[] }>('/api/file-leak/assets');
+  const payload = await requestJson<{ assets?: FileLeakAsset[] }>(buildApiUrl('/api/file-leak/assets'));
   return Array.isArray(payload.assets) ? payload.assets : [];
 };
 
 const fetchRemoteFindings = async (assets: FileLeakAsset[], query?: string) => {
-  const payload = await requestJson<{ findings?: Array<Partial<FileLeakFinding>> }>('/api/file-leak/search', {
+  const payload = await requestJson<{ findings?: Array<Partial<FileLeakFinding>> }>(buildApiUrl('/api/file-leak/search'), {
     method: 'POST',
     body: JSON.stringify({ assets, query }),
   });
@@ -175,7 +177,7 @@ const fetchRemoteFindings = async (assets: FileLeakAsset[], query?: string) => {
 };
 
 const fetchPersistedFindings = async (assets: FileLeakAsset[]) => {
-  const payload = await requestJson<{ findings?: Array<Partial<FileLeakFinding>> }>('/api/file-leak/findings');
+  const payload = await requestJson<{ findings?: Array<Partial<FileLeakFinding>> }>(buildApiUrl('/api/file-leak/findings'));
   const findings = Array.isArray(payload.findings) ? payload.findings : [];
   const assetMap = buildAssetMap(assets);
   return findings.map((finding) => normalizeRemoteFinding(finding, assetMap, assets));
@@ -212,7 +214,7 @@ export const fileLeakService = {
       throw new Error('Monitored asset value cannot be empty.');
     }
 
-    const payload = await requestJson<{ assets?: FileLeakAsset[] }>('/api/file-leak/assets', {
+    const payload = await requestJson<{ assets?: FileLeakAsset[] }>(buildApiUrl('/api/file-leak/assets'), {
       method: 'POST',
       body: JSON.stringify({
         value,
@@ -225,7 +227,7 @@ export const fileLeakService = {
   },
 
   async removeAsset(id: string): Promise<FileLeakAsset[]> {
-    const payload = await requestJson<{ assets?: FileLeakAsset[] }>(`/api/file-leak/assets/${encodeURIComponent(id)}`, {
+    const payload = await requestJson<{ assets?: FileLeakAsset[] }>(buildApiUrl(`/api/file-leak/assets/${encodeURIComponent(id)}`), {
       method: 'DELETE',
     });
 
@@ -268,7 +270,7 @@ export const fileLeakService = {
   },
 
   async updateFindingStatus(id: string, status: FileLeakStatus): Promise<void> {
-    await requestJson<{ finding?: Partial<FileLeakFinding> }>('/api/file-leak/findings', {
+    await requestJson<{ finding?: Partial<FileLeakFinding> }>(buildApiUrl('/api/file-leak/findings'), {
       method: 'PATCH',
       body: JSON.stringify({ id, status }),
     });

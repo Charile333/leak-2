@@ -1,3 +1,5 @@
+import { buildApiUrl } from './apiBase';
+
 export type CveIntelAssetType = 'vendor' | 'product' | 'component' | 'technology' | 'keyword';
 
 export interface CveIntelAsset {
@@ -54,7 +56,7 @@ const requestJson = async <T>(url: string, options: RequestInit = {}) => {
 
 export const cveIntelAssetService = {
   async getAssets(): Promise<CveIntelAsset[]> {
-    const payload = await requestJson<{ assets?: CveIntelAsset[] }>('/api/cve-intel/assets');
+    const payload = await requestJson<{ assets?: CveIntelAsset[] }>(buildApiUrl('/api/cve-intel/assets'));
     return Array.isArray(payload.assets) ? payload.assets : [];
   },
 
@@ -64,7 +66,7 @@ export const cveIntelAssetService = {
       throw new Error('CVE 监控对象不能为空。');
     }
 
-    const payload = await requestJson<{ assets?: CveIntelAsset[] }>('/api/cve-intel/assets', {
+    const payload = await requestJson<{ assets?: CveIntelAsset[] }>(buildApiUrl('/api/cve-intel/assets'), {
       method: 'POST',
       body: JSON.stringify({
         value,
@@ -77,7 +79,7 @@ export const cveIntelAssetService = {
   },
 
   async removeAsset(id: string): Promise<CveIntelAsset[]> {
-    const payload = await requestJson<{ assets?: CveIntelAsset[] }>(`/api/cve-intel/assets/${encodeURIComponent(id)}`, {
+    const payload = await requestJson<{ assets?: CveIntelAsset[] }>(buildApiUrl(`/api/cve-intel/assets/${encodeURIComponent(id)}`), {
       method: 'DELETE',
     });
 

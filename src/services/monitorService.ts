@@ -1,3 +1,4 @@
+import { buildApiUrl } from './apiBase';
 import type { WebhookChannel, WebhookConfig, WebhookDeliveryLog } from './webhookService';
 
 export type MonitorTaskType = 'code_leak' | 'file_leak' | 'cve_intel';
@@ -85,12 +86,12 @@ const requestJson = async <T>(url: string, options: RequestInit = {}) => {
 
 export const monitorService = {
   async getTasks(): Promise<MonitorTask[]> {
-    const payload = await requestJson<{ tasks?: MonitorTask[] }>('/api/scheduled-scans/tasks');
+    const payload = await requestJson<{ tasks?: MonitorTask[] }>(buildApiUrl('/api/scheduled-scans/tasks'));
     return Array.isArray(payload.tasks) ? payload.tasks : [];
   },
 
   async saveTask(input: Partial<MonitorTask> & Pick<MonitorTask, 'scanType' | 'label' | 'intervalMinutes' | 'enabled'>): Promise<MonitorTask> {
-    const payload = await requestJson<{ task?: MonitorTask }>('/api/scheduled-scans/tasks', {
+    const payload = await requestJson<{ task?: MonitorTask }>(buildApiUrl('/api/scheduled-scans/tasks'), {
       method: 'POST',
       body: JSON.stringify(input),
     });
@@ -103,12 +104,12 @@ export const monitorService = {
   },
 
   async getRuns(limit = 20): Promise<MonitorRun[]> {
-    const payload = await requestJson<{ runs?: MonitorRun[] }>(`/api/scheduled-scans/runs?limit=${encodeURIComponent(String(limit))}`);
+    const payload = await requestJson<{ runs?: MonitorRun[] }>(buildApiUrl(`/api/scheduled-scans/runs?limit=${encodeURIComponent(String(limit))}`));
     return Array.isArray(payload.runs) ? payload.runs : [];
   },
 
   async getWebhookSnapshot(channel: WebhookChannel = 'leak_monitor'): Promise<{ config: WebhookConfig | null; configs?: Partial<Record<WebhookChannel, WebhookConfig | null>>; logs: WebhookDeliveryLog[] }> {
-    const payload = await requestJson<{ config?: WebhookConfig | null; configs?: Partial<Record<WebhookChannel, WebhookConfig | null>>; logs?: WebhookDeliveryLog[] }>(`/api/notifications/webhook?channel=${encodeURIComponent(channel)}`);
+    const payload = await requestJson<{ config?: WebhookConfig | null; configs?: Partial<Record<WebhookChannel, WebhookConfig | null>>; logs?: WebhookDeliveryLog[] }>(buildApiUrl(`/api/notifications/webhook?channel=${encodeURIComponent(channel)}`));
     return {
       config: payload.config ?? null,
       configs: payload.configs,
@@ -117,7 +118,7 @@ export const monitorService = {
   },
 
   async getCvePreview(): Promise<CveIntelPreviewItem[]> {
-    const payload = await requestJson<{ items?: CveIntelPreviewItem[] }>('/api/otx/search?mode=cve-feed&limit=6&window=7d');
+    const payload = await requestJson<{ items?: CveIntelPreviewItem[] }>(buildApiUrl('/api/otx/search?mode=cve-feed&limit=6&window=7d'));
     return Array.isArray(payload.items) ? payload.items : [];
   },
 };
