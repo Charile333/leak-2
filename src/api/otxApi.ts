@@ -1,8 +1,9 @@
 import axios from 'axios';
+import { API_BASE_URL } from '../services/apiBase';
 
-const BASE_URL = import.meta.env.DEV
-  ? import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001'
-  : '';
+const BASE_URL =
+  API_BASE_URL ||
+  (import.meta.env.DEV ? import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001' : '');
 const OTX_API_BASE_URL = `${BASE_URL}/api/otx`;
 const OTX_REQUEST_TIMEOUT = 45000;
 const OTX_RETRY_DELAY = 1200;

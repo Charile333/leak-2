@@ -2,6 +2,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import express from 'express';
 
+import proxyHandler from './api/proxy.js';
 import loginHandler from './api/auth/login.js';
 import whitelistHandler from './api/auth/whitelist.js';
 import codeLeakAssetsHandler from './api/code-leak/assets.js';
@@ -54,6 +55,26 @@ const adaptHandler = (handler, queryMapper) => async (req, res) => {
   }
 };
 
+const adaptProxyHandler = (handler) => async (req, res) => {
+  const originalUrl = req.url;
+
+  try {
+    req.url = req.originalUrl || req.url;
+    await handler(req, res);
+  } catch (error) {
+    console.error('[api-server] unhandled proxy error:', error);
+    if (!res.headersSent) {
+      res.status(500).json({
+        success: false,
+        error: 'Internal Server Error',
+        details: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
+  } finally {
+    req.url = originalUrl;
+  }
+};
+
 app.get('/health', (_req, res) => {
   res.status(200).json({
     status: 'ok',
@@ -98,13 +119,7 @@ app.all(
 app.all('/api/scheduled-scans/runs', adaptHandler(scheduledScanRunsHandler));
 app.all('/api/scheduled-scans/run', adaptHandler(scheduledScanRunHandler));
 
-app.use('/api', (_req, res) => {
-  res.status(404).json({
-    success: false,
-    error: 'Not Found',
-    message: 'The requested API endpoint was not found.',
-  });
-});
+app.use('/api', adaptProxyHandler(proxyHandler));
 
 app.listen(PORT, () => {
   console.log(`[api-server] listening on http://127.0.0.1:${PORT}`);

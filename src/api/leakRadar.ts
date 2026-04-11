@@ -1,3 +1,5 @@
+import { API_BASE_URL } from '../services/apiBase';
+
 /**
  * Lysir谍卫 API 客户端
  * 
@@ -9,9 +11,9 @@
 // 根据环境动态选择API地址
 // 开发环境使用本地后端服务器地址
 // 生产环境使用Vercel代理，避免CORS问题
-const BASE_URL = import.meta.env.DEV 
-  ? 'http://localhost:3001'  // 开发环境使用本地后端
-  : '';  // 生产环境使用当前域名，通过Vercel代理访问
+const BASE_URL =
+  API_BASE_URL ||
+  (import.meta.env.DEV ? import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001' : '');
 const API_PREFIX = '/api';
 
 export interface LeakRadarProfile {
