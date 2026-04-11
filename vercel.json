@@ -77,11 +77,5 @@
     "api/**/*.js": {
       "runtime": "@vercel/node@5.5.16"
     }
-  },
-  "crons": [
-    {
-      "path": "/api/scheduled-scans/run",
-      "schedule": "*/15 * * * *"
-    }
-  ]
+  }
 }
