@@ -29,6 +29,7 @@ export interface CodeLeakFinding {
   snippet: string;
   firstSeen: string;
   lastSeen: string;
+  hitCount?: number;
   url: string;
   confidence: number;
   matchedRules: string[];
@@ -43,38 +44,12 @@ export interface CodeLeakSearchFilters {
   source?: CodeLeakSource | 'all';
 }
 
-const STATUS_STORAGE_KEY = 'code-leak-mvp-statuses';
-
 export class CodeLeakSearchError extends Error {
   constructor(message: string) {
     super(message);
     this.name = 'CodeLeakSearchError';
   }
 }
-
-const readStatusOverrides = () => {
-  if (typeof window === 'undefined') return {} as Record<string, CodeLeakStatus>;
-
-  try {
-    const raw = window.localStorage.getItem(STATUS_STORAGE_KEY);
-    return raw ? (JSON.parse(raw) as Record<string, CodeLeakStatus>) : {};
-  } catch {
-    return {};
-  }
-};
-
-const writeStatusOverrides = (statuses: Record<string, CodeLeakStatus>) => {
-  if (typeof window === 'undefined') return;
-  window.localStorage.setItem(STATUS_STORAGE_KEY, JSON.stringify(statuses));
-};
-
-const applyStatuses = (findings: CodeLeakFinding[]) => {
-  const statuses = readStatusOverrides();
-  return findings.map((finding) => ({
-    ...finding,
-    status: statuses[finding.id] || finding.status,
-  }));
-};
 
 const includesText = (haystack: string, needle: string) =>
   haystack.toLowerCase().includes(needle.toLowerCase());
@@ -191,6 +166,13 @@ const fetchRemoteFindings = async (assets: CodeLeakAsset[], query?: string) => {
   return findings.map((finding) => normalizeRemoteFinding(finding, assetMap, assets));
 };
 
+const fetchPersistedFindings = async (assets: CodeLeakAsset[]) => {
+  const payload = await requestJson<{ findings?: Array<Partial<CodeLeakFinding>> }>('/api/code-leak/findings');
+  const findings = Array.isArray(payload.findings) ? payload.findings : [];
+  const assetMap = buildAssetMap(assets);
+  return findings.map((finding) => normalizeRemoteFinding(finding, assetMap, assets));
+};
+
 export const codeLeakService = {
   async getAssets(): Promise<CodeLeakAsset[]> {
     await new Promise((resolve) => window.setTimeout(resolve, 80));
@@ -198,12 +180,19 @@ export const codeLeakService = {
   },
 
   async getFindings(query?: string, assetsOverride?: CodeLeakAsset[]): Promise<CodeLeakFinding[]> {
-    await new Promise((resolve) => window.setTimeout(resolve, 120));
-
     const assets = assetsOverride ?? (await fetchAssets());
 
     try {
-      return applyStatuses(await fetchRemoteFindings(assets, query));
+      if (!query?.trim()) {
+        const persistedFindings = await fetchPersistedFindings(assets);
+        if (persistedFindings.length > 0) {
+          return persistedFindings;
+        }
+
+        return await fetchRemoteFindings(assets, query);
+      }
+
+      return await fetchRemoteFindings(assets, query);
     } catch (error) {
       console.error('[codeLeakService] Remote code leak search failed:', error);
       throw new CodeLeakSearchError('Remote code leak search failed. Please check the API configuration and try again.');
@@ -241,14 +230,12 @@ export const codeLeakService = {
   },
 
   async searchFindings(filters: CodeLeakSearchFilters = {}, assetsOverride?: CodeLeakAsset[]): Promise<CodeLeakFinding[]> {
-    await new Promise((resolve) => window.setTimeout(resolve, 120));
-
     const assets = assetsOverride ?? (await fetchAssets());
     const query = filters.query?.trim().toLowerCase();
     let findings: CodeLeakFinding[] = [];
 
     try {
-      findings = applyStatuses(await fetchRemoteFindings(assets, filters.query));
+      findings = await (filters.query?.trim() ? fetchRemoteFindings(assets, filters.query) : fetchPersistedFindings(assets));
     } catch (error) {
       console.error('[codeLeakService] Remote code leak search failed:', error);
       throw new CodeLeakSearchError('Unable to load code leak findings from the live intelligence source. Please check the backend or API configuration.');
@@ -274,9 +261,9 @@ export const codeLeakService = {
   },
 
   async updateFindingStatus(id: string, status: CodeLeakStatus): Promise<void> {
-    await new Promise((resolve) => window.setTimeout(resolve, 80));
-    const statuses = readStatusOverrides();
-    statuses[id] = status;
-    writeStatusOverrides(statuses);
+    await requestJson<{ finding?: Partial<CodeLeakFinding> }>('/api/code-leak/findings', {
+      method: 'PATCH',
+      body: JSON.stringify({ id, status }),
+    });
   },
 };

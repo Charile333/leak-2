@@ -61,6 +61,7 @@ export const ensureScheduledScanTables = async () => {
         scan_type TEXT NOT NULL,
         dedupe_key TEXT NOT NULL,
         finding_payload JSONB NOT NULL,
+        triage_status TEXT NOT NULL DEFAULT 'new',
         first_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         last_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         hit_count INTEGER NOT NULL DEFAULT 1,
@@ -80,6 +81,11 @@ export const ensureScheduledScanTables = async () => {
         started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         finished_at TIMESTAMPTZ
       )
+    `;
+
+    await sql`
+      ALTER TABLE scheduled_scan_findings
+      ADD COLUMN IF NOT EXISTS triage_status TEXT NOT NULL DEFAULT 'new'
     `;
   }, 'Failed to prepare scheduled scan tables.');
 
@@ -315,6 +321,39 @@ export const recordScheduledScanRun = async ({
   return payload;
 };
 
+export const listScheduledScanRuns = async ({ userEmail = '', limit = 20 } = {}) => {
+  const normalizedLimit = Math.max(1, Math.min(100, Number(limit || 20)));
+
+  if (!hasDatabase()) {
+    const runs = await readJsonFile(RUNS_FILE, []);
+    return runs
+      .filter((run) => !userEmail || run.userEmail === userEmail)
+      .sort((left, right) => new Date(right.startedAt || 0).getTime() - new Date(left.startedAt || 0).getTime())
+      .slice(0, normalizedLimit);
+  }
+
+  await ensureScheduledScanTables();
+  const rows = await sql`
+    SELECT id, task_id, user_email, scan_type, status, findings_count, error_message, started_at, finished_at
+    FROM scheduled_scan_runs
+    WHERE (${userEmail || null}::TEXT IS NULL OR user_email = ${userEmail || null})
+    ORDER BY started_at DESC
+    LIMIT ${normalizedLimit}
+  `;
+
+  return rows.map((row) => ({
+    id: row.id,
+    taskId: row.task_id,
+    userEmail: row.user_email,
+    scanType: row.scan_type,
+    status: row.status,
+    findingsCount: Number(row.findings_count || 0),
+    errorMessage: row.error_message || null,
+    startedAt: row.started_at,
+    finishedAt: row.finished_at || null,
+  }));
+};
+
 export const persistScheduledFinding = async ({ taskId, userEmail, scanType, finding }) => {
   const dedupeKey = `${finding.source}:${finding.url}:${finding.match || finding.assetLabel || finding.title}`;
 
@@ -342,6 +381,7 @@ export const persistScheduledFinding = async ({ taskId, userEmail, scanType, fin
         scanType,
         dedupeKey,
         findingPayload: finding,
+        triageStatus: finding.status || 'new',
         firstSeenAt: new Date().toISOString(),
         lastSeenAt: new Date().toISOString(),
         hitCount: 1,
@@ -371,7 +411,7 @@ export const persistScheduledFinding = async ({ taskId, userEmail, scanType, fin
       finding_payload = EXCLUDED.finding_payload,
       last_seen_at = NOW(),
       hit_count = scheduled_scan_findings.hit_count + 1
-    RETURNING id, task_id, user_email, scan_type, dedupe_key, finding_payload, first_seen_at, last_seen_at, hit_count, xmax = 0 AS inserted
+    RETURNING id, task_id, user_email, scan_type, dedupe_key, finding_payload, triage_status, first_seen_at, last_seen_at, hit_count, xmax = 0 AS inserted
   `;
   const row = Array.isArray(result) ? result[0] : null;
   return {
@@ -379,4 +419,94 @@ export const persistScheduledFinding = async ({ taskId, userEmail, scanType, fin
     dedupeKey,
     record: row || null,
   };
+};
+
+const normalizeScheduledFindingRecord = (record) => {
+  const payload = record.findingPayload || record.finding_payload || {};
+  const triageStatus = record.triageStatus || record.triage_status || payload.status || 'new';
+  const firstSeenAt = record.firstSeenAt || record.first_seen_at || payload.firstSeen || new Date().toISOString();
+  const lastSeenAt = record.lastSeenAt || record.last_seen_at || payload.lastSeen || firstSeenAt;
+  const hitCount = Number(record.hitCount || record.hit_count || 1);
+
+  return {
+    id: record.id,
+    taskId: record.taskId || record.task_id,
+    userEmail: record.userEmail || record.user_email,
+    scanType: record.scanType || record.scan_type,
+    dedupeKey: record.dedupeKey || record.dedupe_key,
+    triageStatus,
+    firstSeenAt,
+    lastSeenAt,
+    hitCount,
+    finding: {
+      ...payload,
+      id: record.id,
+      status: triageStatus,
+      firstSeen: payload.firstSeen || firstSeenAt,
+      lastSeen: payload.lastSeen || lastSeenAt,
+      hitCount,
+    },
+  };
+};
+
+export const listScheduledFindings = async ({ userEmail, scanType, taskId = '', limit = 200 } = {}) => {
+  if (!userEmail) return [];
+
+  if (!hasDatabase()) {
+    const findings = await readJsonFile(FINDINGS_FILE, []);
+    return findings
+      .filter((record) => record.userEmail === userEmail)
+      .filter((record) => !scanType || record.scanType === scanType)
+      .filter((record) => !taskId || record.taskId === taskId)
+      .sort((left, right) => new Date(right.lastSeenAt || 0).getTime() - new Date(left.lastSeenAt || 0).getTime())
+      .slice(0, limit)
+      .map(normalizeScheduledFindingRecord);
+  }
+
+  await ensureScheduledScanTables();
+  const rows = await sql`
+    SELECT id, task_id, user_email, scan_type, dedupe_key, finding_payload, triage_status, first_seen_at, last_seen_at, hit_count
+    FROM scheduled_scan_findings
+    WHERE user_email = ${userEmail}
+      AND (${scanType || null}::TEXT IS NULL OR scan_type = ${scanType || null})
+      AND (${taskId || null}::TEXT IS NULL OR task_id = ${taskId || null})
+    ORDER BY last_seen_at DESC
+    LIMIT ${Math.max(1, Math.min(limit, 500))}
+  `;
+
+  return rows.map(normalizeScheduledFindingRecord);
+};
+
+export const updateScheduledFindingStatus = async ({ findingId, userEmail, status }) => {
+  const nextStatus = typeof status === 'string' ? status.trim() : '';
+  if (!findingId || !userEmail || !nextStatus) return null;
+
+  if (!hasDatabase()) {
+    const findings = await readJsonFile(FINDINGS_FILE, []);
+    const targetIndex = findings.findIndex((record) => record.id === findingId && record.userEmail === userEmail);
+    if (targetIndex < 0) return null;
+
+    findings[targetIndex] = {
+      ...findings[targetIndex],
+      triageStatus: nextStatus,
+      findingPayload: {
+        ...(findings[targetIndex].findingPayload || {}),
+        status: nextStatus,
+      },
+    };
+    await writeJsonFile(FINDINGS_FILE, findings);
+    return normalizeScheduledFindingRecord(findings[targetIndex]);
+  }
+
+  await ensureScheduledScanTables();
+  const result = await sql`
+    UPDATE scheduled_scan_findings
+    SET triage_status = ${nextStatus},
+        finding_payload = jsonb_set(finding_payload, '{status}', to_jsonb(${nextStatus}::TEXT), true)
+    WHERE id = ${findingId} AND user_email = ${userEmail}
+    RETURNING id, task_id, user_email, scan_type, dedupe_key, finding_payload, triage_status, first_seen_at, last_seen_at, hit_count
+  `;
+
+  const row = Array.isArray(result) ? result[0] : null;
+  return row ? normalizeScheduledFindingRecord(row) : null;
 };

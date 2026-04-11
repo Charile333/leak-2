@@ -16,6 +16,18 @@ export interface MonitorTask {
   updatedAt?: string;
 }
 
+export interface MonitorRun {
+  id: string;
+  taskId: string;
+  userEmail: string;
+  scanType: MonitorTaskType;
+  status: 'success' | 'failed';
+  findingsCount: number;
+  errorMessage: string | null;
+  startedAt: string;
+  finishedAt: string | null;
+}
+
 export interface CveIntelPreviewItem {
   cveId: string;
   title: string;
@@ -88,6 +100,11 @@ export const monitorService = {
     }
 
     return payload.task;
+  },
+
+  async getRuns(limit = 20): Promise<MonitorRun[]> {
+    const payload = await requestJson<{ runs?: MonitorRun[] }>(`/api/scheduled-scans/runs?limit=${encodeURIComponent(String(limit))}`);
+    return Array.isArray(payload.runs) ? payload.runs : [];
   },
 
   async getWebhookSnapshot(channel: WebhookChannel = 'leak_monitor'): Promise<{ config: WebhookConfig | null; configs?: Partial<Record<WebhookChannel, WebhookConfig | null>>; logs: WebhookDeliveryLog[] }> {

@@ -1,6 +1,7 @@
 import { evaluateRepositoryAssociation } from '../_lib/leak-rules.js';
 import { applyCors, readJsonBody, sendJson } from '../_lib/http.js';
 import { getGitHubToken, getGiteeAccessToken } from '../_lib/runtime-config.js';
+import { ensureDefaultScheduledScanTasks, persistScheduledFinding } from '../_lib/scheduled-scans.js';
 
 const normalizeAssets = (assets = [], query = '') =>
   Array.from(
@@ -34,6 +35,63 @@ const buildRepositorySearchTerms = (asset) => {
     .forEach((part) => terms.add(part));
 
   return Array.from(terms).filter(Boolean).slice(0, 4);
+};
+
+const getUserEmail = (req) =>
+  typeof req.headers['x-user-email'] === 'string' ? req.headers['x-user-email'].trim().toLowerCase() : '';
+
+const persistFindingsForUser = async (findings, userEmail) => {
+  if (!userEmail) return findings;
+
+  const tasks = await ensureDefaultScheduledScanTasks(userEmail);
+  const task = tasks.find((item) => item.scanType === 'code_leak');
+  if (!task) return findings;
+
+  const persisted = await Promise.all(
+    findings.map((finding) =>
+      persistScheduledFinding({
+        taskId: task.id,
+        userEmail,
+        scanType: 'code_leak',
+        finding,
+      })
+    )
+  );
+
+  return findings.map((finding, index) => {
+    const record = persisted[index]?.record;
+    const firstSeen = record?.firstSeenAt || record?.first_seen_at || finding.firstSeen;
+    const lastSeen = record?.lastSeenAt || record?.last_seen_at || finding.lastSeen;
+    const status = record?.triageStatus || record?.triage_status || finding.status;
+    const hitCount = Number(record?.hitCount || record?.hit_count || 1);
+
+    return {
+      ...finding,
+      id: record?.id || finding.id,
+      status,
+      firstSeen,
+      lastSeen,
+      hitCount,
+    };
+  });
+};
+
+export const runCodeLeakSearch = async ({ assets = [], query = '', userEmail = '' } = {}) => {
+  const normalizedAssets = normalizeAssets(Array.isArray(assets) ? assets : [], typeof query === 'string' ? query : '');
+  if (normalizedAssets.length === 0) {
+    return { findings: [], usedTerms: [] };
+  }
+
+  const [githubFindings, giteeFindings] = await Promise.all([
+    searchGitHubRepositories(normalizedAssets),
+    searchGiteeRepositories(normalizedAssets),
+  ]);
+
+  const findings = await persistFindingsForUser([...githubFindings, ...giteeFindings], userEmail);
+  return {
+    findings,
+    usedTerms: normalizedAssets.map((asset) => asset.value),
+  };
 };
 
 const searchGitHubRepositories = async (assets) => {
@@ -174,21 +232,18 @@ export default async function handler(req, res) {
 
   try {
     const body = await readJsonBody(req);
-    const assets = normalizeAssets(Array.isArray(body.assets) ? body.assets : [], typeof body.query === 'string' ? body.query : '');
-    if (assets.length === 0) {
-      return sendJson(res, 200, { success: true, findings: [], meta: { usedTerms: [] } });
-    }
-
-    const [githubFindings, giteeFindings] = await Promise.all([
-      searchGitHubRepositories(assets),
-      searchGiteeRepositories(assets),
-    ]);
+    const userEmail = getUserEmail(req);
+    const { findings: responseFindings, usedTerms } = await runCodeLeakSearch({
+      assets: Array.isArray(body.assets) ? body.assets : [],
+      query: typeof body.query === 'string' ? body.query : '',
+      userEmail,
+    });
 
     return sendJson(res, 200, {
       success: true,
-      findings: [...githubFindings, ...giteeFindings],
+      findings: responseFindings,
       meta: {
-        usedTerms: assets.map((asset) => asset.value),
+        usedTerms,
         githubCodeEnabled: Boolean(getGitHubToken()),
       },
     });

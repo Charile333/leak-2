@@ -41,6 +41,14 @@
       "destination": "/api/scheduled-scans/tasks.js"
     },
     {
+      "source": "/api/scheduled-scans/runs",
+      "destination": "/api/scheduled-scans/runs.js"
+    },
+    {
+      "source": "/api/scheduled-scans/run",
+      "destination": "/api/scheduled-scans/run.js"
+    },
+    {
       "source": "/api/scheduled-scans/tasks/(.*)",
       "destination": "/api/scheduled-scans/tasks.js?id=$1"
     },
@@ -69,5 +77,11 @@
     "api/**/*.js": {
       "runtime": "@vercel/node@5.5.16"
     }
-  }
+  },
+  "crons": [
+    {
+      "path": "/api/scheduled-scans/run",
+      "schedule": "*/15 * * * *"
+    }
+  ]
 }

@@ -4,7 +4,7 @@ import { cn } from '../lib/utils';
 import { codeLeakService, type CodeLeakAsset, type CodeLeakAssetType } from '../services/codeLeakService';
 import { cveIntelAssetService, type CveIntelAsset, type CveIntelAssetType } from '../services/cveIntelAssetService';
 import { fileLeakService, type FileLeakAsset, type FileLeakAssetType } from '../services/fileLeakService';
-import { monitorService, type CveIntelPreviewItem, type MonitorTask, type MonitorTaskType } from '../services/monitorService';
+import { monitorService, type CveIntelPreviewItem, type MonitorRun, type MonitorTask, type MonitorTaskType } from '../services/monitorService';
 import { webhookService, type WebhookChannel, type WebhookConfig, type WebhookDeliveryLog } from '../services/webhookService';
 
 type UnifiedAsset = {
@@ -107,7 +107,7 @@ type MonitoringRow = {
   id: string;
   name: string;
   scope: string;
-  interval: number;
+  interval: string;
   nextRun: string;
   lastRun: string;
   enabled: boolean;
@@ -302,7 +302,7 @@ const RunsPanel = memo(function RunsPanel({ loading, taskMap, isSavingTask, moni
       ) : (
         <>
       <div className="grid gap-4 border-b border-white/5 bg-black/10 px-6 py-5 lg:grid-cols-3">{monitorTaskTypes.map((scanType) => { const task = taskMap[scanType]; return <div key={scanType} className="rounded-2xl border border-white/8 bg-[#101217] px-4 py-4"><div className="flex items-center justify-between gap-3"><p className="text-sm font-semibold text-white">{taskLabelMap[scanType]}</p><button type="button" onClick={() => onSaveTask(scanType, { enabled: !(task?.enabled ?? false) })} disabled={!task || isSavingTask === scanType} className={cn('rounded-full border px-3 py-1 text-[11px] font-bold', getTaskTone(Boolean(task?.enabled)))}>{task?.enabled ? 'Running' : 'Paused'}</button></div><div className="mt-3 flex items-center gap-2"><select value={task?.intervalMinutes ?? 60} onChange={(event) => onSaveTask(scanType, { intervalMinutes: Number(event.target.value) })} className="min-w-0 flex-1 rounded-xl border border-white/8 bg-white/[0.03] px-3 py-2 text-sm text-white outline-none">{intervalOptions.map((option) => <option key={option} value={option} className="bg-[#11141c]">{'Every ' + option + ' min'}</option>)}</select></div><p className="mt-3 text-xs text-white/42">Last run: {formatTime(task?.lastRunAt)}</p><p className="mt-1 text-xs text-white/42">Next run: {formatRelative(task?.nextRunAt)}</p></div>; })}</div>
-      <div className="overflow-x-auto"><table className="w-full text-left"><thead><tr className="bg-black/20 text-[10px] font-black uppercase tracking-[0.2em] text-gray-500"><th className="px-6 py-4">Name</th><th className="px-6 py-4">Scope</th><th className="px-6 py-4">Frequency / Response</th><th className="px-6 py-4">Time</th><th className="px-6 py-4">Status</th><th className="px-6 py-4">Notes</th></tr></thead><tbody className="divide-y divide-white/5">{monitoringRows.map((row) => <tr key={row.id} className="text-sm transition-colors hover:bg-white/[0.02]"><td className="px-6 py-4 text-gray-300">{row.name}</td><td className="px-6 py-4 text-gray-400">{row.scope}</td><td className="px-6 py-4 font-mono text-xs text-gray-400">{row.name.startsWith('????????????') ? row.interval || '--' : 'Every ' + row.interval + ' min'}</td><td className="px-6 py-4 text-xs text-gray-500">{row.nextRun}</td><td className="px-6 py-4"><span className={cn('rounded-full border px-4 py-0.5 text-[10px] font-black', getTaskTone(row.enabled))}>{row.enabled ? 'Healthy' : 'Attention'}</span></td><td className="px-6 py-4 text-xs text-gray-500">{row.lastRun}</td></tr>)}{cvePreview.slice(0, 3).map((item) => <tr key={item.cveId} className="text-sm transition-colors hover:bg-white/[0.02]"><td className="px-6 py-4 text-gray-300">CVE Preview</td><td className="px-6 py-4 text-gray-400">{item.cveId}</td><td className="px-6 py-4 font-mono text-xs text-gray-400">{typeof item.cvssScore === 'number' ? 'CVSS ' + item.cvssScore.toFixed(1) : '--'}</td><td className="px-6 py-4 text-xs text-gray-500">{item.pushLevel}</td><td className="px-6 py-4"><span className="rounded-full border border-rose-400/30 bg-rose-400/10 px-4 py-0.5 text-[10px] font-black text-rose-200">{item.pushRecommended ? 'Recommended' : 'Observe'}</span></td><td className="max-w-[360px] px-6 py-4 text-xs text-gray-400"><div className="flex items-center gap-2"><span className="truncate">{item.title}</span>{item.references[0] ? <a href={item.references[0]} target="_blank" rel="noreferrer" className="text-accent hover:text-accent/80"><ExternalLink className="h-3.5 w-3.5" /></a> : null}</div></td></tr>)}</tbody></table></div>
+      <div className="overflow-x-auto"><table className="w-full text-left"><thead><tr className="bg-black/20 text-[10px] font-black uppercase tracking-[0.2em] text-gray-500"><th className="px-6 py-4">Name</th><th className="px-6 py-4">Scope</th><th className="px-6 py-4">Frequency / Response</th><th className="px-6 py-4">Time</th><th className="px-6 py-4">Status</th><th className="px-6 py-4">Notes</th></tr></thead><tbody className="divide-y divide-white/5">{monitoringRows.map((row) => <tr key={row.id} className="text-sm transition-colors hover:bg-white/[0.02]"><td className="px-6 py-4 text-gray-300">{row.name}</td><td className="px-6 py-4 text-gray-400">{row.scope}</td><td className="px-6 py-4 font-mono text-xs text-gray-400">{row.interval || '--'}</td><td className="px-6 py-4 text-xs text-gray-500">{row.nextRun}</td><td className="px-6 py-4"><span className={cn('rounded-full border px-4 py-0.5 text-[10px] font-black', getTaskTone(row.enabled))}>{row.enabled ? 'Healthy' : 'Attention'}</span></td><td className="px-6 py-4 text-xs text-gray-500">{row.lastRun}</td></tr>)}{cvePreview.slice(0, 3).map((item) => <tr key={item.cveId} className="text-sm transition-colors hover:bg-white/[0.02]"><td className="px-6 py-4 text-gray-300">CVE Preview</td><td className="px-6 py-4 text-gray-400">{item.cveId}</td><td className="px-6 py-4 font-mono text-xs text-gray-400">{typeof item.cvssScore === 'number' ? 'CVSS ' + item.cvssScore.toFixed(1) : '--'}</td><td className="px-6 py-4 text-xs text-gray-500">{item.pushLevel}</td><td className="px-6 py-4"><span className="rounded-full border border-rose-400/30 bg-rose-400/10 px-4 py-0.5 text-[10px] font-black text-rose-200">{item.pushRecommended ? 'Recommended' : 'Observe'}</span></td><td className="max-w-[360px] px-6 py-4 text-xs text-gray-400"><div className="flex items-center gap-2"><span className="truncate">{item.title}</span>{item.references[0] ? <a href={item.references[0]} target="_blank" rel="noreferrer" className="text-accent hover:text-accent/80"><ExternalLink className="h-3.5 w-3.5" /></a> : null}</div></td></tr>)}</tbody></table></div>
         </>
       )}
     </div>
@@ -314,6 +314,7 @@ const DomainMonitor = () => {
   const [cveAssets, setCveAssets] = useState<CveIntelAsset[]>([]);
   const [fileAssets, setFileAssets] = useState<FileLeakAsset[]>([]);
   const [tasks, setTasks] = useState<MonitorTask[]>([]);
+  const [runs, setRuns] = useState<MonitorRun[]>([]);
   const [cvePreview, setCvePreview] = useState<CveIntelPreviewItem[]>([]);
   const [webhookConfigs, setWebhookConfigs] = useState<Record<WebhookChannel, WebhookConfig>>({
     leak_monitor: emptyWebhookConfig('leak_monitor'),
@@ -395,12 +396,14 @@ const DomainMonitor = () => {
     }
 
     try {
-      const [nextTasks, nextCvePreview] = await Promise.all([
+      const [nextTasks, nextRuns, nextCvePreview] = await Promise.all([
         monitorService.getTasks(),
+        monitorService.getRuns(12),
         monitorService.getCvePreview().catch(() => []),
       ]);
 
       setTasks(nextTasks);
+      setRuns(nextRuns);
       setCvePreview(nextCvePreview);
     } catch (loadError) {
       setError((current) => current || (loadError instanceof Error ? loadError.message : '???????????????'));
@@ -493,25 +496,35 @@ const DomainMonitor = () => {
           scanType === 'cve_intel'
             ? `${cveAssets.length} 个匹配对象`
             : `${scanType === 'code_leak' ? codeAssets.length : fileAssets.length} 个监控对象`,
-        interval: task?.intervalMinutes ?? 60,
+        interval: `Every ${task?.intervalMinutes ?? 60} min`,
         nextRun: formatRelative(task?.nextRunAt),
         lastRun: formatTime(task?.lastRunAt),
         enabled: task?.enabled ?? false,
       };
     });
 
+    const runRows = runs.slice(0, 6).map((run) => ({
+      id: run.id,
+      name: `Run / ${taskLabelMap[run.scanType]}`,
+      scope: run.taskId,
+      interval: run.status === 'success' ? `${run.findingsCount} findings` : 'Execution failed',
+      nextRun: formatTime(run.finishedAt || run.startedAt),
+      lastRun: run.status === 'success' ? 'Scheduled run completed' : run.errorMessage || 'Scheduled run failed',
+      enabled: run.status === 'success',
+    }));
+
     const deliveryRows = webhookLogs.slice(0, 4).map((log) => ({
       id: log.id,
       name: `推送记录 / ${channelLabelMap[(log.channel as WebhookChannel) || 'leak_monitor']}`,
       scope: log.eventName,
-      interval: log.responseStatus ?? 0,
+      interval: `HTTP ${log.responseStatus ?? '--'}`,
       nextRun: formatTime(log.deliveredAt),
       lastRun: log.status === 'success' ? '推送成功' : log.errorMessage || '推送失败',
       enabled: log.status === 'success',
     }));
 
-    return [...taskRows, ...deliveryRows];
-  }, [taskMap, codeAssets.length, cveAssets.length, fileAssets.length, webhookLogs]);
+    return [...taskRows, ...runRows, ...deliveryRows];
+  }, [taskMap, codeAssets.length, cveAssets.length, fileAssets.length, runs, webhookLogs]);
 
   const saveWebhookChannel = useCallback(async (channel: WebhookChannel) => {
     const config = webhookConfigs[channel];

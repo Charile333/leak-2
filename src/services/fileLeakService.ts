@@ -34,6 +34,7 @@ export interface FileLeakFinding {
   sourceSite: string;
   firstSeen: string;
   lastSeen: string;
+  hitCount?: number;
   confidence: number;
   matchedRules: string[];
   notes: string[];
@@ -48,38 +49,12 @@ export interface FileLeakSearchFilters {
   sensitivity?: FileLeakSensitivity | 'all';
 }
 
-const STATUS_STORAGE_KEY = 'file-leak-statuses';
-
 export class FileLeakSearchError extends Error {
   constructor(message: string) {
     super(message);
     this.name = 'FileLeakSearchError';
   }
 }
-
-const readStatusOverrides = () => {
-  if (typeof window === 'undefined') return {} as Record<string, FileLeakStatus>;
-
-  try {
-    const raw = window.localStorage.getItem(STATUS_STORAGE_KEY);
-    return raw ? (JSON.parse(raw) as Record<string, FileLeakStatus>) : {};
-  } catch {
-    return {};
-  }
-};
-
-const writeStatusOverrides = (statuses: Record<string, FileLeakStatus>) => {
-  if (typeof window === 'undefined') return;
-  window.localStorage.setItem(STATUS_STORAGE_KEY, JSON.stringify(statuses));
-};
-
-const applyStatuses = (findings: FileLeakFinding[]) => {
-  const statuses = readStatusOverrides();
-  return findings.map((finding) => ({
-    ...finding,
-    status: statuses[finding.id] || finding.status,
-  }));
-};
 
 const includesText = (haystack: string, needle: string) =>
   haystack.toLowerCase().includes(needle.toLowerCase());
@@ -199,6 +174,13 @@ const fetchRemoteFindings = async (assets: FileLeakAsset[], query?: string) => {
   return findings.map((finding) => normalizeRemoteFinding(finding, assetMap, assets));
 };
 
+const fetchPersistedFindings = async (assets: FileLeakAsset[]) => {
+  const payload = await requestJson<{ findings?: Array<Partial<FileLeakFinding>> }>('/api/file-leak/findings');
+  const findings = Array.isArray(payload.findings) ? payload.findings : [];
+  const assetMap = buildAssetMap(assets);
+  return findings.map((finding) => normalizeRemoteFinding(finding, assetMap, assets));
+};
+
 export const fileLeakService = {
   async getAssets(): Promise<FileLeakAsset[]> {
     return fetchAssets();
@@ -208,7 +190,16 @@ export const fileLeakService = {
     const assets = assetsOverride ?? (await fetchAssets());
 
     try {
-      return applyStatuses(await fetchRemoteFindings(assets, query));
+      if (!query?.trim()) {
+        const persistedFindings = await fetchPersistedFindings(assets);
+        if (persistedFindings.length > 0) {
+          return persistedFindings;
+        }
+
+        return await fetchRemoteFindings(assets, query);
+      }
+
+      return await fetchRemoteFindings(assets, query);
     } catch (error) {
       console.error('[fileLeakService] Remote file leak search failed:', error);
       throw new FileLeakSearchError('Remote file leak search failed. Please check the API configuration and try again.');
@@ -248,7 +239,7 @@ export const fileLeakService = {
     let findings: FileLeakFinding[] = [];
 
     try {
-      findings = applyStatuses(await fetchRemoteFindings(assets, filters.query));
+      findings = await (filters.query?.trim() ? fetchRemoteFindings(assets, filters.query) : fetchPersistedFindings(assets));
     } catch (error) {
       console.error('[fileLeakService] Remote file leak search failed:', error);
       throw new FileLeakSearchError('Unable to load file leak findings from the live intelligence source. Please check the backend or API configuration.');
@@ -277,8 +268,9 @@ export const fileLeakService = {
   },
 
   async updateFindingStatus(id: string, status: FileLeakStatus): Promise<void> {
-    const statuses = readStatusOverrides();
-    statuses[id] = status;
-    writeStatusOverrides(statuses);
+    await requestJson<{ finding?: Partial<FileLeakFinding> }>('/api/file-leak/findings', {
+      method: 'PATCH',
+      body: JSON.stringify({ id, status }),
+    });
   },
 };

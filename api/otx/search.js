@@ -403,28 +403,25 @@ const buildIndicatorSummary = (type, query, generalPayload, extraSections = {}) 
   return data;
 };
 
-const handleCveFeedRequest = async (req, res) => {
-  const limit = Math.max(1, Math.min(50, Number(req.query.limit) || 12));
-  const windowKey = String(req.query.window || '7d').trim().toLowerCase();
-  const noCache = String(req.query.noCache || '').trim().toLowerCase() === '1';
-  const userEmail = getCveIntelUserEmail(req);
-  const cacheKey = `cve-feed:${limit}:${windowKey}:${userEmail || 'anon'}`;
+export const getCveFeedSnapshot = async ({ limit = 12, windowKey = '7d', userEmail = '', noCache = false } = {}) => {
+  const normalizedLimit = Math.max(1, Math.min(50, Number(limit) || 12));
+  const normalizedWindowKey = String(windowKey || '7d').trim().toLowerCase();
+  const cacheKey = `cve-feed:${normalizedLimit}:${normalizedWindowKey}:${userEmail || 'anon'}`;
 
   if (!noCache) {
     const cached = readCachedValue(cacheKey);
     if (cached) {
-      return sendJson(res, 200, {
-        success: true,
+      return {
         ...cached,
         cached: true,
-      });
+      };
     }
   }
 
   const activity = await fetchJson(`${OTX_API_BASE}/pulses/activity`, { timeoutMs: 20000 });
-  const allItems = buildCveFeedItems(activity?.results || [], windowKey);
+  const allItems = buildCveFeedItems(activity?.results || [], normalizedWindowKey);
   const assets = await listCveIntelAssetsSafely(userEmail);
-  const filteredItems = filterItemsByAssets(allItems, assets).slice(0, limit);
+  const filteredItems = filterItemsByAssets(allItems, assets).slice(0, normalizedLimit);
 
   const payload = {
     items: filteredItems,
@@ -433,16 +430,29 @@ const handleCveFeedRequest = async (req, res) => {
       matchedAssetCount: assets.length,
       recommendedCount: filteredItems.filter((item) => item.pushRecommended).length,
       source: 'otx-pulses',
-      window: windowKey,
+      window: normalizedWindowKey,
     },
   };
 
   writeCachedValue(cacheKey, payload);
 
+  return {
+    ...payload,
+    cached: false,
+  };
+};
+
+const handleCveFeedRequest = async (req, res) => {
+  const limit = Math.max(1, Math.min(50, Number(req.query.limit) || 12));
+  const windowKey = String(req.query.window || '7d').trim().toLowerCase();
+  const noCache = String(req.query.noCache || '').trim().toLowerCase() === '1';
+  const userEmail = getCveIntelUserEmail(req);
+
+  const payload = await getCveFeedSnapshot({ limit, windowKey, userEmail, noCache });
+
   return sendJson(res, 200, {
     success: true,
     ...payload,
-    cached: false,
   });
 };
 
