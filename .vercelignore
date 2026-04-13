@@ -5,14 +5,3 @@ dist
 .trae
 .log
 .figma
-/api
-/workers
-/docs
-/api-server.js
-/dev-server.js
-/server.js
-/simple-server.js
-/proxy.js
-/simple-proxy.js
-/Dockerfile.backend
-/docker-compose.yml
