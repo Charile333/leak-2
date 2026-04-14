@@ -57,6 +57,10 @@ type CveIntelFeed = {
   items?: CveIntelItem[];
 };
 
+type ActivityPayload = {
+  results?: ActivityPulse[];
+};
+
 const REFRESH_INTERVAL_MS = 60_000;
 
 const formatAbsoluteTime = (value?: string) => {
@@ -157,7 +161,7 @@ const Activity = () => {
 
       const activityTask = otxApi
         .getActivity()
-        .then((activityPayload) => {
+        .then((activityPayload: ActivityPayload) => {
           const results = Array.isArray(activityPayload?.results) ? activityPayload.results : [];
           if (!cancelled) {
             startTransition(() => {
@@ -179,7 +183,7 @@ const Activity = () => {
 
       const cveTask = otxApi
         .getLatestCveIntel({ limit: 6, window: activeWindow })
-        .then((payload) => {
+        .then((payload: CveIntelFeed) => {
           if (!cancelled) {
             startTransition(() => {
               setCveFeed(payload || {});

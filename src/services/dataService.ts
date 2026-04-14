@@ -40,6 +40,8 @@ export interface DomainSearchSummary {
   subdomains_count: number;
 }
 
+type LeakRadarResultItem = LeakRadarSearchResult['items'][number];
+
 // 解锁状态缓存，避免重复解锁
 // 使用sessionStorage持久化缓存，避免页面刷新后缓存丢失
 class UnlockCache {
@@ -182,9 +184,9 @@ export const dataService = {
       };
 
       const credentials: LeakedCredential[] = [
-        ...empRes.items.map(item => transformItem(item, 'Employee')),
-        ...custRes.items.map(item => transformItem(item, 'Customer')),
-        ...thirdRes.items.map(item => transformItem(item, 'Third-Party')),
+        ...empRes.items.map((item: LeakRadarResultItem) => transformItem(item, 'Employee')),
+        ...custRes.items.map((item: LeakRadarResultItem) => transformItem(item, 'Customer')),
+        ...thirdRes.items.map((item: LeakRadarResultItem) => transformItem(item, 'Third-Party')),
       ];
 
       const summary: DomainSearchSummary = {
@@ -398,7 +400,7 @@ export const dataService = {
         'third_parties': 'Third-Party'
       } as const;
 
-      return res.items.map(item => transformItem(item, typeMap[category as keyof typeof typeMap]));
+      return res.items.map((item: LeakRadarResultItem) => transformItem(item, typeMap[category as keyof typeof typeMap]));
     } catch (error) {
       console.error(`[dataService] Error searching category ${category}:`, error);
       return [];
