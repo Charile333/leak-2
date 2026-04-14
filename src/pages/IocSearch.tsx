@@ -224,6 +224,24 @@ const getDetectionRatio = (records: any[]) => {
   return `${matched} / ${entries.length}`;
 };
 
+const preferLoadedCount = (
+  loadedCount: number,
+  state: { status?: string },
+  ...fallbackCounts: Array<number | undefined>
+) => {
+  if ((state.status === 'ready' || state.status === 'success') && loadedCount > 0) {
+    return loadedCount;
+  }
+
+  for (const count of fallbackCounts) {
+    if (typeof count === 'number' && !Number.isNaN(count)) {
+      return count;
+    }
+  }
+
+  return loadedCount;
+};
+
 const buildExternalResources = (type: SearchType, data: any) => {
   const resources: Array<{ label: string; href: string }> = [];
   const indicator = toDisplayText(data?.indicator, '');
@@ -659,28 +677,30 @@ const IocSearch = () => {
   const counts = useMemo(
     () => ({
       pulses: typeof results?.pulse_info?.count === 'number' ? results.pulse_info.count : pulseEntries.length,
-      passiveDns:
-        typeof results?.derived?.passive_dns_count === 'number'
-          ? results.derived.passive_dns_count
-          : typeof results?.derived?.dns_resolutions === 'number'
-            ? results.derived.dns_resolutions
-          : passiveDnsEntries.length,
-      urls:
-        typeof results?.derived?.url_count === 'number'
-          ? results.derived.url_count
-          : Array.isArray(results?.url_list)
-            ? results.url_list.length
-            : urlEntries.length,
-      malware:
-        typeof results?.derived?.malware_count === 'number'
-          ? results.derived.malware_count
-          : typeof results?.malware?.count === 'number'
-          ? results.malware.count
-            : malwareEntries.length,
+      passiveDns: preferLoadedCount(
+        passiveDnsEntries.length,
+        passiveDnsState,
+        results?.derived?.passive_dns_count,
+        results?.derived?.dns_resolutions,
+      ),
+      urls: preferLoadedCount(
+        urlEntries.length,
+        urlListState,
+        results?.derived?.url_count,
+        Array.isArray(results?.url_list) ? results.url_list.length : undefined,
+      ),
+      malware: preferLoadedCount(
+        malwareEntries.length,
+        malwareState,
+        results?.derived?.malware_count,
+        typeof results?.malware?.count === 'number' ? results.malware.count : undefined,
+      ),
     }),
     [
       malwareEntries.length,
+      malwareState,
       passiveDnsEntries.length,
+      passiveDnsState,
       pulseEntries.length,
       results?.derived?.dns_resolutions,
       results?.derived?.passive_dns_count,
@@ -689,6 +709,7 @@ const IocSearch = () => {
       results?.malware,
       results?.pulse_info?.count,
       results?.url_list,
+      urlListState,
       urlEntries.length,
     ]
   );
