@@ -1,6 +1,8 @@
 import axios from 'axios';
 
-const DNS_API_BASE_URL = '/api'; 
+import { buildApiUrl } from '../services/apiBase';
+
+const DNS_API_BASE_URL = buildApiUrl('/api');
 
 const dnsAxios = axios.create({
   baseURL: DNS_API_BASE_URL,

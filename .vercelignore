@@ -5,3 +5,11 @@ dist
 .trae
 .log
 .figma
+.data
+api
+docs
+tmp
+tmp-web-access-inspect
+workers
+process.exit(0)
+workbench.activityBar.orientation

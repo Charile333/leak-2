@@ -1,7 +1,7 @@
 import { createContext, useContext, useState } from 'react';
 import type { ReactNode } from 'react';
 
-import { buildApiUrl } from '../services/apiBase';
+import { buildApiUrl, getFetchErrorMessage } from '../services/apiBase';
 
 interface AuthContextType {
   isAuthenticated: boolean;
@@ -40,7 +40,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const loginWithCredentials = async (
     email: string,
-    password?: string
+    password?: string,
   ): Promise<{ success: boolean; message?: string }> => {
     try {
       const response = await fetch(buildApiUrl('/api/auth/login'), {
@@ -56,7 +56,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!response.ok) {
         return {
           success: false,
-          message: getErrorMessage(data, '登录失败，请检查后端接口返回。'),
+          message: getErrorMessage(data, '登录失败，请检查账号或密码。'),
         };
       }
 
@@ -74,7 +74,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch (error) {
       return {
         success: false,
-        message: error instanceof Error ? error.message : '登录失败，请稍后重试。',
+        message: getFetchErrorMessage(error, '登录请求发送失败，请检查后端服务与前端环境变量配置。'),
       };
     }
   };
@@ -90,7 +90,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!response.ok) {
         return {
           success: false,
-          message: getErrorMessage(data, '登录校验失败，请检查后端接口返回。'),
+          message: getErrorMessage(data, '登录验证失败，请重新获取登录链接。'),
         };
       }
 
@@ -103,12 +103,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       return {
         success: true,
-        message: getErrorMessage(data, '登录校验成功。'),
+        message: getErrorMessage(data, '登录验证成功。'),
       };
     } catch (error) {
       return {
         success: false,
-        message: error instanceof Error ? error.message : '登录校验失败，请稍后重试。',
+        message: getFetchErrorMessage(error, '登录验证请求发送失败，请检查后端服务与前端环境变量配置。'),
       };
     }
   };
