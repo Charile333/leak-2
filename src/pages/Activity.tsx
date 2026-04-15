@@ -411,7 +411,7 @@ const Activity = () => {
           initial={{ opacity: 0, y: 18 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.38, ease: [0.22, 1, 0.36, 1], delay: 0.05 }}
-          className="overflow-hidden rounded-[28px] border border-white/8 bg-[linear-gradient(180deg,rgba(14,19,28,0.96),rgba(8,12,18,0.96))]"
+          className="overflow-hidden rounded-[28px] border border-white/8 bg-[linear-gradient(180deg,rgba(14,19,28,0.96),rgba(8,12,18,0.96))] xl:sticky xl:top-6 xl:flex xl:max-h-[calc(100vh-2.5rem)] xl:flex-col"
         >
           <div className="border-b border-white/8 px-6 py-5 sm:px-7">
             <h2 className="text-xl font-semibold tracking-[-0.05em] text-white">活动流</h2>
@@ -420,7 +420,7 @@ const Activity = () => {
             </p>
           </div>
 
-          <div className="px-6 py-6 sm:px-7">
+          <div className="px-6 py-6 sm:px-7 xl:min-h-0 xl:flex-1 xl:overflow-y-auto">
             {loading ? (
               <div className="flex min-h-[280px] items-center justify-center rounded-[24px] border border-dashed border-white/10 bg-white/[0.02]">
                 <div className="flex items-center gap-3 text-sm text-white/58">
