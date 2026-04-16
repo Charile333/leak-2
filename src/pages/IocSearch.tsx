@@ -17,6 +17,13 @@ type SearchConfig = {
   placeholder: string;
 };
 
+type CveReferenceLink = {
+  href: string;
+  label: string;
+  source: string;
+  hostname: string;
+};
+
 const SEARCH_TYPES: Record<SearchType, SearchConfig> = {
   ip: { label: 'IP', icon: Radar, placeholder: '输入 IPv4 或 IPv6 地址' },
   domain: { label: '域名', icon: Globe, placeholder: '输入域名，例如 example.com' },
@@ -159,6 +166,73 @@ const normalizeSourceLabel = (value: string) => {
   if (normalized === 'Aliyun AVD') return '阿里云漏洞库';
   if (normalized === 'KEV') return 'CISA KEV';
   return normalized;
+};
+
+const getHostnameLabel = (hostname: string) =>
+  hostname
+    .replace(/^www\./i, '')
+    .split('.')
+    .filter(Boolean)
+    .slice(0, 2)
+    .join('.');
+
+const inferCveReferenceLink = (href: string): CveReferenceLink | null => {
+  if (!isDisplayableValue(href)) return null;
+
+  try {
+    const url = new URL(String(href));
+    const hostname = url.hostname.toLowerCase();
+    const hostLabel = getHostnameLabel(hostname);
+
+    if (hostname.includes('avd.aliyun.com')) {
+      return { href: url.toString(), label: '阿里云漏洞库', source: 'Aliyun AVD', hostname: 'avd.aliyun.com' };
+    }
+
+    if (hostname.includes('nvd.nist.gov')) {
+      return { href: url.toString(), label: 'NVD', source: 'NVD', hostname: 'nvd.nist.gov' };
+    }
+
+    if (hostname.includes('cve.org') || hostname.includes('mitre.org')) {
+      return { href: url.toString(), label: 'CVE / MITRE', source: 'MITRE', hostname: hostLabel };
+    }
+
+    if (hostname.includes('cisa.gov')) {
+      return { href: url.toString(), label: 'CISA', source: 'CISA', hostname: hostLabel };
+    }
+
+    if (hostname.includes('github.com') || hostname.includes('githubusercontent.com')) {
+      return { href: url.toString(), label: 'GitHub', source: 'GitHub', hostname: hostLabel };
+    }
+
+    if (hostname.includes('apache.org')) {
+      return { href: url.toString(), label: 'Apache', source: 'Apache', hostname: hostLabel };
+    }
+
+    if (hostname.includes('microsoft.com')) {
+      return { href: url.toString(), label: 'Microsoft', source: 'Microsoft', hostname: hostLabel };
+    }
+
+    if (hostname.includes('oracle.com')) {
+      return { href: url.toString(), label: 'Oracle', source: 'Oracle', hostname: hostLabel };
+    }
+
+    if (hostname.includes('cisco.com')) {
+      return { href: url.toString(), label: 'Cisco', source: 'Cisco', hostname: hostLabel };
+    }
+
+    if (hostname.includes('redhat.com')) {
+      return { href: url.toString(), label: 'Red Hat', source: 'Red Hat', hostname: hostLabel };
+    }
+
+    return {
+      href: url.toString(),
+      label: hostLabel,
+      source: hostLabel,
+      hostname: hostLabel,
+    };
+  } catch {
+    return null;
+  }
 };
 
 const detectSearchType = (input: string): SearchType | null => {
@@ -763,27 +837,76 @@ const IocSearch = () => {
     () => (Array.isArray(results?.targeted_products) ? results.targeted_products : []),
     [results]
   );
-  const cveReferenceLinks = useMemo(() => {
-    const references = [
+  const cveReferenceLinks = useMemo<CveReferenceLink[]>(() => {
+    const entries = [
       ...(Array.isArray(results?.source_details?.nvd?.references) ? results.source_details.nvd.references : []),
       ...(results?.source_details?.aliyun?.sourceUrl ? [results.source_details.aliyun.sourceUrl] : []),
-    ].filter((value, index, array) => isDisplayableValue(value) && array.indexOf(value) === index);
-    return references.slice(0, 8);
+    ]
+      .map((href) => inferCveReferenceLink(String(href)))
+      .filter((entry): entry is CveReferenceLink => Boolean(entry));
+
+    const seen = new Set<string>();
+    return entries.filter((entry) => {
+      if (seen.has(entry.href)) return false;
+      seen.add(entry.href);
+      return true;
+    }).slice(0, 8);
   }, [results]);
+  const cveSourceRoles = useMemo(
+    () =>
+      [
+        cveSourceTags.includes('OTX')
+          ? {
+              key: 'otx',
+              label: 'OTX',
+              description: '提供活动情报、关联上下文，以及社区侧的利用线索。',
+            }
+          : null,
+        results?.source_details?.nvd
+          ? {
+              key: 'nvd',
+              label: 'NVD',
+              description: '提供 CVSS 细项、CWE、标准参考链接和受影响产品信息。',
+            }
+          : null,
+        results?.hasKev || cveSourceTags.includes('CISA KEV')
+          ? {
+              key: 'kev',
+              label: 'CISA KEV',
+              description: '标记该漏洞是否进入已知在野利用目录，用于提高处置优先级。',
+            }
+          : null,
+        cveEpss
+          ? {
+              key: 'epss',
+              label: 'EPSS',
+              description: '提供漏洞未来被利用的概率评分和风险分位。',
+            }
+          : null,
+        results?.source_details?.aliyun
+          ? {
+              key: 'aliyun',
+              label: '阿里云漏洞库',
+              description: '作为补充情报源，补齐标题、严重度和中文漏洞详情入口。',
+            }
+          : null,
+      ].filter(Boolean),
+    [cveEpss, cveSourceTags, results]
+  );
   const cveCvssRows = useMemo(
     () => [
-      { label: 'Base Score', value: formatScore(cveOverview?.cvssScore ?? results?.base_score) },
-      { label: 'Base Severity', value: toDisplayText(cveOverview?.severity ?? results?.severity) },
-      { label: 'Attack Vector', value: toDisplayText(cveOverview?.attackVector) },
-      { label: 'Attack Complexity', value: toDisplayText(cveOverview?.attackComplexity) },
-      { label: 'Privileges Required', value: toDisplayText(cveOverview?.privilegesRequired) },
-      { label: 'User Interaction', value: toDisplayText(cveOverview?.userInteraction) },
-      { label: 'Confidentiality Impact', value: toDisplayText(cveOverview?.confidentialityImpact) },
-      { label: 'Integrity Impact', value: toDisplayText(cveOverview?.integrityImpact) },
-      { label: 'Availability Impact', value: toDisplayText(cveOverview?.availabilityImpact) },
-      { label: 'Exploitability Score', value: formatScore(cveOverview?.exploitabilityScore) },
-      { label: 'Impact Score', value: formatScore(cveOverview?.impactScore) },
-      { label: 'Vector', value: toDisplayText(cveOverview?.vector ?? results?.vector) },
+      { label: '基础分数', value: formatScore(cveOverview?.cvssScore ?? results?.base_score) },
+      { label: '基础等级', value: toDisplayText(cveOverview?.severity ?? results?.severity) },
+      { label: '攻击向量', value: toDisplayText(cveOverview?.attackVector) },
+      { label: '攻击复杂度', value: toDisplayText(cveOverview?.attackComplexity) },
+      { label: '所需权限', value: toDisplayText(cveOverview?.privilegesRequired) },
+      { label: '用户交互', value: toDisplayText(cveOverview?.userInteraction) },
+      { label: '机密性影响', value: toDisplayText(cveOverview?.confidentialityImpact) },
+      { label: '完整性影响', value: toDisplayText(cveOverview?.integrityImpact) },
+      { label: '可用性影响', value: toDisplayText(cveOverview?.availabilityImpact) },
+      { label: '可利用性分数', value: formatScore(cveOverview?.exploitabilityScore) },
+      { label: '影响分数', value: formatScore(cveOverview?.impactScore) },
+      { label: '向量字符串', value: toDisplayText(cveOverview?.vector ?? results?.vector) },
     ],
     [cveOverview, results]
   );
@@ -961,7 +1084,7 @@ const IocSearch = () => {
           <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_12%_18%,rgba(168,85,247,0.12),transparent_28%),radial-gradient(circle_at_88%_0%,rgba(168,85,247,0.08),transparent_26%),linear-gradient(90deg,transparent,rgba(255,255,255,0.02),transparent)]" />
           <div className="relative mx-auto flex max-w-[1040px] flex-col items-start gap-8">
             <div className="space-y-4">
-              <p className="text-[11px] uppercase tracking-[0.34em] text-accent/78">Threat Intelligence Search</p>
+              <p className="text-[11px] uppercase tracking-[0.34em] text-accent/78">威胁情报检索</p>
               <h1 className="max-w-[760px] text-4xl font-semibold tracking-[-0.08em] text-white sm:text-5xl lg:text-6xl">
                 用单一检索入口查看 IOC 的结构化情报脉络
               </h1>
@@ -1039,9 +1162,9 @@ const IocSearch = () => {
             <motion.section initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1], delay: 0.04 }} className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
               {activeSearchType === 'cve' ? (
                 <>
-                  <CountMetric label="Pulses" value={counts.pulses} highlight={counts.pulses > 0} active={false} />
-                  <CountMetric label="Exploits" value={toDisplayText(cveExploitActivity?.exploitSignalCount, '0')} highlight={Boolean(cveExploitActivity?.exploitSignalCount)} active={false} />
-                  <CountMetric label="Targeted Products" value={cveTargetedProducts.length} highlight={cveTargetedProducts.length > 0} active={false} />
+                  <CountMetric label="情报脉冲" value={counts.pulses} highlight={counts.pulses > 0} active={false} />
+                  <CountMetric label="利用信号" value={toDisplayText(cveExploitActivity?.exploitSignalCount, '0')} highlight={Boolean(cveExploitActivity?.exploitSignalCount)} active={false} />
+                  <CountMetric label="受影响产品" value={cveTargetedProducts.length} highlight={cveTargetedProducts.length > 0} active={false} />
                   <CountMetric label="EPSS" value={cveEpss ? formatPercentFromRatio(cveEpss.score) : 'N/A'} highlight={Boolean(cveEpss && typeof cveEpss.score === 'number' && cveEpss.score > 0)} active={false} />
                 </>
               ) : (
@@ -1062,7 +1185,7 @@ const IocSearch = () => {
                 className="grid gap-6 xl:grid-cols-[minmax(0,1.05fr)_minmax(360px,0.95fr)]"
               >
                 <div className="space-y-6">
-                  <Panel title="CVE Overview" subtitle="Overview">
+                  <Panel title="CVE 概览" subtitle="概览">
                     <div className="space-y-5">
                       <div className="flex flex-wrap gap-2">
                         {cveSourceTags.map((tag: string) => (
@@ -1074,15 +1197,17 @@ const IocSearch = () => {
                       <p className="text-sm leading-7 text-white/64">{toDisplayText(results?.description, '暂无漏洞描述')}</p>
                       {cveReferenceLinks.length > 0 ? (
                         <div className="flex flex-wrap gap-2">
-                          {cveReferenceLinks.map((href: string) => (
+                          {cveReferenceLinks.map((link) => (
                             <a
-                              key={href}
-                              href={href}
+                              key={link.href}
+                              href={link.href}
                               target="_blank"
                               rel="noreferrer"
-                              className="inline-flex items-center rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 text-xs font-medium text-accent transition-colors hover:border-accent/30 hover:bg-accent/10"
+                              title={link.href}
+                              className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 text-xs font-medium text-accent transition-colors hover:border-accent/30 hover:bg-accent/10"
                             >
-                              参考链接
+                              <span>{link.label}</span>
+                              <span className="text-[10px] uppercase tracking-[0.18em] text-white/40">{link.hostname}</span>
                             </a>
                           ))}
                         </div>
@@ -1098,10 +1223,10 @@ const IocSearch = () => {
                     </div>
                   </Panel>
 
-                  <Panel title="Exploit Activity" subtitle="Activity">
+                  <Panel title="利用活动" subtitle="动态">
                     <div className="grid gap-4 xl:grid-cols-2">
                       <div className="rounded-[22px] border border-white/8 bg-white/[0.025] p-5">
-                        <div className="text-xs uppercase tracking-[0.22em] text-white/40">Threat Signals</div>
+                        <div className="text-xs uppercase tracking-[0.22em] text-white/40">威胁信号</div>
                         <div className="mt-4 grid gap-3 text-sm text-white/64">
                           <span>{`OTX 情报数：${toDisplayText(cveExploitActivity?.otxPulseCount, String(counts.pulses))}`}</span>
                           <span>{`Exploit 信号：${toDisplayText(cveExploitActivity?.exploitSignalCount, '0')}`}</span>
@@ -1112,7 +1237,7 @@ const IocSearch = () => {
                         </div>
                       </div>
                       <div className="rounded-[22px] border border-white/8 bg-white/[0.025] p-5">
-                        <div className="text-xs uppercase tracking-[0.22em] text-white/40">Priority Reasons</div>
+                        <div className="text-xs uppercase tracking-[0.22em] text-white/40">优先原因</div>
                         <div className="mt-4 flex flex-wrap gap-2">
                           {(Array.isArray(cveExploitActivity?.pushReasons) ? cveExploitActivity.pushReasons : []).length > 0 ? (
                             cveExploitActivity.pushReasons.map((reason: string) => (
@@ -1132,10 +1257,10 @@ const IocSearch = () => {
                     </div>
                   </Panel>
 
-                  <Panel title="Exploit Prediction Scoring System (EPSS)" subtitle="EPSS">
+                  <Panel title="漏洞利用预测评分（EPSS）" subtitle="EPSS">
                     <div className="grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">
                       <div className="rounded-[22px] border border-white/8 bg-white/[0.025] p-5">
-                        <div className="text-xs uppercase tracking-[0.22em] text-white/40">Scores</div>
+                        <div className="text-xs uppercase tracking-[0.22em] text-white/40">评分</div>
                         <div className="mt-4 grid gap-3 text-sm text-white/64">
                           <span>{`EPSS Score：${cveEpss ? formatPercentFromRatio(cveEpss.score) : 'N/A'}`}</span>
                           <span>{`EPSS Percentile：${cveEpss ? formatPercentFromRatio(cveEpss.percentile) : 'N/A'}`}</span>
@@ -1150,7 +1275,7 @@ const IocSearch = () => {
                 </div>
 
                 <div className="space-y-6">
-                  <Panel title="CVSS V3 Severity" subtitle="Severity">
+                  <Panel title="CVSS V3 严重度" subtitle="严重度">
                     <div className="grid gap-3">
                       {cveCvssRows.map((row) => (
                         <div key={row.label} className="grid gap-2 border-b border-white/6 pb-3 last:border-b-0 last:pb-0 md:grid-cols-[180px_1fr]">
@@ -1161,7 +1286,20 @@ const IocSearch = () => {
                     </div>
                   </Panel>
 
-                  <Panel title="Threat Intel" subtitle="Pulses">
+                  <Panel title="威胁情报" subtitle="情报脉冲">
+                    {cveSourceRoles.length > 0 ? (
+                      <div className="mb-4 rounded-[22px] border border-white/8 bg-white/[0.025] p-5">
+                        <div className="text-xs uppercase tracking-[0.22em] text-white/40">来源职责</div>
+                        <div className="mt-4 grid gap-3">
+                          {cveSourceRoles.map((role: any) => (
+                            <div key={role.key} className="grid gap-1 border-b border-white/6 pb-3 last:border-b-0 last:pb-0 md:grid-cols-[132px_1fr]">
+                              <div className="text-xs font-semibold uppercase tracking-[0.18em] text-accent">{role.label}</div>
+                              <div className="text-sm leading-6 text-white/60">{role.description}</div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ) : null}
                     {pulseEntries.length > 0 ? (
                       <div className="space-y-4">
                         {pulseEntries.slice(0, 6).map((pulse: any, index: number) => (
@@ -1180,7 +1318,7 @@ const IocSearch = () => {
                     )}
                   </Panel>
 
-                  <Panel title="Targeted Products" subtitle="Products">
+                  <Panel title="受影响产品" subtitle="产品">
                     {cveTargetedProducts.length > 0 ? (
                       <div className="space-y-4">
                         {cveTargetedProducts.map((entry: any, index: number) => (
