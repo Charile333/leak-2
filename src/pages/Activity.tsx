@@ -37,6 +37,7 @@ type CveIntelItem = {
   hasKev: boolean;
   otxMentionCount: number;
   sourceTags: string[];
+  references?: string[];
   sourceDetails?: {
     aliyun?: {
       sourceUrl?: string;
@@ -160,6 +161,15 @@ const getWindowLabel = (windowKey: '24h' | '7d' | 'all') => {
   return '全部';
 };
 
+const getReferenceLabel = (href: string) => {
+  try {
+    const url = new URL(href);
+    return url.hostname.replace(/^www\./i, '');
+  } catch {
+    return '相关链接';
+  }
+};
+
 const Activity = () => {
   const [items, setItems] = useState<ActivityPulse[]>([]);
   const [cveFeed, setCveFeed] = useState<CveIntelFeed>({});
@@ -168,7 +178,7 @@ const Activity = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
   const [cveError, setCveError] = useState('');
-  const [activeWindow, setActiveWindow] = useState<'24h' | '7d' | 'all'>('7d');
+  const [activeWindow, setActiveWindow] = useState<'24h' | '7d' | 'all'>('all');
 
   useEffect(() => {
     let cancelled = false;
@@ -311,12 +321,12 @@ const Activity = () => {
         </div>
       </motion.section>
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.15fr)_minmax(360px,0.85fr)]">
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.15fr)_minmax(360px,0.85fr)] xl:items-start">
         <motion.section
           initial={{ opacity: 0, y: 18 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.38, ease: [0.22, 1, 0.36, 1], delay: 0.05 }}
-          className="overflow-hidden rounded-[28px] border border-white/8 bg-[linear-gradient(180deg,rgba(14,19,28,0.96),rgba(8,12,18,0.96))]"
+          className="overflow-hidden rounded-[28px] border border-white/8 bg-[linear-gradient(180deg,rgba(14,19,28,0.96),rgba(8,12,18,0.96))] xl:sticky xl:top-6 xl:flex xl:max-h-[calc(100vh-2.5rem)] xl:flex-col"
         >
           <div className="border-b border-white/8 px-6 py-5 sm:px-7">
             <h2 className="text-xl font-semibold tracking-[-0.05em] text-white">活动流</h2>
@@ -325,7 +335,7 @@ const Activity = () => {
             </p>
           </div>
 
-          <div className="px-6 py-6 sm:px-7">
+          <div className="px-6 py-6 sm:px-7 xl:min-h-0 xl:flex-1 xl:overflow-y-auto">
             {loading ? (
               <div className="flex min-h-[280px] items-center justify-center rounded-[24px] border border-dashed border-white/10 bg-white/[0.02]">
                 <div className="flex items-center gap-3 text-sm text-white/58">
@@ -443,7 +453,7 @@ const Activity = () => {
           initial={{ opacity: 0, y: 18 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.38, ease: [0.22, 1, 0.36, 1], delay: 0.08 }}
-          className="overflow-hidden rounded-[28px] border border-white/8 bg-[linear-gradient(180deg,rgba(17,22,31,0.98),rgba(10,14,20,0.98))]"
+          className="overflow-hidden rounded-[28px] border border-white/8 bg-[linear-gradient(180deg,rgba(17,22,31,0.98),rgba(10,14,20,0.98))] xl:sticky xl:top-6 xl:flex xl:max-h-[calc(100vh-2.5rem)] xl:flex-col"
         >
           <div className="border-b border-white/8 px-6 py-5 sm:px-7">
             <h2 className="text-xl font-semibold tracking-[-0.05em] text-white">CVE 情报</h2>
@@ -452,7 +462,7 @@ const Activity = () => {
             </p>
           </div>
 
-          <div className="space-y-4 px-6 py-6 sm:px-7">
+          <div className="space-y-4 px-6 py-6 sm:px-7 xl:min-h-0 xl:flex-1 xl:overflow-y-auto">
             {cveLoading ? (
               <div className="flex min-h-[280px] items-center justify-center rounded-[24px] border border-dashed border-white/10 bg-white/[0.02]">
                 <div className="flex items-center gap-3 text-sm text-white/58">
@@ -535,6 +545,21 @@ const Activity = () => {
                   ) : null}
 
                   <div className="mt-5 flex flex-wrap gap-2">
+                    {Array.isArray(item.references)
+                      ? item.references.filter(Boolean).slice(0, 3).map((reference) => (
+                          <a
+                            key={`${item.cveId}-${reference}`}
+                            href={reference}
+                            target="_blank"
+                            rel="noreferrer"
+                            title={reference}
+                            className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-3 py-2 text-xs text-white/70 transition-colors hover:bg-white/[0.06] hover:text-white"
+                          >
+                            {getReferenceLabel(reference)}
+                            <ExternalLink className="h-3.5 w-3.5" />
+                          </a>
+                        ))
+                      : null}
                     {item.sourceDetails?.aliyun?.sourceUrl ? (
                       <a
                         href={item.sourceDetails.aliyun.sourceUrl}
