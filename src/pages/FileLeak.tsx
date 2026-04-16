@@ -1,6 +1,7 @@
 import { startTransition, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { createPortal } from 'react-dom';
+import useSWR from 'swr';
 import {
   Archive,
   Copy,
@@ -183,6 +184,71 @@ const FileLeak = () => {
     return () => window.clearTimeout(timer);
   }, [deferredSearchQuery]);
 
+  const assetCacheKey = 'file-leak-assets';
+
+  const {
+    data: cachedAssets,
+    error: assetsRequestError,
+    isLoading: isAssetsLoading,
+    mutate: mutateAssets,
+  } = useSWR(assetCacheKey, () => fileLeakService.getAssets(), {
+    revalidateOnFocus: false,
+  });
+
+  const queryAssets = cachedAssets ?? assets;
+  const assetSignature = useMemo(
+    () => queryAssets.map((asset) => `${asset.id}:${asset.value}:${asset.enabled ? '1' : '0'}`).join('|'),
+    [queryAssets]
+  );
+
+  const {
+    data: cachedFindings,
+    error: findingsRequestError,
+    isLoading: isFindingsLoading,
+    mutate: mutateFindings,
+  } = useSWR(
+    ['file-leak-findings', debouncedQuery, assetSignature],
+    () => fileLeakService.getFindings(debouncedQuery, queryAssets),
+    {
+      keepPreviousData: true,
+      revalidateOnFocus: false,
+    }
+  );
+
+  useEffect(() => {
+    if (cachedAssets) {
+      setAssets(cachedAssets);
+    }
+  }, [cachedAssets]);
+
+  useEffect(() => {
+    if (cachedFindings) {
+      setRemoteFindings(cachedFindings);
+    } else if (!isFindingsLoading) {
+      setRemoteFindings([]);
+    }
+  }, [cachedFindings, isFindingsLoading]);
+
+  useEffect(() => {
+    setIsLoading(isAssetsLoading || isFindingsLoading);
+  }, [isAssetsLoading, isFindingsLoading]);
+
+  useEffect(() => {
+    const error = assetsRequestError ?? findingsRequestError;
+    if (!error) {
+      setLoadError('');
+      return;
+    }
+
+    setLoadError(
+      error instanceof FileLeakSearchError
+        ? error.message
+        : error instanceof Error
+          ? error.message
+          : '鏂囦欢娉勯湶鏁版嵁鍔犺浇澶辫触锛岃绋嶅悗鍐嶈瘯銆?'
+    );
+  }, [assetsRequestError, findingsRequestError]);
+
   const loadData = async (assetList?: FileLeakAsset[], queryOverride?: string) => {
     const requestId = latestLoadRequestRef.current + 1;
     latestLoadRequestRef.current = requestId;
@@ -211,10 +277,7 @@ const FileLeak = () => {
     }
   };
 
-  useEffect(() => {
-    void loadData(undefined, debouncedQuery);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [debouncedQuery]);
+  void loadData;
 
   useEffect(() => {
     const onClickOutside = (event: MouseEvent) => {
@@ -267,12 +330,13 @@ const FileLeak = () => {
     try {
       const nextAssets = await fileLeakService.addAsset({ value, type: newAssetType });
       setNewAssetValue('');
+      await mutateAssets(nextAssets, { revalidate: false });
       if (assetFilter !== 'all') {
         startTransition(() => {
           setAssetFilter('all');
         });
       }
-      await loadData(nextAssets, debouncedQuery);
+      await mutateFindings(fileLeakService.getFindings(debouncedQuery, nextAssets), { revalidate: false });
     } catch (error) {
       setAssetError(error instanceof Error ? error.message : '添加监测对象失败。');
     } finally {
@@ -285,12 +349,13 @@ const FileLeak = () => {
     setAssetError('');
     try {
       const nextAssets = await fileLeakService.removeAsset(id);
+      await mutateAssets(nextAssets, { revalidate: false });
       if (assetFilter === id) {
         startTransition(() => {
           setAssetFilter('all');
         });
       }
-      await loadData(nextAssets, debouncedQuery);
+      await mutateFindings(fileLeakService.getFindings(debouncedQuery, nextAssets), { revalidate: false });
     } catch (error) {
       setAssetError(error instanceof Error ? error.message : '删除监测对象失败。');
     } finally {
@@ -306,10 +371,16 @@ const FileLeak = () => {
   const handleStatusUpdate = async (status: FileLeakStatus) => {
     if (!selectedFinding) return;
     setIsUpdatingStatus(true);
-    await fileLeakService.updateFindingStatus(selectedFinding.id, status);
-    setSelectedFinding({ ...selectedFinding, status });
-    setRemoteFindings((current) => current.map((item) => (item.id === selectedFinding.id ? { ...item, status } : item)));
-    setIsUpdatingStatus(false);
+    try {
+      await fileLeakService.updateFindingStatus(selectedFinding.id, status);
+      setSelectedFinding({ ...selectedFinding, status });
+      await mutateFindings(
+        (current = []) => current.map((item) => (item.id === selectedFinding.id ? { ...item, status } : item)),
+        { revalidate: false }
+      );
+    } finally {
+      setIsUpdatingStatus(false);
+    }
   };
 
   const drawer = typeof document !== 'undefined' && selectedFinding

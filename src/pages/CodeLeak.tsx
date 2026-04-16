@@ -1,6 +1,7 @@
 import { startTransition, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { createPortal } from 'react-dom';
+import useSWR from 'swr';
 import {
   AlertTriangle,
   Code2,
@@ -140,6 +141,71 @@ const CodeLeak = () => {
     return () => window.clearTimeout(timer);
   }, [deferredSearchQuery]);
 
+  const assetCacheKey = 'code-leak-assets';
+
+  const {
+    data: cachedAssets,
+    error: assetsRequestError,
+    isLoading: isAssetsLoading,
+    mutate: mutateAssets,
+  } = useSWR(assetCacheKey, () => codeLeakService.getAssets(), {
+    revalidateOnFocus: false,
+  });
+
+  const queryAssets = cachedAssets ?? assets;
+  const assetSignature = useMemo(
+    () => queryAssets.map((asset) => `${asset.id}:${asset.value}:${asset.enabled ? '1' : '0'}`).join('|'),
+    [queryAssets]
+  );
+
+  const {
+    data: cachedFindings,
+    error: findingsRequestError,
+    isLoading: isFindingsLoading,
+    mutate: mutateFindings,
+  } = useSWR(
+    ['code-leak-findings', debouncedQuery, assetSignature],
+    () => codeLeakService.getFindings(debouncedQuery, queryAssets),
+    {
+      keepPreviousData: true,
+      revalidateOnFocus: false,
+    }
+  );
+
+  useEffect(() => {
+    if (cachedAssets) {
+      setAssets(cachedAssets);
+    }
+  }, [cachedAssets]);
+
+  useEffect(() => {
+    if (cachedFindings) {
+      setRemoteFindings(cachedFindings);
+    } else if (!isFindingsLoading) {
+      setRemoteFindings([]);
+    }
+  }, [cachedFindings, isFindingsLoading]);
+
+  useEffect(() => {
+    setIsLoading(isAssetsLoading || isFindingsLoading);
+  }, [isAssetsLoading, isFindingsLoading]);
+
+  useEffect(() => {
+    const error = assetsRequestError ?? findingsRequestError;
+    if (!error) {
+      setLoadError('');
+      return;
+    }
+
+    setLoadError(
+      error instanceof CodeLeakSearchError
+        ? error.message
+        : error instanceof Error
+          ? error.message
+          : '褰撳墠鏃犳硶鍔犺浇鐪熷疄浠ｇ爜娉勯湶缁撴灉锛岃绋嶅悗閲嶈瘯銆?'
+    );
+  }, [assetsRequestError, findingsRequestError]);
+
   const loadData = async (assetList?: CodeLeakAsset[], queryOverride?: string) => {
     const requestId = latestLoadRequestRef.current + 1;
     latestLoadRequestRef.current = requestId;
@@ -172,10 +238,7 @@ const CodeLeak = () => {
     }
   };
 
-  useEffect(() => {
-    void loadData(undefined, debouncedQuery);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [debouncedQuery]);
+  void loadData;
 
   useEffect(() => {
     const onClickOutside = (event: MouseEvent) => {
@@ -227,12 +290,13 @@ const CodeLeak = () => {
     try {
       const nextAssets = await codeLeakService.addAsset({ value, type: newAssetType });
       setNewAssetValue('');
+      await mutateAssets(nextAssets, { revalidate: false });
       if (assetFilter !== 'all') {
         startTransition(() => {
           setAssetFilter('all');
         });
       }
-      await loadData(nextAssets, debouncedQuery);
+      await mutateFindings(codeLeakService.getFindings(debouncedQuery, nextAssets), { revalidate: false });
     } catch (error) {
       setAssetError(error instanceof Error ? error.message : '添加失败');
     } finally {
@@ -245,12 +309,13 @@ const CodeLeak = () => {
     setAssetError('');
     try {
       const nextAssets = await codeLeakService.removeAsset(id);
+      await mutateAssets(nextAssets, { revalidate: false });
       if (assetFilter === id) {
         startTransition(() => {
           setAssetFilter('all');
         });
       }
-      await loadData(nextAssets, debouncedQuery);
+      await mutateFindings(codeLeakService.getFindings(debouncedQuery, nextAssets), { revalidate: false });
     } catch (error) {
       setAssetError(error instanceof Error ? error.message : '删除失败');
     } finally {
@@ -266,10 +331,16 @@ const CodeLeak = () => {
   const handleStatusUpdate = async (status: CodeLeakStatus) => {
     if (!selectedFinding) return;
     setIsUpdatingStatus(true);
-    await codeLeakService.updateFindingStatus(selectedFinding.id, status);
-    setSelectedFinding({ ...selectedFinding, status });
-    setRemoteFindings((current) => current.map((item) => (item.id === selectedFinding.id ? { ...item, status } : item)));
-    setIsUpdatingStatus(false);
+    try {
+      await codeLeakService.updateFindingStatus(selectedFinding.id, status);
+      setSelectedFinding({ ...selectedFinding, status });
+      await mutateFindings(
+        (current = []) => current.map((item) => (item.id === selectedFinding.id ? { ...item, status } : item)),
+        { revalidate: false }
+      );
+    } finally {
+      setIsUpdatingStatus(false);
+    }
   };
 
   const drawer = typeof document !== 'undefined' && selectedFinding

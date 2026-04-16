@@ -356,7 +356,7 @@ const DomainMonitor = () => {
         cve_intel: cveSnapshot.config || emptyWebhookConfig('cve_intel'),
       });
       setWebhookLogs(
-        (leakSnapshot.logs || [])
+        [...(leakSnapshot.logs || []), ...(cveSnapshot.logs || [])]
           .slice()
           .sort((a, b) => new Date(b.deliveredAt).getTime() - new Date(a.deliveredAt).getTime())
           .slice(0, 10)
@@ -545,14 +545,14 @@ const DomainMonitor = () => {
         enabled: config.enabled,
       });
       setWebhookConfigs((current) => ({ ...current, [channel]: saved }));
-      await loadMonitorData(true);
+      await loadWebhooksPanel(true);
       setSuccess(`${channelLabelMap[channel]}配置已保存。`);
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : '保存推送配置失败。');
     } finally {
       setIsSavingChannel(null);
     }
-  }, [loadMonitorData, webhookConfigs]);
+  }, [loadWebhooksPanel, webhookConfigs]);
 
   const testWebhookChannel = useCallback(async (channel: WebhookChannel) => {
     setIsTestingChannel(channel);
@@ -566,13 +566,13 @@ const DomainMonitor = () => {
       } else {
         setError(result.error || `${channelLabelMap[channel]}测试推送失败。`);
       }
-      await loadMonitorData(true);
+      await loadWebhooksPanel(true);
     } catch (testError) {
       setError(testError instanceof Error ? testError.message : '测试推送失败。');
     } finally {
       setIsTestingChannel(null);
     }
-  }, [loadMonitorData]);
+  }, [loadWebhooksPanel]);
 
   const handleSaveTask = useCallback(async (scanType: MonitorTaskType, patch: Partial<MonitorTask>) => {
     const task = taskMap[scanType];
@@ -609,20 +609,21 @@ const DomainMonitor = () => {
       return;
     }
 
-    setIsSavingAsset('cve');
+    setIsSavingAsset('code');
     setError('');
     setSuccess('');
 
     try {
       setCodeAssets(await codeLeakService.addAsset({ value, type: codeAssetType }));
       setCodeAssetValue('');
+      void loadRunsPanel(true);
       setSuccess('代码泄露监控对象已添加。');
     } catch (assetError) {
       setError(assetError instanceof Error ? assetError.message : '添加代码泄露监控对象失败。');
     } finally {
       setIsSavingAsset(null);
     }
-  }, [codeAssetType, codeAssetValue]);
+  }, [codeAssetType, codeAssetValue, loadRunsPanel]);
 
   const handleAddCveAsset = useCallback(async () => {
     const value = cveAssetValue.trim();
@@ -631,20 +632,21 @@ const DomainMonitor = () => {
       return;
     }
 
-    setIsSavingAsset('code');
+    setIsSavingAsset('cve');
     setError('');
     setSuccess('');
 
     try {
       setCveAssets(await cveIntelAssetService.addAsset({ value, type: cveAssetType }));
       setCveAssetValue('');
+      void loadRunsPanel(true);
       setSuccess('CVE 匹配对象已添加。');
     } catch (assetError) {
       setError(assetError instanceof Error ? assetError.message : '添加 CVE 匹配对象失败。');
     } finally {
       setIsSavingAsset(null);
     }
-  }, [cveAssetType, cveAssetValue]);
+  }, [cveAssetType, cveAssetValue, loadRunsPanel]);
 
   const handleAddFileAsset = useCallback(async () => {
     const value = fileAssetValue.trim();
@@ -660,13 +662,14 @@ const DomainMonitor = () => {
     try {
       setFileAssets(await fileLeakService.addAsset({ value, type: fileAssetType }));
       setFileAssetValue('');
+      void loadRunsPanel(true);
       setSuccess('文件泄露监控对象已添加。');
     } catch (assetError) {
       setError(assetError instanceof Error ? assetError.message : '添加文件泄露监控对象失败。');
     } finally {
       setIsSavingAsset(null);
     }
-  }, [fileAssetType, fileAssetValue]);
+  }, [fileAssetType, fileAssetValue, loadRunsPanel]);
 
   const handleRemoveAsset = useCallback(async (asset: UnifiedAsset) => {
     setIsSavingAsset(asset.category === 'file_leak' ? 'file' : asset.category === 'cve_intel' ? 'cve' : 'code');
@@ -681,6 +684,7 @@ const DomainMonitor = () => {
       } else {
         setFileAssets(await fileLeakService.removeAsset(asset.id));
       }
+      void loadRunsPanel(true);
       setSuccess('监控对象已移除。');
     } catch (assetError) {
       setError(assetError instanceof Error ? assetError.message : '移除监控对象失败。');
