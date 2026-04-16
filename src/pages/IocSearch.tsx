@@ -141,6 +141,26 @@ const formatDisplayDate = (value: any) => {
   return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleDateString('zh-CN');
 };
 
+const formatPercentFromRatio = (value: any) => {
+  const numeric = typeof value === 'number' ? value : Number.parseFloat(String(value || ''));
+  if (!Number.isFinite(numeric)) return 'N/A';
+  return `${(numeric * 100).toFixed(numeric >= 0.1 ? 1 : 2)}%`;
+};
+
+const formatScore = (value: any, digits = 1) => {
+  const numeric = typeof value === 'number' ? value : Number.parseFloat(String(value || ''));
+  if (!Number.isFinite(numeric)) return 'N/A';
+  return numeric.toFixed(digits);
+};
+
+const normalizeSourceLabel = (value: string) => {
+  const normalized = String(value || '').trim();
+  if (!normalized) return '';
+  if (normalized === 'Aliyun AVD') return '阿里云漏洞库';
+  if (normalized === 'KEV') return 'CISA KEV';
+  return normalized;
+};
+
 const detectSearchType = (input: string): SearchType | null => {
   const trimmedInput = input.trim();
   if (!trimmedInput) return null;
@@ -262,6 +282,9 @@ const buildExternalResources = (type: SearchType, data: any) => {
   if (type === 'cve' && indicator) {
     resources.push({ label: 'NVD', href: `https://nvd.nist.gov/vuln/detail/${encodeURIComponent(indicator)}` });
     resources.push({ label: 'MITRE', href: `https://www.cve.org/CVERecord?id=${encodeURIComponent(indicator)}` });
+    if (isDisplayableValue(data?.source_details?.aliyun?.sourceUrl)) {
+      resources.push({ label: 'Aliyun AVD', href: String(data.source_details.aliyun.sourceUrl) });
+    }
   }
 
   if (resources.length === 0) return 'N/A';
@@ -724,6 +747,46 @@ const IocSearch = () => {
     () => toDisplayText(pickFirstValue(results?.published, results?.published_date, results?.release_date, results?.__raw?.general?.published), 'N/A'),
     [results]
   );
+  const cveSourceTags = useMemo(
+    () =>
+      Array.isArray(results?.source_tags)
+        ? results.source_tags.map((tag: string) => normalizeSourceLabel(tag)).filter(Boolean)
+        : Array.isArray(results?.derived?.source_tags)
+          ? results.derived.source_tags.map((tag: string) => normalizeSourceLabel(tag)).filter(Boolean)
+          : [],
+    [results]
+  );
+  const cveEpss = results?.epss || results?.source_details?.epss || null;
+  const cveExploitActivity = results?.exploit_activity || null;
+  const cveOverview = results?.overview || null;
+  const cveTargetedProducts = useMemo(
+    () => (Array.isArray(results?.targeted_products) ? results.targeted_products : []),
+    [results]
+  );
+  const cveReferenceLinks = useMemo(() => {
+    const references = [
+      ...(Array.isArray(results?.source_details?.nvd?.references) ? results.source_details.nvd.references : []),
+      ...(results?.source_details?.aliyun?.sourceUrl ? [results.source_details.aliyun.sourceUrl] : []),
+    ].filter((value, index, array) => isDisplayableValue(value) && array.indexOf(value) === index);
+    return references.slice(0, 8);
+  }, [results]);
+  const cveCvssRows = useMemo(
+    () => [
+      { label: 'Base Score', value: formatScore(cveOverview?.cvssScore ?? results?.base_score) },
+      { label: 'Base Severity', value: toDisplayText(cveOverview?.severity ?? results?.severity) },
+      { label: 'Attack Vector', value: toDisplayText(cveOverview?.attackVector) },
+      { label: 'Attack Complexity', value: toDisplayText(cveOverview?.attackComplexity) },
+      { label: 'Privileges Required', value: toDisplayText(cveOverview?.privilegesRequired) },
+      { label: 'User Interaction', value: toDisplayText(cveOverview?.userInteraction) },
+      { label: 'Confidentiality Impact', value: toDisplayText(cveOverview?.confidentialityImpact) },
+      { label: 'Integrity Impact', value: toDisplayText(cveOverview?.integrityImpact) },
+      { label: 'Availability Impact', value: toDisplayText(cveOverview?.availabilityImpact) },
+      { label: 'Exploitability Score', value: formatScore(cveOverview?.exploitabilityScore) },
+      { label: 'Impact Score', value: formatScore(cveOverview?.impactScore) },
+      { label: 'Vector', value: toDisplayText(cveOverview?.vector ?? results?.vector) },
+    ],
+    [cveOverview, results]
+  );
 
   const resultTitle = submittedQuery || queryFromUrl;
   const countryFlag = getCountryFlag(results?.country);
@@ -813,9 +876,10 @@ const IocSearch = () => {
               { label: '外部资源', value: buildExternalResources('url', results) },
             ]
           : [
-              { label: 'CVSS / 严重性', value: toDisplayText(results?.base_score) },
-              { label: '发布日期 / 更新时间', value: publishedDate },
-              { label: '关联情报', value: String(counts.pulses) },
+              { label: 'CVSS / 严重性', value: `${formatScore(cveOverview?.cvssScore ?? results?.base_score)} / ${toDisplayText(cveOverview?.severity ?? results?.severity)}` },
+              { label: '发布日期 / 更新时间', value: `${toDisplayText(cveOverview?.published, publishedDate)} / ${toDisplayText(cveOverview?.lastModified)}` },
+              { label: 'Exploit Activity', value: cveExploitActivity ? `${toDisplayText(cveExploitActivity.otxPulseCount, '0')} 条情报 / ${toDisplayText(cveExploitActivity.pushLevel, 'Monitor')}` : String(counts.pulses) },
+              { label: 'EPSS', value: cveEpss ? `${formatPercentFromRatio(cveEpss.score)} / P${formatPercentFromRatio(cveEpss.percentile)}` : 'N/A' },
               { label: '外部资源', value: buildExternalResources('cve', results) },
             ];
 
@@ -973,12 +1037,184 @@ const IocSearch = () => {
         {results ? (
           <>
             <motion.section initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1], delay: 0.04 }} className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-              <CountMetric label="情报" value={tabCounts.pulses} highlight={pulsesState.status === 'success' && counts.pulses > 0} active={activeTab === 'pulses'} />
-              <CountMetric label="被动 DNS" value={tabCounts['passive-dns']} highlight={passiveDnsState.status === 'success' && counts.passiveDns > 0} active={activeTab === 'passive-dns'} />
-              <CountMetric label="关联 URL" value={tabCounts.urls} highlight={urlListState.status === 'success' && counts.urls > 0} active={activeTab === 'urls'} />
-              <CountMetric label="恶意样本" value={tabCounts.malware} highlight={malwareState.status === 'success' && counts.malware > 0} active={activeTab === 'malware'} />
+              {activeSearchType === 'cve' ? (
+                <>
+                  <CountMetric label="Pulses" value={counts.pulses} highlight={counts.pulses > 0} active={false} />
+                  <CountMetric label="Exploits" value={toDisplayText(cveExploitActivity?.exploitSignalCount, '0')} highlight={Boolean(cveExploitActivity?.exploitSignalCount)} active={false} />
+                  <CountMetric label="Targeted Products" value={cveTargetedProducts.length} highlight={cveTargetedProducts.length > 0} active={false} />
+                  <CountMetric label="EPSS" value={cveEpss ? formatPercentFromRatio(cveEpss.score) : 'N/A'} highlight={Boolean(cveEpss && typeof cveEpss.score === 'number' && cveEpss.score > 0)} active={false} />
+                </>
+              ) : (
+                <>
+                  <CountMetric label="情报" value={tabCounts.pulses} highlight={pulsesState.status === 'success' && counts.pulses > 0} active={activeTab === 'pulses'} />
+                  <CountMetric label="被动 DNS" value={tabCounts['passive-dns']} highlight={passiveDnsState.status === 'success' && counts.passiveDns > 0} active={activeTab === 'passive-dns'} />
+                  <CountMetric label="关联 URL" value={tabCounts.urls} highlight={urlListState.status === 'success' && counts.urls > 0} active={activeTab === 'urls'} />
+                  <CountMetric label="恶意样本" value={tabCounts.malware} highlight={malwareState.status === 'success' && counts.malware > 0} active={activeTab === 'malware'} />
+                </>
+              )}
             </motion.section>
 
+            {activeSearchType === 'cve' ? (
+              <motion.section
+                initial={{ opacity: 0, y: 16 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1], delay: 0.08 }}
+                className="grid gap-6 xl:grid-cols-[minmax(0,1.05fr)_minmax(360px,0.95fr)]"
+              >
+                <div className="space-y-6">
+                  <Panel title="CVE Overview" subtitle="Overview">
+                    <div className="space-y-5">
+                      <div className="flex flex-wrap gap-2">
+                        {cveSourceTags.map((tag: string) => (
+                          <span key={tag} className="rounded-full border border-accent/15 bg-accent/10 px-3 py-1 text-xs text-accent">
+                            {tag}
+                          </span>
+                        ))}
+                      </div>
+                      <p className="text-sm leading-7 text-white/64">{toDisplayText(results?.description, '暂无漏洞描述')}</p>
+                      {cveReferenceLinks.length > 0 ? (
+                        <div className="flex flex-wrap gap-2">
+                          {cveReferenceLinks.map((href: string) => (
+                            <a
+                              key={href}
+                              href={href}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex items-center rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 text-xs font-medium text-accent transition-colors hover:border-accent/30 hover:bg-accent/10"
+                            >
+                              参考链接
+                            </a>
+                          ))}
+                        </div>
+                      ) : null}
+                      <div className="grid gap-3 text-sm text-white/64 md:grid-cols-2">
+                        <span>{`CVE：${toDisplayText(results?.indicator)}`}</span>
+                        <span>{`CWE：${toDisplayText(results?.cwe || cveOverview?.cwe)}`}</span>
+                        <span>{`发布时间：${toDisplayText(cveOverview?.published, publishedDate)}`}</span>
+                        <span>{`最后修改：${toDisplayText(cveOverview?.lastModified)}`}</span>
+                        <span>{`CVSS：${formatScore(cveOverview?.cvssScore ?? results?.base_score)}`}</span>
+                        <span>{`严重等级：${toDisplayText(cveOverview?.severity ?? results?.severity)}`}</span>
+                      </div>
+                    </div>
+                  </Panel>
+
+                  <Panel title="Exploit Activity" subtitle="Activity">
+                    <div className="grid gap-4 xl:grid-cols-2">
+                      <div className="rounded-[22px] border border-white/8 bg-white/[0.025] p-5">
+                        <div className="text-xs uppercase tracking-[0.22em] text-white/40">Threat Signals</div>
+                        <div className="mt-4 grid gap-3 text-sm text-white/64">
+                          <span>{`OTX 情报数：${toDisplayText(cveExploitActivity?.otxPulseCount, String(counts.pulses))}`}</span>
+                          <span>{`Exploit 信号：${toDisplayText(cveExploitActivity?.exploitSignalCount, '0')}`}</span>
+                          <span>{`活跃利用：${cveExploitActivity?.activeExploitation ? '是' : '否'}`}</span>
+                          <span>{`当前优先级：${toDisplayText(cveExploitActivity?.pushLevel, 'Monitor')}`}</span>
+                          <span>{`最后观测：${toDisplayText(cveExploitActivity?.lastObservedAt)}`}</span>
+                          <span>{`CISA KEV：${results?.hasKev ? '是' : '否'}`}</span>
+                        </div>
+                      </div>
+                      <div className="rounded-[22px] border border-white/8 bg-white/[0.025] p-5">
+                        <div className="text-xs uppercase tracking-[0.22em] text-white/40">Priority Reasons</div>
+                        <div className="mt-4 flex flex-wrap gap-2">
+                          {(Array.isArray(cveExploitActivity?.pushReasons) ? cveExploitActivity.pushReasons : []).length > 0 ? (
+                            cveExploitActivity.pushReasons.map((reason: string) => (
+                              <span key={reason} className="rounded-full border border-accent/15 bg-accent/10 px-3 py-1 text-xs text-accent">
+                                {reason}
+                              </span>
+                            ))
+                          ) : (
+                            <span className="text-sm text-white/56">暂无额外利用信号。</span>
+                          )}
+                        </div>
+                        <div className="mt-5 grid gap-3 text-sm text-white/64">
+                          <span>{`Threat Actors：${Array.isArray(cveExploitActivity?.associatedThreatActors) && cveExploitActivity.associatedThreatActors.length > 0 ? cveExploitActivity.associatedThreatActors.join(', ') : '暂无'}`}</span>
+                          <span>{`Targeted Industries：${Array.isArray(cveExploitActivity?.industriesTargeted) && cveExploitActivity.industriesTargeted.length > 0 ? cveExploitActivity.industriesTargeted.join(', ') : '暂无'}`}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </Panel>
+
+                  <Panel title="Exploit Prediction Scoring System (EPSS)" subtitle="EPSS">
+                    <div className="grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">
+                      <div className="rounded-[22px] border border-white/8 bg-white/[0.025] p-5">
+                        <div className="text-xs uppercase tracking-[0.22em] text-white/40">Scores</div>
+                        <div className="mt-4 grid gap-3 text-sm text-white/64">
+                          <span>{`EPSS Score：${cveEpss ? formatPercentFromRatio(cveEpss.score) : 'N/A'}`}</span>
+                          <span>{`EPSS Percentile：${cveEpss ? formatPercentFromRatio(cveEpss.percentile) : 'N/A'}`}</span>
+                          <span>{`更新时间：${toDisplayText(cveEpss?.date)}`}</span>
+                        </div>
+                      </div>
+                      <div className="rounded-[22px] border border-white/8 bg-white/[0.025] p-5 text-sm leading-7 text-white/60">
+                        EPSS 用来衡量漏洞未来被利用的概率。分数越高，说明越值得优先跟进；Percentile 越高，说明在所有漏洞中的风险排序越靠前。
+                      </div>
+                    </div>
+                  </Panel>
+                </div>
+
+                <div className="space-y-6">
+                  <Panel title="CVSS V3 Severity" subtitle="Severity">
+                    <div className="grid gap-3">
+                      {cveCvssRows.map((row) => (
+                        <div key={row.label} className="grid gap-2 border-b border-white/6 pb-3 last:border-b-0 last:pb-0 md:grid-cols-[180px_1fr]">
+                          <div className="text-[11px] uppercase tracking-[0.22em] text-white/40">{row.label}</div>
+                          <div className="text-sm text-white/82">{row.value}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </Panel>
+
+                  <Panel title="Threat Intel" subtitle="Pulses">
+                    {pulseEntries.length > 0 ? (
+                      <div className="space-y-4">
+                        {pulseEntries.slice(0, 6).map((pulse: any, index: number) => (
+                          <article key={`${pulse?.id || pulse?.name || 'cve-pulse'}-${index}`} className="rounded-[22px] border border-white/8 bg-white/[0.025] p-5">
+                            <div className="text-sm font-semibold text-white/88">{toDisplayText(pulse?.name, '未命名情报')}</div>
+                            <p className="mt-3 text-sm leading-7 text-white/60">{toDisplayText(pulse?.description, '暂无情报描述')}</p>
+                            <div className="mt-4 grid gap-2 text-sm text-white/56">
+                              <span>{`作者：${toDisplayText(pulse?.author?.username || pulse?.author_name, '未知')}`}</span>
+                              <span>{`更新时间：${formatDisplayDate(pulse?.modified)}`}</span>
+                            </div>
+                          </article>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="rounded-[22px] border border-dashed border-white/10 px-5 py-8 text-sm text-white/52">暂无相关 OTX 情报。</div>
+                    )}
+                  </Panel>
+
+                  <Panel title="Targeted Products" subtitle="Products">
+                    {cveTargetedProducts.length > 0 ? (
+                      <div className="space-y-4">
+                        {cveTargetedProducts.map((entry: any, index: number) => (
+                          <div key={`${entry.vendor || 'vendor'}-${entry.product || 'product'}-${index}`} className="rounded-[22px] border border-white/8 bg-white/[0.025] p-5">
+                            <div className="flex flex-wrap items-center justify-between gap-3">
+                              <div>
+                                <div className="text-sm font-semibold text-white/88">{`${toDisplayText(entry.vendor)} / ${toDisplayText(entry.product)}`}</div>
+                                <div className="mt-2 text-xs uppercase tracking-[0.22em] text-white/40">{`${toDisplayText(entry.source, 'nvd')} / ${toDisplayText(entry.confidence, 'high')}`}</div>
+                              </div>
+                            </div>
+                            <div className="mt-4 flex flex-wrap gap-2">
+                              {Array.isArray(entry.versions) && entry.versions.length > 0 ? (
+                                entry.versions.map((version: string) => (
+                                  <span key={version} className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1 text-xs text-white/68">
+                                    {version}
+                                  </span>
+                                ))
+                              ) : (
+                                <span className="text-sm text-white/56">版本范围暂未标注。</span>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="rounded-[22px] border border-dashed border-white/10 px-5 py-8 text-sm text-white/52">当前未解析到标准化受影响产品。</div>
+                    )}
+                  </Panel>
+                </div>
+              </motion.section>
+            ) : null}
+
+            {activeSearchType !== 'cve' ? (
+            <>
             <motion.section initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1], delay: 0.08 }} className="overflow-hidden rounded-[28px] border border-white/8 bg-[linear-gradient(180deg,rgba(17,22,31,0.98),rgba(10,14,20,0.98))]">
               <div className="border-b border-white/8 px-6 py-5 sm:px-7">
                 <p className="text-[11px] uppercase tracking-[0.3em] text-white/38">分析概览</p>
@@ -1266,6 +1502,8 @@ const IocSearch = () => {
                 ) : null}
               </div>
             </motion.section>
+            </>
+            ) : null}
           </>
         ) : null}
       </div>
